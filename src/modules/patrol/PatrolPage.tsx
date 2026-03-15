@@ -35,6 +35,8 @@ import {
   validateMinimumStaffing
 } from "../../lib/schedule-utils";
 
+import { recommendEligibleForce } from "../force/force-engine"
+
 export function PatrolPage({ employees, canEdit }: { employees: Employee[]; canEdit?: boolean }) {
   const today = new Date();
   const [view, setView] = useState<ScheduleView>("month");
@@ -139,6 +141,11 @@ export function PatrolPage({ employees, canEdit }: { employees: Employee[]; canE
 <div style={{fontWeight:"600"}}>
 
 V{realCell?.vehicle || ""} {employee?.lastName || "OPEN"}{" "}
+{!employee && realCell?.status && realCell.status !== "Scheduled" && (
+  <div style={{color:"#b91c1c",fontSize:"11px"}}>
+    ⚠ Suggestion available
+  </div>
+)}
 
 {realCell?.status && realCell.status !== "Scheduled"
   ? realCell.status
