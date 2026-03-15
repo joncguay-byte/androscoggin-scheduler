@@ -75,3 +75,38 @@ export function recordForce(
 export function recommendForce(list:ForceRecord[]){
   return list[0]
 }
+
+export function recommendEligibleForce(
+  forceList:any[],
+  employees:any[],
+  schedule:any,
+  date:string
+){
+
+  const workingIds = new Set()
+
+  Object.values(schedule).forEach((cell:any)=>{
+    if(cell.assignmentDate===date && cell.employeeId){
+      workingIds.add(cell.employeeId)
+    }
+  })
+
+  const eligible = forceList.filter((p:any)=>{
+
+    const emp = employees.find((e:any)=>e.id===p.employeeId)
+
+    if(!emp) return false
+
+    if(emp.status!=="Active") return false
+
+    if(workingIds.has(emp.id)) return false
+
+    return true
+
+  })
+
+  if(!eligible.length) return null
+
+  return eligible[0]
+
+}
