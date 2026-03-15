@@ -31,11 +31,21 @@ export function calculateForceList(
 
   })
 
-  result.sort((a,b)=>{
-    return (a.totalForced||0)-(b.totalForced||0)
-  })
+  return result.sort(sortForceList)
 
-  return result
+}
+
+function sortForceList(a:ForceRecord,b:ForceRecord){
+
+  if((a.totalForced||0)!==(b.totalForced||0)){
+    return (a.totalForced||0)-(b.totalForced||0)
+  }
+
+  if(!a.lastForced && !b.lastForced) return 0
+  if(!a.lastForced) return -1
+  if(!b.lastForced) return 1
+
+  return new Date(a.lastForced).getTime() - new Date(b.lastForced).getTime()
 
 }
 
@@ -45,7 +55,7 @@ export function recordForce(
   date:string
 ){
 
-  return list.map(p=>{
+  const updated = list.map(p=>{
 
     if(p.employeeId!==employeeId) return p
 
@@ -58,4 +68,10 @@ export function recordForce(
 
   })
 
+  return updated.sort(sortForceList)
+
+}
+
+export function recommendForce(list:ForceRecord[]){
+  return list[0]
 }
