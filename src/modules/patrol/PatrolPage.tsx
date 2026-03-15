@@ -3,25 +3,11 @@ import {
   Card,
   CardHeader,
   CardTitle,
-  CardContent,
-  Label,
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  Button
+  CardContent
 } from "../../components/ui/simple-ui";
 
 import {
-  patrolPositions,
-  scheduleViews,
-  statusOptions
+  patrolPositions
 } from "../../App";
 
 import {
@@ -33,13 +19,13 @@ import {
   validateMinimumStaffing
 } from "../../lib/schedule-utils";
 
-export function PatrolPage({ employees, canEdit }) {
+export function PatrolPage({ employees }) {
 
   const today = new Date()
 
-  const [view,setView] = useState("month")
-  const [month,setMonth] = useState(today.getMonth())
-  const [year,setYear] = useState(today.getFullYear())
+  const [view] = useState("month")
+  const [month] = useState(today.getMonth())
+  const [year] = useState(today.getFullYear())
 
   const baseDate = new Date(year,month,1)
   const dates = buildVisibleDates(baseDate,view)
@@ -58,31 +44,30 @@ export function PatrolPage({ employees, canEdit }) {
 
     return(
 
-<button
+<div
 style={{
 width:"100%",
-minHeight:"64px",
+minHeight:"70px",
 padding:"8px",
 fontSize:"13px",
 border:"1px solid #e2e8f0",
 borderRadius:"6px",
-background: cell?.status && cell.status!=="Scheduled" ? "#fde68a":"white",
-textAlign:"left"
+background: cell?.status && cell.status!=="Scheduled" ? "#fde68a":"white"
 }}
 >
 
-<div style={{fontWeight:"600"}}>
+<div style={{fontWeight:"700"}}>
 V{cell?.vehicle||""} {employee?.lastName||"OPEN"}{" "}
 {cell?.status && cell.status!=="Scheduled" ? cell.status : cell?.shiftHours}
 </div>
 
 {replacement && (
-<div>
+<div style={{fontSize:"12px"}}>
 V{cell?.replacementVehicle||""} {replacement.lastName} {cell?.replacementHours}
 </div>
 )}
 
-</button>
+</div>
 
     )
 
@@ -90,7 +75,6 @@ V{cell?.replacementVehicle||""} {replacement.lastName} {cell?.replacementHours}
 
 return(
 
-<>
 <Card>
 
 <CardHeader>
@@ -108,13 +92,15 @@ const end=week[week.length-1]
 
 return(
 
-<div key={weekIndex} style={{marginBottom:"30px"}}>
+<div key={weekIndex} style={{marginBottom:"40px"}}>
+
+{/* WEEK TITLE */}
 
 <div style={{
 textAlign:"center",
 fontWeight:"700",
-background:"#f1f5f9",
-padding:"8px",
+background:"#e2e8f0",
+padding:"10px",
 borderRadius:"6px"
 }}>
 {formatLongDate(start)} - {formatLongDate(end)}
@@ -125,7 +111,7 @@ borderRadius:"6px"
 <div
 style={{
 display:"grid",
-gridTemplateColumns:`240px repeat(${visibleDayCount},170px)`,
+gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`,
 background:"#f8fafc",
 borderBottom:"1px solid #cbd5e1",
 fontWeight:"600",
@@ -160,11 +146,20 @@ return(
 
 </div>
 
-{/* DAYS LABEL */}
+{/* DAYS SECTION */}
+
+<div style={{
+background:"#cbd5e1",
+fontWeight:"700",
+padding:"8px",
+marginTop:"8px"
+}}>
+DAY SHIFT
+</div>
 
 <div style={{
 display:"grid",
-gridTemplateColumns:`240px repeat(${visibleDayCount},170px)`
+gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`
 }}>
 
 <div style={{
@@ -176,7 +171,7 @@ fontWeight:"700",
 borderRight:"2px solid #cbd5e1",
 zIndex:4
 }}>
-Days
+Team
 </div>
 
 {week.map(d=>(
@@ -187,8 +182,6 @@ Days
 
 </div>
 
-{/* DAY POSITIONS */}
-
 {patrolPositions.map(pos=>{
 
 return(
@@ -197,7 +190,7 @@ return(
 key={`days-${pos.code}`}
 style={{
 display:"grid",
-gridTemplateColumns:`240px repeat(${visibleDayCount},170px)`,
+gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`,
 borderTop:"1px solid #e2e8f0"
 }}
 >
@@ -235,12 +228,20 @@ return(
 
 })}
 
-{/* NIGHTS */}
+{/* NIGHT SECTION */}
+
+<div style={{
+background:"#cbd5e1",
+fontWeight:"700",
+padding:"8px",
+marginTop:"16px"
+}}>
+NIGHT SHIFT
+</div>
 
 <div style={{
 display:"grid",
-gridTemplateColumns:`240px repeat(${visibleDayCount},170px)`,
-marginTop:"12px"
+gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`
 }}>
 
 <div style={{
@@ -252,7 +253,7 @@ fontWeight:"700",
 borderRight:"2px solid #cbd5e1",
 zIndex:4
 }}>
-Nights
+Team
 </div>
 
 {week.map(d=>(
@@ -271,7 +272,7 @@ return(
 key={`nights-${pos.code}`}
 style={{
 display:"grid",
-gridTemplateColumns:`240px repeat(${visibleDayCount},170px)`,
+gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`,
 borderTop:"1px solid #e2e8f0"
 }}
 >
@@ -318,8 +319,8 @@ return(
 </div>
 
 </CardContent>
+
 </Card>
-</>
 
 )
 
