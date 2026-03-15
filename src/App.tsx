@@ -379,32 +379,77 @@ export default function App() {
   const canEdit = permissions.patrol.edit;
 
   return (
-  <div style={{width:"100%",minHeight:"100vh",padding:"20px",boxSizing:"border-box"}}>
-      <Header user={user} onRoleChange={(r)=>setUser({...user, role:r})} />
 
-      <div style={{marginTop:"20px",marginBottom:"20px"}}>
-  <SummaryCards />
+<div
+style={{
+background:"#f1f5f9",
+minHeight:"100vh"
+}}
+>
+
+<div
+style={{
+maxWidth:"1600px",
+margin:"0 auto",
+padding:"24px"
+}}
+>
+
+{/* HEADER */}
+
+<div style={{marginBottom:"20px"}}>
+<Header user={user} onRoleChange={(r)=>setUser({...user, role:r})} />
 </div>
 
-      <ModuleTabs
-  active={activeModule}
-  onChange={setActiveModule}
-  visibleModules={visibleModules}
-  moduleOrder={moduleOrder}
-/>
+{/* SUMMARY CARDS */}
 
-      {activeModule === "patrol" && <PatrolPage employees={employees} canEdit={canEdit} />}
-      {activeModule === "cid" && <EmptyModule title="CID" />}
-      {activeModule === "force" && <ForcePage employees={employees} />}
-      {activeModule === "detail" && <EmptyModule title="Detail" />}
-      {activeModule === "reports" && <EmptyModule title="Reports" />}
-      {activeModule === "employees" && (
-  <EmployeesPage
-    employees={employees}
-    setEmployees={setEmployees}
-  />
+<div style={{marginBottom:"24px"}}>
+<SummaryCards />
+</div>
+
+{/* MODULE TABS */}
+
+<div style={{marginBottom:"24px"}}>
+<ModuleTabs
+active={activeModule}
+onChange={setActiveModule}
+visibleModules={visibleModules}
+moduleOrder={moduleOrder}
+/>
+</div>
+
+{/* MODULE CONTENT */}
+
+<div>
+
+{activeModule === "patrol" && (
+<PatrolPage employees={employees} canEdit={canEdit} />
 )}
-      {activeModule === "settings" && <EmptyModule title="Settings" />}
-    </div>
-  );
+
+{activeModule === "cid" && <EmptyModule title="CID" />}
+
+{activeModule === "force" && (
+<ForcePage employees={employees} />
+)}
+
+{activeModule === "detail" && <EmptyModule title="Detail" />}
+
+{activeModule === "reports" && <EmptyModule title="Reports" />}
+
+{activeModule === "employees" && (
+<EmployeesPage
+employees={employees}
+setEmployees={setEmployees}
+/>
+)}
+
+{activeModule === "settings" && <EmptyModule title="Settings" />}
+
+</div>
+
+</div>
+
+</div>
+
+)
 }
