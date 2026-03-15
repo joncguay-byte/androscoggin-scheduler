@@ -1,0 +1,61 @@
+export type ForceRecord = {
+  employeeId: string
+  name: string
+  lastForced?: string
+  previousForced?: string
+  totalForced: number
+}
+
+export function calculateForceList(
+  employees:any[],
+  history:ForceRecord[]
+){
+
+  const map = new Map()
+
+  history.forEach(r=>{
+    map.set(r.employeeId,r)
+  })
+
+  const result:ForceRecord[] = employees.map(e=>{
+
+    const existing = map.get(e.id)
+
+    if(existing) return existing
+
+    return {
+      employeeId:e.id,
+      name:e.lastName,
+      totalForced:0
+    }
+
+  })
+
+  result.sort((a,b)=>{
+    return (a.totalForced||0)-(b.totalForced||0)
+  })
+
+  return result
+
+}
+
+export function recordForce(
+  list:ForceRecord[],
+  employeeId:string,
+  date:string
+){
+
+  return list.map(p=>{
+
+    if(p.employeeId!==employeeId) return p
+
+    return {
+      ...p,
+      previousForced:p.lastForced,
+      lastForced:date,
+      totalForced:(p.totalForced||0)+1
+    }
+
+  })
+
+}

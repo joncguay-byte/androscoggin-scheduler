@@ -1,0 +1,6 @@
+diff --git a/src/App.tsx b/src/App.tsx
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@
+-      {activeModule === "force" && <EmptyModule title="Force" />}
++      {activeModule === "force" && <ForcePage employees={employees} />}
