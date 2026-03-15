@@ -1,26 +1,29 @@
-import React from "react"
+import React, { useState } from "react"
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent
+Card,
+CardHeader,
+CardTitle,
+CardContent,
+Button
 } from "../../components/ui/simple-ui"
 
 import { patrolPositions } from "../../App"
 
 import {
-  buildPatrolCellsForDate,
-  buildVisibleDates,
-  formatShortDate,
-  formatLongDate,
-  getActiveTeam
+buildPatrolCellsForDate,
+buildVisibleDates,
+formatShortDate,
+formatLongDate
 } from "../../lib/schedule-utils"
 
 export function PatrolPage({ employees }) {
 
 const today = new Date()
 
-const baseDate = new Date(today.getFullYear(),today.getMonth(),1)
+const [baseDate,setBaseDate] = useState(
+new Date(today.getFullYear(),today.getMonth(),1)
+)
+
 const dates = buildVisibleDates(baseDate,"month")
 
 const weeks=[]
@@ -29,6 +32,30 @@ weeks.push(dates.slice(i,i+7))
 }
 
 const visibleDayCount = weeks[0]?.length || 7
+
+function prevPeriod(){
+
+const d=new Date(baseDate)
+d.setMonth(d.getMonth()-1)
+setBaseDate(d)
+
+}
+
+function nextPeriod(){
+
+const d=new Date(baseDate)
+d.setMonth(d.getMonth()+1)
+setBaseDate(d)
+
+}
+
+function goToday(){
+
+setBaseDate(
+new Date(today.getFullYear(),today.getMonth(),1)
+)
+
+}
 
 function renderShiftCell(cell){
 
@@ -48,14 +75,11 @@ borderRadius:"6px",
 background:isLeave?"#fde68a":"white",
 display:"flex",
 flexDirection:"column",
-gap:"4px",
-cursor:"pointer"
+gap:"4px"
 }}
 >
 
-{/* MAIN LINE */}
-
-<div style={{display:"flex",alignItems:"center",gap:"6px"}}>
+<div style={{display:"flex",gap:"6px"}}>
 
 <div
 style={{
@@ -78,8 +102,6 @@ V{cell?.vehicle||""}
 </div>
 
 </div>
-
-{/* REPLACEMENT */}
 
 {replacement &&(
 
@@ -118,7 +140,23 @@ return(
 <Card>
 
 <CardHeader>
+
+<div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+
 <CardTitle>Androscoggin Patrol Schedule</CardTitle>
+
+<div style={{display:"flex",gap:"8px"}}>
+
+<Button onClick={prevPeriod}>←</Button>
+
+<Button onClick={goToday}>Today</Button>
+
+<Button onClick={nextPeriod}>→</Button>
+
+</div>
+
+</div>
+
 </CardHeader>
 
 <CardContent>
@@ -144,8 +182,6 @@ borderRadius:"6px"
 {formatLongDate(start)} - {formatLongDate(end)}
 </div>
 
-{/* DATE HEADER */}
-
 <div
 style={{
 display:"grid",
@@ -167,8 +203,6 @@ fontWeight:"600"
 ))}
 
 </div>
-
-{/* DAYS */}
 
 <div style={{
 background:"#cbd5e1",
@@ -201,6 +235,7 @@ fontWeight:"700"
 {week.map(d=>{
 
 const cells = buildPatrolCellsForDate(d,employees)
+
 const cell = cells.find(
 c=>c.positionCode===pos.code && c.shiftType==="Days"
 )
@@ -216,8 +251,6 @@ return(
 </div>
 
 ))}
-
-{/* NIGHTS */}
 
 <div style={{
 background:"#cbd5e1",
@@ -250,6 +283,7 @@ fontWeight:"700"
 {week.map(d=>{
 
 const cells = buildPatrolCellsForDate(d,employees)
+
 const cell = cells.find(
 c=>c.positionCode===pos.code && c.shiftType==="Nights"
 )
