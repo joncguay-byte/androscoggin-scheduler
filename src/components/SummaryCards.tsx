@@ -1,38 +1,80 @@
-import React from "react";
-
-const Card = ({children, className}:any)=> 
-  <div className={className} style={{border:"1px solid #e2e8f0",borderRadius:16,background:"white"}}>
-    {children}
-  </div>;
-
-const CardContent = ({children,className}:any)=> 
-  <div className={className} style={{padding:16}}>
-    {children}
-  </div>;
+import React from "react"
 
 export default function SummaryCards() {
-  const cards = [
-    { title: "CID On Call Today", value: "Troy Young" },
-    { title: "Next Force Candidate", value: "Phillips" },
-    { title: "Next Detail Candidate", value: "Miller" },
-    { title: "Poland Coverage", value: "Covered" },
-    { title: "Open Shift Count", value: "0" },
-  ];
 
-  return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-      {cards.map((card) => (
-        <Card key={card.title} className="rounded-2xl border-slate-200 shadow-sm">
-          <CardContent className="p-5">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              {card.title}
-            </div>
-            <div className="mt-3 text-2xl font-semibold text-slate-900">
-              {card.value}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
+const cards = [
+{
+label:"Total Deputies",
+value:"20",
+color:"#2563eb"
+},
+{
+label:"On Duty Today",
+value:"10",
+color:"#16a34a"
+},
+{
+label:"Open Shifts",
+value:"1",
+color:"#ea580c"
+},
+{
+label:"Staffing Alerts",
+value:"⚠",
+color:"#dc2626"
+}
+]
+
+return(
+
+<div
+style={{
+display:"grid",
+gridTemplateColumns:"repeat(4,1fr)",
+gap:"16px"
+}}
+>
+
+{cards.map((card,i)=>(
+
+<div
+key={i}
+style={{
+background:"white",
+borderRadius:"12px",
+padding:"18px",
+border:"1px solid #e2e8f0",
+boxShadow:"0 2px 4px rgba(0,0,0,0.04)"
+}}
+>
+
+<div
+style={{
+fontSize:"13px",
+fontWeight:"600",
+color:"#64748b",
+marginBottom:"8px"
+}}
+>
+{card.label}
+</div>
+
+<div
+style={{
+fontSize:"28px",
+fontWeight:"800",
+color:card.color
+}}
+>
+{card.value}
+</div>
+
+</div>
+
+))}
+
+</div>
+
+)
+
 }
