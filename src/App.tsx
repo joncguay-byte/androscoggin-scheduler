@@ -4,6 +4,7 @@ import SummaryCards from "./components/SummaryCards";
 import ModuleTabs from "./components/ModuleTabs";
 import { PatrolPage } from "./modules/patrol/PatrolPage";
 import EmployeesPage from "./modules/employees/EmployeesPage";
+import { ForcePage } from "./modules/force/ForcePage";
 import {
   Shield,
   Users,

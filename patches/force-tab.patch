@@ -1,0 +1,20 @@
+diff --git a/src/App.tsx b/src/App.tsx
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@
+ import { PatrolPage } from "./modules/patrol/PatrolPage";
++import { ForcePage } from "./modules/force/ForcePage";
+
+@@
+-const [activeTab,setActiveTab] = useState("command")
++const [activeTab,setActiveTab] = useState("command")
+
+@@
+ <button onClick={()=>setActiveTab("command")}>Command</button>
+ <button onClick={()=>setActiveTab("patrol")}>Patrol</button>
++<button onClick={()=>setActiveTab("force")}>Force</button>
+
+@@
+ {activeTab === "command" && <CommandPage />}
+ {activeTab === "patrol" && <PatrolPage employees={employees} canEdit />}
++{activeTab === "force" && <ForcePage employees={employees} />}
