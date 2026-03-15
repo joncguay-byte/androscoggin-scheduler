@@ -302,10 +302,6 @@ function countVisibleDates(baseDate: Date, view: ScheduleView) {
   return new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0).getDate();
 }
 
- 
-
-
-
 function getStatusBadgeClass(status: PatrolStatus, highlightYellow: boolean) {
   if (highlightYellow && (status === "Open Shift" || status === "Swap")) return "bg-yellow-200 text-yellow-900 border-yellow-300";
   switch (status) {
@@ -399,7 +395,7 @@ export default function App() {
 
       {activeModule === "patrol" && <PatrolPage employees={employees} canEdit={canEdit} />}
       {activeModule === "cid" && <EmptyModule title="CID" />}
-      {activeModule === "force" && <EmptyModule title="Force" />}
+      {activeModule === "force" && <ForcePage employees={employees} />}
       {activeModule === "detail" && <EmptyModule title="Detail" />}
       {activeModule === "reports" && <EmptyModule title="Reports" />}
       {activeModule === "employees" && (
