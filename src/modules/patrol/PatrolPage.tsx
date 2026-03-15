@@ -1,106 +1,144 @@
-import React, { useState } from "react";
+import React from "react"
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent
-} from "../../components/ui/simple-ui";
+} from "../../components/ui/simple-ui"
 
-import {
-  patrolPositions
-} from "../../App";
+import { patrolPositions } from "../../App"
 
 import {
   buildPatrolCellsForDate,
   buildVisibleDates,
   formatShortDate,
   formatLongDate,
-  getActiveTeam,
-  validateMinimumStaffing
-} from "../../lib/schedule-utils";
+  getActiveTeam
+} from "../../lib/schedule-utils"
 
 export function PatrolPage({ employees }) {
 
-  const today = new Date()
+const today = new Date()
 
-  const [view] = useState("month")
-  const [month] = useState(today.getMonth())
-  const [year] = useState(today.getFullYear())
+const baseDate = new Date(today.getFullYear(),today.getMonth(),1)
+const dates = buildVisibleDates(baseDate,"month")
 
-  const baseDate = new Date(year,month,1)
-  const dates = buildVisibleDates(baseDate,view)
+const weeks=[]
+for(let i=0;i<dates.length;i+=7){
+weeks.push(dates.slice(i,i+7))
+}
 
-  const weeks=[]
-  for(let i=0;i<dates.length;i+=7){
-    weeks.push(dates.slice(i,i+7))
-  }
+const visibleDayCount = weeks[0]?.length || 7
 
-  const visibleDayCount = weeks[0]?.length || 7
+function renderShiftCell(cell){
 
-  const renderShiftCell=(cell)=>{
+const employee = employees.find(e=>e.id===cell?.employeeId)
+const replacement = employees.find(e=>e.id===cell?.replacementEmployeeId)
 
-    const employee = employees.find(e=>e.id===cell?.employeeId)
-    const replacement = employees.find(e=>e.id===cell?.replacementEmployeeId)
+const isLeave = cell?.status && cell.status!=="Scheduled"
 
-    return(
+return(
 
 <div
 style={{
-width:"100%",
-minHeight:"70px",
 padding:"8px",
-fontSize:"13px",
+minHeight:"70px",
 border:"1px solid #e2e8f0",
 borderRadius:"6px",
-background: cell?.status && cell.status!=="Scheduled" ? "#fde68a":"white"
+background:isLeave?"#fde68a":"white",
+display:"flex",
+flexDirection:"column",
+gap:"4px",
+cursor:"pointer"
 }}
 >
 
-<div style={{fontWeight:"700"}}>
-V{cell?.vehicle||""} {employee?.lastName||"OPEN"}{" "}
-{cell?.status && cell.status!=="Scheduled" ? cell.status : cell?.shiftHours}
+{/* MAIN LINE */}
+
+<div style={{display:"flex",alignItems:"center",gap:"6px"}}>
+
+<div
+style={{
+background:"#1e293b",
+color:"white",
+fontSize:"11px",
+padding:"2px 6px",
+borderRadius:"4px"
+}}
+>
+V{cell?.vehicle||""}
 </div>
 
-{replacement && (
-<div style={{fontSize:"12px"}}>
-V{cell?.replacementVehicle||""} {replacement.lastName} {cell?.replacementHours}
+<div style={{fontWeight:"700"}}>
+{employee?.lastName||"OPEN"}
 </div>
+
+<div style={{marginLeft:"auto"}}>
+{isLeave?cell.status:cell?.shiftHours}
+</div>
+
+</div>
+
+{/* REPLACEMENT */}
+
+{replacement &&(
+
+<div style={{display:"flex",gap:"6px",fontSize:"12px"}}>
+
+<div
+style={{
+background:"#475569",
+color:"white",
+fontSize:"11px",
+padding:"2px 6px",
+borderRadius:"4px"
+}}
+>
+V{cell?.replacementVehicle||""}
+</div>
+
+<div>{replacement.lastName}</div>
+
+<div style={{marginLeft:"auto"}}>
+{cell?.replacementHours}
+</div>
+
+</div>
+
 )}
 
 </div>
 
-    )
+)
 
-  }
+}
 
 return(
 
 <Card>
 
 <CardHeader>
-<CardTitle>Patrol Schedule</CardTitle>
+<CardTitle>Androscoggin Patrol Schedule</CardTitle>
 </CardHeader>
 
 <CardContent>
 
 <div style={{overflowX:"auto"}}>
 
-{weeks.map((week,weekIndex)=>{
+{weeks.map((week,i)=>{
 
 const start=week[0]
 const end=week[week.length-1]
 
 return(
 
-<div key={weekIndex} style={{marginBottom:"40px"}}>
-
-{/* WEEK TITLE */}
+<div key={i} style={{marginBottom:"40px"}}>
 
 <div style={{
-textAlign:"center",
-fontWeight:"700",
 background:"#e2e8f0",
 padding:"10px",
+fontWeight:"700",
+textAlign:"center",
 borderRadius:"6px"
 }}>
 {formatLongDate(start)} - {formatLongDate(end)}
@@ -114,80 +152,37 @@ display:"grid",
 gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`,
 background:"#f8fafc",
 borderBottom:"1px solid #cbd5e1",
-fontWeight:"600",
-position:"sticky",
-top:0,
-zIndex:5
+fontWeight:"600"
 }}
 >
 
 <div></div>
 
-{week.map(d=>{
-
-const cells = buildPatrolCellsForDate(d,employees)
-const staffing = validateMinimumStaffing(cells,{})
-
-return(
+{week.map(d=>(
 
 <div key={d.toISOString()} style={{textAlign:"center",padding:"6px"}}>
-
 {formatShortDate(d)}
+</div>
 
-{!staffing.ok && (
-<div style={{color:"#dc2626",fontWeight:"700"}}>⚠</div>
-)}
+))}
 
 </div>
 
-)
-
-})}
-
-</div>
-
-{/* DAYS SECTION */}
+{/* DAYS */}
 
 <div style={{
 background:"#cbd5e1",
-fontWeight:"700",
 padding:"8px",
+fontWeight:"700",
 marginTop:"8px"
 }}>
 DAY SHIFT
 </div>
 
-<div style={{
-display:"grid",
-gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`
-}}>
-
-<div style={{
-position:"sticky",
-left:0,
-background:"#e2e8f0",
-padding:"8px",
-fontWeight:"700",
-borderRight:"2px solid #cbd5e1",
-zIndex:4
-}}>
-Team
-</div>
-
-{week.map(d=>(
-<div key={d.toISOString()} style={{textAlign:"center"}}>
-{getActiveTeam(d,"Days")}
-</div>
-))}
-
-</div>
-
-{patrolPositions.map(pos=>{
-
-return(
+{patrolPositions.map(pos=>(
 
 <div
-key={`days-${pos.code}`}
+key={pos.code}
 style={{
 display:"grid",
 gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`,
@@ -195,27 +190,23 @@ borderTop:"1px solid #e2e8f0"
 }}
 >
 
-<div
-style={{
-position:"sticky",
-left:0,
+<div style={{
 background:"#f1f5f9",
 padding:"8px",
-fontWeight:"700",
-borderRight:"2px solid #cbd5e1",
-zIndex:4
-}}
->
+fontWeight:"700"
+}}>
 {pos.label}
 </div>
 
 {week.map(d=>{
 
 const cells = buildPatrolCellsForDate(d,employees)
-const cell = cells.find(c=>c.positionCode===pos.code && c.shiftType==="Days")
+const cell = cells.find(
+c=>c.positionCode===pos.code && c.shiftType==="Days"
+)
 
 return(
-<div key={`${pos.code}-${d.toISOString()}`}>
+<div key={d.toISOString()}>
 {renderShiftCell(cell)}
 </div>
 )
@@ -224,52 +215,23 @@ return(
 
 </div>
 
-)
+))}
 
-})}
-
-{/* NIGHT SECTION */}
+{/* NIGHTS */}
 
 <div style={{
 background:"#cbd5e1",
-fontWeight:"700",
 padding:"8px",
+fontWeight:"700",
 marginTop:"16px"
 }}>
 NIGHT SHIFT
 </div>
 
-<div style={{
-display:"grid",
-gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`
-}}>
-
-<div style={{
-position:"sticky",
-left:0,
-background:"#e2e8f0",
-padding:"8px",
-fontWeight:"700",
-borderRight:"2px solid #cbd5e1",
-zIndex:4
-}}>
-Team
-</div>
-
-{week.map(d=>(
-<div key={d.toISOString()} style={{textAlign:"center"}}>
-{getActiveTeam(d,"Nights")}
-</div>
-))}
-
-</div>
-
-{patrolPositions.map(pos=>{
-
-return(
+{patrolPositions.map(pos=>(
 
 <div
-key={`nights-${pos.code}`}
+key={`night-${pos.code}`}
 style={{
 display:"grid",
 gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`,
@@ -277,27 +239,23 @@ borderTop:"1px solid #e2e8f0"
 }}
 >
 
-<div
-style={{
-position:"sticky",
-left:0,
+<div style={{
 background:"#f1f5f9",
 padding:"8px",
-fontWeight:"700",
-borderRight:"2px solid #cbd5e1",
-zIndex:4
-}}
->
+fontWeight:"700"
+}}>
 {pos.label}
 </div>
 
 {week.map(d=>{
 
 const cells = buildPatrolCellsForDate(d,employees)
-const cell = cells.find(c=>c.positionCode===pos.code && c.shiftType==="Nights")
+const cell = cells.find(
+c=>c.positionCode===pos.code && c.shiftType==="Nights"
+)
 
 return(
-<div key={`${pos.code}-${d.toISOString()}`}>
+<div key={d.toISOString()}>
 {renderShiftCell(cell)}
 </div>
 )
@@ -306,9 +264,7 @@ return(
 
 </div>
 
-)
-
-})}
+))}
 
 </div>
 
