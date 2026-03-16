@@ -1,336 +1,204 @@
-import { fetchSchedule, saveScheduleCell, subscribeToSchedule } from "../../lib/schedule-utils"
-
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import {
-Card,
-CardHeader,
-CardTitle,
-CardContent,
-Button
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent
 } from "../../components/ui/simple-ui"
-
-useEffect(() => {
-
-  async function loadSchedule() {
-    const data = await fetchSchedule()
-    setSchedule(data)
-  }
-
-  loadSchedule()
-
-  const channel = subscribeToSchedule(() => {
-    loadSchedule()
-  })
-
-  return () => {
-    channel.unsubscribe()
-  }
-
-}, [])
 
 import { patrolPositions } from "../../App"
 
 import {
-buildPatrolCellsForDate,
-buildVisibleDates,
-formatShortDate,
-formatLongDate
+  buildVisibleDates,
+  formatShortDate,
+  formatLongDate,
+  getActiveTeam,
+  validateMinimumStaffing,
+  fetchSchedule,
+  subscribeToSchedule
 } from "../../lib/schedule-utils"
 
 export function PatrolPage({ employees }) {
 
-const today = new Date()
-
-const [baseDate,setBaseDate] = useState(
-new Date(today.getFullYear(),today.getMonth(),1)
-)
-
-const [schedule, setSchedule] = useState([])
+  const today = new Date()
 
-const [dragEmployee,setDragEmployee] = useState(null)
-
-const dates = buildVisibleDates(baseDate,"month")
-
-const weeks=[]
-for(let i=0;i<dates.length;i+=7){
-weeks.push(dates.slice(i,i+7))
-}
-
-const visibleDayCount = weeks[0]?.length || 7
-
-function prevPeriod(){
-const d=new Date(baseDate)
-d.setMonth(d.getMonth()-1)
-setBaseDate(d)
-}
-
-function nextPeriod(){
-const d=new Date(baseDate)
-d.setMonth(d.getMonth()+1)
-setBaseDate(d)
-}
+  const [view] = useState("month")
+  const [month] = useState(today.getMonth())
+  const [year] = useState(today.getFullYear())
 
-function goToday(){
-setBaseDate(new Date(today.getFullYear(),today.getMonth(),1))
-}
+  const [schedule, setSchedule] = useState([])
 
-function assignEmployee(cell,employee){
+  const baseDate = new Date(year, month, 1)
+  const dates = buildVisibleDates(baseDate, view)
 
-const updated={
-...cell,
-employeeId:employee.id,
-vehicle:employee.defaultVehicle,
-shiftHours:employee.defaultShiftHours,
-status:"Scheduled"
-}
+  const weeks = []
+  for (let i = 0; i < dates.length; i += 7) {
+    weeks.push(dates.slice(i, i + 7))
+  }
 
-setSchedule(prev=>({
-...prev,
-[cell.id]:updated
-}))
+  const visibleDayCount = weeks[0]?.length || 7
 
-}
 
-function renderShiftCell(cell){
+  /* =============================
+     LOAD SCHEDULE FROM SUPABASE
+  ============================== */
 
-const realCell=schedule[cell?.id] || cell
+  useEffect(() => {
 
-const employee = employees.find(e=>e.id===realCell?.employeeId)
-const replacement = employees.find(e=>e.id===realCell?.replacementEmployeeId)
+    async function loadSchedule() {
+      const data = await fetchSchedule()
+      setSchedule(data)
+    }
 
-const isLeave = realCell?.status && realCell.status!=="Scheduled"
+    loadSchedule()
 
-return(
+    const channel = subscribeToSchedule(() => {
+      loadSchedule()
+    })
 
-<div
-onDragOver={(e)=>e.preventDefault()}
-onDrop={()=>dragEmployee && assignEmployee(cell,dragEmployee)}
-style={{
-padding:"8px",
-minHeight:"70px",
-border:"1px solid #e2e8f0",
-borderRadius:"6px",
-background:isLeave?"#fde68a":"white",
-display:"flex",
-flexDirection:"column",
-gap:"4px"
-}}
->
+    return () => {
+      channel.unsubscribe()
+    }
 
-<div style={{display:"flex",gap:"6px"}}>
+  }, [])
 
-<div
-style={{
-background:"#1e293b",
-color:"white",
-fontSize:"11px",
-padding:"2px 6px",
-borderRadius:"4px"
-}}
->
-V{realCell?.vehicle||""}
-</div>
 
-<div style={{fontWeight:"700"}}>
-{employee?.lastName||"OPEN"}
-</div>
+  return (
 
-<div style={{marginLeft:"auto"}}>
-{isLeave?realCell.status:realCell?.shiftHours}
-</div>
+    <Card>
 
-</div>
+      <CardHeader>
+        <CardTitle>Androscoggin Patrol Schedule</CardTitle>
+      </CardHeader>
 
-{replacement &&(
+      <CardContent>
 
-<div style={{display:"flex",gap:"6px",fontSize:"12px"}}>
+        <div style={{width:"100%",overflowX:"auto"}}>
 
-<div
-style={{
-background:"#475569",
-color:"white",
-fontSize:"11px",
-padding:"2px 6px",
-borderRadius:"4px"
-}}
->
-V{realCell?.replacementVehicle||""}
-</div>
+          {weeks.map((week, weekIndex) => {
 
-<div>{replacement.lastName}</div>
+            const start = week[0]
+            const end = week[week.length - 1]
 
-<div style={{marginLeft:"auto"}}>
-{realCell?.replacementHours}
-</div>
+            return (
 
-</div>
+              <div key={weekIndex} style={{marginBottom:"30px"}}>
 
-)}
+                <div style={{
+                  background:"#f1f5f9",
+                  textAlign:"center",
+                  fontWeight:"600",
+                  padding:"6px"
+                }}>
+                  {formatLongDate(start)} - {formatLongDate(end)}
+                </div>
 
-</div>
 
-)
+                {/* DATE HEADER */}
 
-}
+                <div style={{
+                  display:"grid",
+                  gridTemplateColumns:`220px repeat(${visibleDayCount},150px)`,
+                  background:"#f8fafc",
+                  borderBottom:"1px solid #cbd5e1",
+                  fontWeight:"600"
+                }}>
 
-return(
+                  <div></div>
 
-<Card>
+                  {week.map((d)=>{
 
-<CardHeader>
+                    const staffing = validateMinimumStaffing([])
 
-<div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    return (
 
-<CardTitle>Androscoggin Patrol Schedule</CardTitle>
+                      <div key={d.toISOString()} style={{textAlign:"center"}}>
 
-<div style={{display:"flex",gap:"8px"}}>
+                        {formatShortDate(d)}
 
-<Button onClick={prevPeriod}>←</Button>
-<Button onClick={goToday}>Today</Button>
-<Button onClick={nextPeriod}>→</Button>
+                        {!staffing.ok && (
+                          <div style={{color:"red"}}>⚠</div>
+                        )}
 
-</div>
+                      </div>
 
-</div>
+                    )
 
-</CardHeader>
+                  })}
 
-<CardContent>
+                </div>
 
-{/* DRAG SOURCE */}
 
-<div style={{
-display:"flex",
-gap:"10px",
-marginBottom:"20px",
-flexWrap:"wrap"
-}}>
+                {/* DAYS TEAM */}
 
-{employees.map(emp=>(
+                <div style={{
+                  display:"grid",
+                  gridTemplateColumns:`220px repeat(${visibleDayCount},150px)`
+                }}>
 
-<div
-key={emp.id}
-draggable
-onDragStart={()=>setDragEmployee(emp)}
-style={{
-padding:"6px 10px",
-background:"#e2e8f0",
-borderRadius:"6px",
-cursor:"grab",
-fontSize:"13px",
-fontWeight:"600"
-}}
->
-{emp.lastName}
-</div>
+                  <div style={{
+                    padding:"6px",
+                    fontWeight:"700",
+                    background:"#e2e8f0"
+                  }}>
+                    Days
+                  </div>
 
-))}
+                  {week.map((d)=>(
+                    <div key={d.toISOString()} style={{textAlign:"center"}}>
+                      {getActiveTeam(d,"Days")}
+                    </div>
+                  ))}
 
-</div>
+                </div>
 
-<div style={{overflowX:"auto"}}>
 
-{weeks.map((week,i)=>{
+                {/* POSITIONS */}
 
-const start=week[0]
-const end=week[week.length-1]
+                {patrolPositions.map((pos)=>{
 
-return(
+                  return (
 
-<div key={i} style={{marginBottom:"40px"}}>
+                    <div
+                      key={pos.code}
+                      style={{
+                        display:"grid",
+                        gridTemplateColumns:`220px repeat(${visibleDayCount},150px)`,
+                        borderTop:"1px solid #e2e8f0"
+                      }}
+                    >
 
-<div style={{
-background:"#e2e8f0",
-padding:"10px",
-fontWeight:"700",
-textAlign:"center",
-borderRadius:"6px"
-}}>
-{formatLongDate(start)} - {formatLongDate(end)}
-</div>
+                      <div style={{
+                        padding:"6px",
+                        fontWeight:"600",
+                        background:"#f1f5f9"
+                      }}>
+                        {pos.label}
+                      </div>
 
-<div
-style={{
-display:"grid",
-gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`,
-background:"#f8fafc",
-borderBottom:"1px solid #cbd5e1",
-fontWeight:"600"
-}}
->
+                      {week.map((d)=>(
+                        <div key={d.toISOString()} style={{borderLeft:"1px solid #e2e8f0"}}>
+                        </div>
+                      ))}
 
-<div></div>
+                    </div>
 
-{week.map(d=>(
+                  )
 
-<div key={d.toISOString()} style={{textAlign:"center",padding:"6px"}}>
-{formatShortDate(d)}
-</div>
+                })}
 
-))}
+              </div>
 
-</div>
+            )
 
-<div style={{
-background:"#cbd5e1",
-padding:"8px",
-fontWeight:"700",
-marginTop:"8px"
-}}>
-DAY SHIFT
-</div>
+          })}
 
-{patrolPositions.map(pos=>(
+        </div>
 
-<div
-key={pos.code}
-style={{
-display:"grid",
-gridTemplateColumns:`260px repeat(${visibleDayCount},170px)`,
-borderTop:"1px solid #e2e8f0"
-}}
->
+      </CardContent>
 
-<div style={{
-background:"#f1f5f9",
-padding:"8px",
-fontWeight:"700"
-}}>
-{pos.label}
-</div>
+    </Card>
 
-{week.map(d=>{
-
-const cells = buildPatrolCellsForDate(d,employees)
-
-const cell = cells.find(
-c=>c.positionCode===pos.code && c.shiftType==="Days"
-)
-
-return(
-<div key={d.toISOString()}>
-{renderShiftCell(cell)}
-</div>
-)
-
-})}
-
-</div>
-
-))}
-
-</div>
-
-)
-
-})}
-
-</div>
-
-</CardContent>
-
-</Card>
-
-)
+  )
 
 }
