@@ -12,13 +12,31 @@ import { ForcePage } from "./modules/force/ForcePage"
 import {
   Shield,
   Users,
-  CalendarDays,
   FileText,
   Settings,
   Briefcase,
   Clock3,
   AlertTriangle
 } from "lucide-react"
+
+
+/* =========================
+   SHARED EXPORTS
+   (PatrolPage depends on these)
+========================= */
+
+export const patrolPositions = [
+  { code: "SUP1", label: "Supervisor 1" },
+  { code: "SUP2", label: "Supervisor 2" },
+  { code: "DEP1", label: "Deputy 1" },
+  { code: "DEP2", label: "Deputy 2" },
+  { code: "POL", label: "Poland" }
+]
+
+
+/* =========================
+   TYPES
+========================= */
 
 type AppRole = "Admin" | "Sergeant" | "Detective" | "Deputy"
 type ModuleKey = "patrol" | "cid" | "force" | "detail" | "reports" | "employees" | "settings"
@@ -41,6 +59,11 @@ type UserProfile = {
   role: AppRole
 }
 
+
+/* =========================
+   MODULE ORDER
+========================= */
+
 const moduleOrder = [
   { key: "patrol", label: "Patrol", icon: Shield },
   { key: "cid", label: "CID", icon: Clock3 },
@@ -51,6 +74,11 @@ const moduleOrder = [
   { key: "settings", label: "Settings", icon: Settings }
 ]
 
+
+/* =========================
+   INITIAL EMPLOYEES
+========================= */
+
 const initialEmployees: Employee[] = [
   { id:"1", firstName:"Jon", lastName:"Guay", rank:"Sgt", team:"Days A", defaultVehicle:"V7", defaultShiftHours:"5a-5p", hireDate:"2011-05-01", status:"Active" },
   { id:"2", firstName:"Dylan", lastName:"Rider", rank:"Cpl", team:"Days A", defaultVehicle:"V17", defaultShiftHours:"5a-5p", hireDate:"2013-06-01", status:"Active" },
@@ -59,6 +87,11 @@ const initialEmployees: Employee[] = [
   { id:"5", firstName:"Joe", lastName:"Tripp", rank:"Poland Deputy", team:"Days A", defaultVehicle:"V28", defaultShiftHours:"5a-5p", hireDate:"2020-01-10", status:"Active" }
 ]
 
+
+/* =========================
+   PLACEHOLDER MODULE
+========================= */
+
 function EmptyModule({ title }: { title: string }) {
   return (
     <div style={{padding:"40px",textAlign:"center"}}>
@@ -66,6 +99,11 @@ function EmptyModule({ title }: { title: string }) {
     </div>
   )
 }
+
+
+/* =========================
+   APP ROOT
+========================= */
 
 export default function App() {
 
@@ -129,6 +167,5 @@ export default function App() {
       )}
 
     </div>
-
   )
 }
