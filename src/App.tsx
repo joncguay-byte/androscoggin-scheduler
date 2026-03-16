@@ -1,6 +1,4 @@
-import React,{useState,useEffect} from "react"
-
-import LoginPage from "./modules/auth/LoginPage"
+import React, { useState } from "react"
 
 import Header from "./components/Header"
 import SummaryCards from "./components/SummaryCards"
@@ -9,62 +7,68 @@ import ModuleTabs from "./components/ModuleTabs"
 import { PatrolPage } from "./modules/patrol/PatrolPage"
 import EmployeesPage from "./modules/employees/EmployeesPage"
 
-import { getCurrentUser } from "./lib/auth"
+import { initialEmployees } from "./data/employees"
+
+import { Shield, Users, AlertTriangle } from "lucide-react"
 
 
-export default function App(){
-
-  const [user,setUser]=useState(null)
-
-  const [activeModule,setActiveModule]=useState("patrol")
-
-  const [employees,setEmployees]=useState([])
-
-
-  useEffect(()=>{
-
-    async function checkLogin(){
-
-      const u = await getCurrentUser()
-
-      if(u){
-        setUser(u)
-      }
-
-    }
-
-    checkLogin()
-
-  },[])
+type ModuleKey =
+  | "patrol"
+  | "cid"
+  | "force"
+  | "detail"
+  | "reports"
+  | "employees"
+  | "settings"
 
 
-  if(!user){
-
-    return(
-      <LoginPage onLogin={(u)=>setUser(u)}/>
-    )
-
-  }
+const moduleOrder = [
+  { key: "patrol", label: "Patrol", icon: Shield },
+  { key: "force", label: "Force", icon: AlertTriangle },
+  { key: "employees", label: "Employees", icon: Users }
+]
 
 
-  return(
+export default function App() {
 
-    <div style={{padding:"20px"}}>
+  const [employees, setEmployees] = useState(initialEmployees)
 
-      <Header user={user}/>
+  const [activeModule, setActiveModule] =
+    useState<ModuleKey>("patrol")
 
-      <SummaryCards/>
+
+  return (
+
+    <div
+      style={{
+        width: "100%",
+        minHeight: "100vh",
+        padding: "20px",
+        boxSizing: "border-box"
+      }}
+    >
+
+      <Header />
+
+      <div style={{ marginTop: "20px", marginBottom: "20px" }}>
+        <SummaryCards />
+      </div>
 
       <ModuleTabs
         active={activeModule}
         onChange={setActiveModule}
+        moduleOrder={moduleOrder}
+        visibleModules={moduleOrder.map(m => m.key)}
       />
 
-      {activeModule==="patrol" && (
-        <PatrolPage employees={employees}/>
+      {activeModule === "patrol" && (
+        <PatrolPage
+          employees={employees}
+          canEdit={true}
+        />
       )}
 
-      {activeModule==="employees" && (
+      {activeModule === "employees" && (
         <EmployeesPage
           employees={employees}
           setEmployees={setEmployees}
@@ -74,5 +78,4 @@ export default function App(){
     </div>
 
   )
-
 }
