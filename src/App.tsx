@@ -8,6 +8,8 @@ import { PatrolPage } from "./modules/patrol/PatrolPage"
 import EmployeesPage from "./modules/employees/EmployeesPage"
 import { CIDPage } from "./modules/cid/CIDPage"
 import { ForcePage } from "./modules/force/ForcePage"
+import { DetailPage } from "./modules/detail/DetailPage"
+import { ReportsPage } from "./modules/reports/ReportsPage"
 
 import {
   Shield,
@@ -150,13 +152,9 @@ export default function App() {
         <ForcePage employees={employees} />
       )}
 
-      {activeModule === "detail" && (
-        <EmptyModule title="Detail" />
-      )}
+      {activeModule === "detail" && <DetailPage employees={employees} />}
 
-      {activeModule === "reports" && (
-        <EmptyModule title="Reports" />
-      )}
+      {activeModule === "reports" && <ReportsPage employees={employees} />}
 
       {activeModule === "employees" && (
         <EmployeesPage employees={employees} setEmployees={setEmployees} />
