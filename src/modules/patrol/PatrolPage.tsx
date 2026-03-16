@@ -6,7 +6,11 @@ import {
   CardContent
 } from "../../components/ui/simple-ui"
 
-import { patrolPositions } from "../../App"
+import {
+  patrolPositions,
+  scheduleViews,
+  statusOptions
+} from "../../data/constants";
 
 import {
   buildVisibleDates,
