@@ -1,3 +1,5 @@
+import { fetchSchedule, saveScheduleCell, subscribeToSchedule } from "../../lib/schedule-utils"
+
 import React, { useState } from "react"
 import {
 Card,
@@ -6,6 +8,25 @@ CardTitle,
 CardContent,
 Button
 } from "../../components/ui/simple-ui"
+
+useEffect(() => {
+
+  async function loadSchedule() {
+    const data = await fetchSchedule()
+    setSchedule(data)
+  }
+
+  loadSchedule()
+
+  const channel = subscribeToSchedule(() => {
+    loadSchedule()
+  })
+
+  return () => {
+    channel.unsubscribe()
+  }
+
+}, [])
 
 import { patrolPositions } from "../../App"
 
@@ -24,7 +45,7 @@ const [baseDate,setBaseDate] = useState(
 new Date(today.getFullYear(),today.getMonth(),1)
 )
 
-const [schedule,setSchedule] = useState({})
+const [schedule, setSchedule] = useState([])
 
 const [dragEmployee,setDragEmployee] = useState(null)
 
