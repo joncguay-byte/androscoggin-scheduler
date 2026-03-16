@@ -1,4 +1,8 @@
-export type AppRole = "admin" | "sergeant" | "detective" | "deputy"
+export type AppRole =
+  | "admin"
+  | "sergeant"
+  | "detective"
+  | "deputy"
 
 export type Rank =
   | "Sgt"
@@ -22,7 +26,9 @@ export type ScheduleView =
   | "week"
   | "day"
 
-export type ShiftType = "Days" | "Nights"
+export type ShiftType =
+  | "Days"
+  | "Nights"
 
 export type PatrolPositionCode =
   | "SUP1"
