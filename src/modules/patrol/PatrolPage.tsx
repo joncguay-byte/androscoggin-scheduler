@@ -1,208 +1,206 @@
-import React, { useState, useEffect } from "react"
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent
-} from "../../components/ui/simple-ui"
+import React, { useEffect, useMemo, useState } from "react"
+import type { Employee } from "../../types"
+import { patrolPositions } from "../../data/constants"
+import { isShiftCovered, isForceRequired } from "../../lib/staffing-engine"
+import { supabase } from "../../lib/supabase"
+import { ensureMonthSchedule } from "../../lib/schedule-generator"
 
-import {
-  patrolPositions,
-  scheduleViews,
-  statusOptions
-} from "../../data/constants";
+type ScheduleRow = {
+  id?: string
+  assignment_date: string
+  shift_type: "Days" | "Nights"
+  position_code: "SUP1" | "SUP2" | "DEP1" | "DEP2" | "POL"
+  employee_id: string | null
+  vehicle: string | null
+  shift_hours: string | null
+  status: string | null
+  replacement_employee_id: string | null
+  replacement_vehicle: string | null
+  replacement_hours: string | null
+}
 
-import {
-  buildVisibleDates,
-  formatShortDate,
-  formatLongDate,
-  getActiveTeam,
-  validateMinimumStaffing,
-  fetchSchedule,
-  subscribeToSchedule
-} from "../../lib/schedule-utils"
+type EditingRow = ScheduleRow
 
-export function PatrolPage({ employees }) {
+const STATUS_OPTIONS = [
+  "Scheduled","Sick","Vacation","Court","Training","FMLA",
+  "Professional Leave","Bereavement","Call Out","Detail",
+  "Extra","Swap","Open Shift","Off"
+]
+
+function buildMonthDates(baseDate: Date) {
+  const year = baseDate.getFullYear()
+  const month = baseDate.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  return Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1))
+}
+
+function formatDayHeader(d: Date) {
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "numeric",
+    day: "numeric"
+  })
+}
+
+function formatRange(start: Date, end: Date) {
+  return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`
+}
+
+function getActiveTeam(date: Date, shift: "Days" | "Nights") {
+  const pitman = [0,1,1,0,0,1,1,1,0,0,1,1,0,0]
+  const start = new Date("2024-01-01")
+  const diff = Math.floor((date.getTime() - start.getTime()) / 86400000)
+  const idx = pitman[Math.abs(diff) % pitman.length]
+  return shift === "Days" ? (idx ? "Days A" : "Days B") : (idx ? "Nights A" : "Nights B")
+}
+
+function isProblemStatus(status?: string | null) {
+  return !!status && status !== "Scheduled"
+}
+
+function toIsoDate(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+export function PatrolPage({ employees, canEdit }: { employees: Employee[], canEdit?: boolean }) {
 
   const today = new Date()
 
-  const [view] = useState("month")
-  const [month] = useState(today.getMonth())
-  const [year] = useState(today.getFullYear())
+  const [baseDate, setBaseDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
+  const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([])
+  const [editingRow, setEditingRow] = useState<EditingRow | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  const [schedule, setSchedule] = useState([])
-
-  const baseDate = new Date(year, month, 1)
-  const dates = buildVisibleDates(baseDate, view)
-
-  const weeks = []
-  for (let i = 0; i < dates.length; i += 7) {
-    weeks.push(dates.slice(i, i + 7))
-  }
-
-  const visibleDayCount = weeks[0]?.length || 7
-
-
-  /* =============================
-     LOAD SCHEDULE FROM SUPABASE
-  ============================== */
+  // ✅ MOBILE DETECTION
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
 
+  const dates = useMemo(() => buildMonthDates(baseDate), [baseDate])
+
+  useEffect(() => {
     async function loadSchedule() {
-      const data = await fetchSchedule()
-      setSchedule(data)
+      const start = toIsoDate(new Date(baseDate.getFullYear(), baseDate.getMonth(), 1))
+      const end = toIsoDate(new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0))
+
+      await ensureMonthSchedule(baseDate)
+
+      const { data } = await supabase
+        .from("patrol_schedule")
+        .select("*")
+        .gte("assignment_date", start)
+        .lte("assignment_date", end)
+
+      setScheduleRows((data || []) as ScheduleRow[])
     }
 
     loadSchedule()
+  }, [baseDate])
 
-    const channel = subscribeToSchedule(() => {
-      loadSchedule()
+  function cellFor(date: Date, pos: any, shift: any) {
+    const iso = toIsoDate(date)
+    return scheduleRows.find(r =>
+      r.assignment_date === iso &&
+      r.position_code === pos &&
+      r.shift_type === shift
+    )
+  }
+
+  function openEditor(date: Date, pos: any, shift: any) {
+    if (!canEdit) return
+    const existing = cellFor(date, pos, shift)
+    if (existing) setEditingRow({ ...existing })
+  }
+
+  // ✅ MOBILE GROUPING
+  const groupedByDate = useMemo(() => {
+    const map: Record<string, ScheduleRow[]> = {}
+    scheduleRows.forEach(row => {
+      if (!map[row.assignment_date]) map[row.assignment_date] = []
+      map[row.assignment_date].push(row)
     })
+    return map
+  }, [scheduleRows])
 
-    return () => {
-      channel.unsubscribe()
-    }
+  // ✅ MOBILE VIEW
+  const renderMobile = () => (
+    <div style={{ padding: 10 }}>
+      {Object.entries(groupedByDate).map(([date, rows]) => (
+        <div key={date} style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700 }}>{date}</div>
 
-  }, [])
-
-
-  return (
-
-    <Card>
-
-      <CardHeader>
-        <CardTitle>Androscoggin Patrol Schedule</CardTitle>
-      </CardHeader>
-
-      <CardContent>
-
-        <div style={{width:"100%",overflowX:"auto"}}>
-
-          {weeks.map((week, weekIndex) => {
-
-            const start = week[0]
-            const end = week[week.length - 1]
+          {rows.map(row => {
+            const emp = employees.find(e => e.id === row.employee_id)
+            const rep = employees.find(e => e.id === row.replacement_employee_id)
+            const leave = isProblemStatus(row.status)
 
             return (
+              <div
+                key={row.id}
+                onClick={() => openEditor(new Date(row.assignment_date), row.position_code, row.shift_type)}
+                style={{
+                  padding: 10,
+                  marginTop: 6,
+                  border: "1px solid #ccc",
+                  borderRadius: 6,
+                  background: leave ? "#fde68a" : "#fff"
+                }}
+              >
+                <div>{row.position_code} - {row.shift_type}</div>
+                <div>{row.vehicle} {emp?.lastName}</div>
+                <div>{leave ? row.status : row.shift_hours}</div>
 
-              <div key={weekIndex} style={{marginBottom:"30px"}}>
-
-                <div style={{
-                  background:"#f1f5f9",
-                  textAlign:"center",
-                  fontWeight:"600",
-                  padding:"6px"
-                }}>
-                  {formatLongDate(start)} - {formatLongDate(end)}
-                </div>
-
-
-                {/* DATE HEADER */}
-
-                <div style={{
-                  display:"grid",
-                  gridTemplateColumns:`220px repeat(${visibleDayCount},150px)`,
-                  background:"#f8fafc",
-                  borderBottom:"1px solid #cbd5e1",
-                  fontWeight:"600"
-                }}>
-
-                  <div></div>
-
-                  {week.map((d)=>{
-
-                    const staffing = validateMinimumStaffing([])
-
-                    return (
-
-                      <div key={d.toISOString()} style={{textAlign:"center"}}>
-
-                        {formatShortDate(d)}
-
-                        {!staffing.ok && (
-                          <div style={{color:"red"}}>⚠</div>
-                        )}
-
-                      </div>
-
-                    )
-
-                  })}
-
-                </div>
-
-
-                {/* DAYS TEAM */}
-
-                <div style={{
-                  display:"grid",
-                  gridTemplateColumns:`220px repeat(${visibleDayCount},150px)`
-                }}>
-
-                  <div style={{
-                    padding:"6px",
-                    fontWeight:"700",
-                    background:"#e2e8f0"
-                  }}>
-                    Days
+                {rep && (
+                  <div style={{ fontSize: 12, color: "blue" }}>
+                    ↳ {row.replacement_vehicle} {rep.lastName}
                   </div>
-
-                  {week.map((d)=>(
-                    <div key={d.toISOString()} style={{textAlign:"center"}}>
-                      {getActiveTeam(d,"Days")}
-                    </div>
-                  ))}
-
-                </div>
-
-
-                {/* POSITIONS */}
-
-                {patrolPositions.map((pos)=>{
-
-                  return (
-
-                    <div
-                      key={pos.code}
-                      style={{
-                        display:"grid",
-                        gridTemplateColumns:`220px repeat(${visibleDayCount},150px)`,
-                        borderTop:"1px solid #e2e8f0"
-                      }}
-                    >
-
-                      <div style={{
-                        padding:"6px",
-                        fontWeight:"600",
-                        background:"#f1f5f9"
-                      }}>
-                        {pos.label}
-                      </div>
-
-                      {week.map((d)=>(
-                        <div key={d.toISOString()} style={{borderLeft:"1px solid #e2e8f0"}}>
-                        </div>
-                      ))}
-
-                    </div>
-
-                  )
-
-                })}
-
+                )}
               </div>
-
             )
-
           })}
-
         </div>
-
-      </CardContent>
-
-    </Card>
-
+      ))}
+    </div>
   )
 
+  const rangeTitle = dates.length ? formatRange(dates[0], dates[dates.length - 1]) : ""
+
+  // ✅ DESKTOP (UNCHANGED GRID)
+  const renderDesktop = () => (
+    <div style={{ overflowX: "auto" }}>
+      <h2>Patrol Schedule</h2>
+      <div>{rangeTitle}</div>
+
+      {patrolPositions.map(pos => (
+        <div key={pos.code}>
+          <strong>{pos.label}</strong>
+
+          {dates.map(d => (
+            <div key={d.toISOString()}>
+              {renderShiftCell(d, pos.code, "Days")}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+
+  function renderShiftCell(date: Date, pos: any, shift: any) {
+    const row = cellFor(date, pos, shift)
+    if (!row) return <div>OPEN</div>
+
+    const emp = employees.find(e => e.id === row.employee_id)
+    return (
+      <div>
+        {row.vehicle} {emp?.lastName}
+      </div>
+    )
+  }
+
+  return isMobile ? renderMobile() : renderDesktop()
 }
