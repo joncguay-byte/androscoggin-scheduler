@@ -49,6 +49,8 @@ const OVERTIME_CARD_STYLE = {
   borderRadius: "10px",
   background: "#ffffff"
 } as const
+const LOCAL_PATROL_OVERRIDES_KEY = "androscoggin-local-patrol-overrides"
+const OVERTIME_SHIFT_REQUESTS_STORAGE_KEY = "androscoggin-overtime-shift-requests"
 
 function toIsoDate(date: Date) {
   const year = date.getFullYear()
@@ -654,6 +656,8 @@ export function OvertimePage({
     const requestKeysToRemove = new Set<string>()
     const selectedDatesSet = new Set(selectedOffDates)
 
+    let nextRequestsSnapshot: OvertimeShiftRequest[] = []
+
     updateOvertimeRequests((current) => {
       const nextRequests = [...current]
 
@@ -713,7 +717,7 @@ export function OvertimePage({
         }
       }
 
-      return [...nextRequests, ...requestsToUpsert.values()]
+      nextRequestsSnapshot = [...nextRequests, ...requestsToUpsert.values()]
         .filter((request) => {
           const key = `${request.assignmentDate}-${request.shiftType}-${request.positionCode}`
           if (!requestKeysToRemove.has(key)) return true
@@ -727,6 +731,8 @@ export function OvertimePage({
           a.shiftType.localeCompare(b.shiftType) ||
           a.positionCode.localeCompare(b.positionCode)
       )
+
+      return nextRequestsSnapshot
     })
 
     if (updatedRows.length > 0) {
@@ -737,6 +743,14 @@ export function OvertimePage({
       localOverridesRef.current = nextOverrides
       invalidatePatrolScheduleCache()
       setPatrolOverrideRows(nextOverrides)
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(LOCAL_PATROL_OVERRIDES_KEY, JSON.stringify(nextOverrides))
+      }
+    }
+
+    if (typeof window !== "undefined" && nextRequestsSnapshot.length > 0) {
+      window.localStorage.setItem(OVERTIME_SHIFT_REQUESTS_STORAGE_KEY, JSON.stringify(nextRequestsSnapshot))
     }
 
     onAuditEvent(
