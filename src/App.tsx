@@ -551,6 +551,7 @@ export default function App() {
   const lastSupabaseOvertimeNotificationsActorRef = useRef("")
   const patrolSummaryRefreshTimeoutRef = useRef<number | null>(null)
   const forceHistoryRefreshTimeoutRef = useRef<number | null>(null)
+  const overtimeNotificationsRefreshTimeoutRef = useRef<number | null>(null)
   const currentUserRole = useMemo<AppRole>(() => profileRole || resolveAppRole(authUser), [authUser, profileRole])
   const currentUserDisplayName = useMemo(() => resolveDisplayName(authUser), [authUser])
   const currentSyncActorKey = useMemo(
@@ -561,6 +562,50 @@ export default function App() {
     () => mergePatrolSummaryRows(patrolSummaryRows, localPatrolOverrideRows),
     [patrolSummaryRows, localPatrolOverrideRows]
   )
+
+  function applyOvertimeNotificationsSyncData(data: Awaited<ReturnType<typeof loadSupabaseOvertimeNotificationsState>>["data"]) {
+    if (!data) return
+
+    const initialQueue = buildInitialOvertimeQueue(employees)
+    const defaultPreferences = buildInitialNotificationPreferences(employees)
+
+    const nextQueueIds =
+      data.overtimeQueueIds.length > 0
+        ? data.overtimeQueueIds
+        : (overtimeQueueIds.length > 0 ? overtimeQueueIds : initialQueue)
+
+    const nextShiftRequests =
+      data.overtimeShiftRequests.length > 0
+        ? data.overtimeShiftRequests
+        : overtimeShiftRequests
+
+    const nextEntries = data.overtimeEntries.length > 0 ? data.overtimeEntries : overtimeEntries
+    const nextPreferences =
+      data.notificationPreferences.length > 0
+        ? data.notificationPreferences
+        : (notificationPreferences.length > 0 ? notificationPreferences : defaultPreferences)
+    const nextCampaigns = data.notificationCampaigns.length > 0 ? data.notificationCampaigns : notificationCampaigns
+    const nextDeliveries = data.notificationDeliveries.length > 0 ? data.notificationDeliveries : notificationDeliveries
+    const nextProviderConfig = data.notificationProviderConfig || notificationProviderConfig
+
+    setOvertimeQueueIds(nextQueueIds)
+    setOvertimeShiftRequests(nextShiftRequests)
+    setOvertimeEntries(nextEntries)
+    setNotificationPreferences(nextPreferences)
+    setNotificationCampaigns(nextCampaigns)
+    setNotificationDeliveries(nextDeliveries)
+    setNotificationProviderConfig(nextProviderConfig)
+
+    lastSupabaseOvertimeNotificationsRef.current = JSON.stringify({
+      overtimeQueueIds: nextQueueIds,
+      overtimeShiftRequests: nextShiftRequests,
+      overtimeEntries: nextEntries,
+      notificationPreferences: nextPreferences,
+      notificationCampaigns: nextCampaigns,
+      notificationDeliveries: nextDeliveries,
+      notificationProviderConfig: nextProviderConfig
+    })
+  }
   const coverageEvaluatedPatrolSummaryRows = useMemo(() => {
     const positions: PatrolPositionCode[] = ["SUP1", "SUP2", "DEP1", "DEP2", "POL"]
     const shifts: ShiftType[] = ["Days", "Nights"]
@@ -1075,7 +1120,7 @@ export default function App() {
         lastSupabaseSnapshotRef.current = JSON.stringify(normalized)
         setAppStateSyncStatus({
           mode: "connected",
-          message: "Supabase sync is active for Employees, CID, Detail, Settings, and audit."
+          message: "Supabase sync is active for Employees, CID, Detail, Settings, audit, overtime, notifications, and patrol overrides."
         })
       } else if (result.error) {
         setAppStateSyncStatus({
@@ -1103,48 +1148,12 @@ export default function App() {
     let active = true
 
     async function hydrateOvertimeNotifications() {
-      const fallbackSnapshot = schedulerSnapshot
       const result = await loadSupabaseOvertimeNotificationsState()
 
       if (!active) return
 
       if (result.data) {
-        const mergedOvertimeNotificationData = {
-          ...result.data,
-          overtimeQueueIds: result.data.overtimeQueueIds.length > 0
-            ? result.data.overtimeQueueIds
-            : fallbackSnapshot.overtimeQueueIds,
-          overtimeShiftRequests: result.data.overtimeShiftRequests.length > 0
-            ? result.data.overtimeShiftRequests
-            : fallbackSnapshot.overtimeShiftRequests,
-          overtimeEntries: result.data.overtimeEntries.length > 0
-            ? result.data.overtimeEntries
-            : fallbackSnapshot.overtimeEntries,
-          notificationPreferences: result.data.notificationPreferences.length > 0
-            ? result.data.notificationPreferences
-            : fallbackSnapshot.notificationPreferences,
-          notificationCampaigns: result.data.notificationCampaigns.length > 0
-            ? result.data.notificationCampaigns
-            : fallbackSnapshot.notificationCampaigns,
-          notificationDeliveries: result.data.notificationDeliveries.length > 0
-            ? result.data.notificationDeliveries
-            : fallbackSnapshot.notificationDeliveries
-        }
-        const normalized = normalizePersistedState(
-          {
-            ...mergedOvertimeNotificationData,
-            notificationProviderConfig: result.data.notificationProviderConfig || undefined
-          },
-          fallbackSnapshot
-        )
-        setOvertimeQueueIds(normalized.overtimeQueueIds)
-        setOvertimeShiftRequests(normalized.overtimeShiftRequests)
-        setOvertimeEntries(normalized.overtimeEntries)
-        setNotificationPreferences(normalized.notificationPreferences)
-        setNotificationCampaigns(normalized.notificationCampaigns)
-        setNotificationDeliveries(normalized.notificationDeliveries)
-        setNotificationProviderConfig(normalized.notificationProviderConfig)
-        lastSupabaseOvertimeNotificationsRef.current = JSON.stringify(mergedOvertimeNotificationData)
+        applyOvertimeNotificationsSyncData(result.data)
       }
 
       hasHydratedOvertimeNotifications.current = true
@@ -1156,6 +1165,45 @@ export default function App() {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    let active = true
+
+    async function refreshOvertimeNotifications() {
+      const result = await loadSupabaseOvertimeNotificationsState()
+      if (!active || !result.data) return
+      applyOvertimeNotificationsSyncData(result.data)
+    }
+
+    const scheduleRefresh = () => {
+      if (overtimeNotificationsRefreshTimeoutRef.current) {
+        window.clearTimeout(overtimeNotificationsRefreshTimeoutRef.current)
+      }
+
+      overtimeNotificationsRefreshTimeoutRef.current = window.setTimeout(() => {
+        void refreshOvertimeNotifications()
+      }, 1200)
+    }
+
+    const channel = supabase
+      .channel("app_overtime_notifications")
+      .on("postgres_changes", { event: "*", schema: "public", table: "overtime_queue" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "overtime_shift_requests" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "overtime_entries" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notification_preferences" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notification_campaigns" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notification_deliveries" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notification_provider_config" }, scheduleRefresh)
+      .subscribe()
+
+    return () => {
+      active = false
+      if (overtimeNotificationsRefreshTimeoutRef.current) {
+        window.clearTimeout(overtimeNotificationsRefreshTimeoutRef.current)
+      }
+      supabase.removeChannel(channel)
+    }
+  }, [employees, notificationCampaigns, notificationDeliveries, notificationPreferences, notificationProviderConfig, overtimeEntries])
 
   useEffect(() => {
     if (!hasHydratedSupabaseState.current) return
@@ -1176,7 +1224,7 @@ export default function App() {
         lastSupabaseSyncActorRef.current = currentSyncActorKey
         setAppStateSyncStatus({
           mode: "connected",
-          message: "Supabase sync is active for Employees, CID, Detail, Settings, and audit."
+          message: "Supabase sync is active for Employees, CID, Detail, Settings, audit, overtime, notifications, and patrol overrides."
         })
       } else {
         setAppStateSyncStatus({
