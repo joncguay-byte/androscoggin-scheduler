@@ -1109,9 +1109,30 @@ export default function App() {
       if (!active) return
 
       if (result.data) {
+        const mergedOvertimeNotificationData = {
+          ...result.data,
+          overtimeQueueIds: result.data.overtimeQueueIds.length > 0
+            ? result.data.overtimeQueueIds
+            : fallbackSnapshot.overtimeQueueIds,
+          overtimeShiftRequests: result.data.overtimeShiftRequests.length > 0
+            ? result.data.overtimeShiftRequests
+            : fallbackSnapshot.overtimeShiftRequests,
+          overtimeEntries: result.data.overtimeEntries.length > 0
+            ? result.data.overtimeEntries
+            : fallbackSnapshot.overtimeEntries,
+          notificationPreferences: result.data.notificationPreferences.length > 0
+            ? result.data.notificationPreferences
+            : fallbackSnapshot.notificationPreferences,
+          notificationCampaigns: result.data.notificationCampaigns.length > 0
+            ? result.data.notificationCampaigns
+            : fallbackSnapshot.notificationCampaigns,
+          notificationDeliveries: result.data.notificationDeliveries.length > 0
+            ? result.data.notificationDeliveries
+            : fallbackSnapshot.notificationDeliveries
+        }
         const normalized = normalizePersistedState(
           {
-            ...result.data,
+            ...mergedOvertimeNotificationData,
             notificationProviderConfig: result.data.notificationProviderConfig || undefined
           },
           fallbackSnapshot
@@ -1123,7 +1144,7 @@ export default function App() {
         setNotificationCampaigns(normalized.notificationCampaigns)
         setNotificationDeliveries(normalized.notificationDeliveries)
         setNotificationProviderConfig(normalized.notificationProviderConfig)
-        lastSupabaseOvertimeNotificationsRef.current = JSON.stringify(result.data)
+        lastSupabaseOvertimeNotificationsRef.current = JSON.stringify(mergedOvertimeNotificationData)
       }
 
       hasHydratedOvertimeNotifications.current = true
