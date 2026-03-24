@@ -140,6 +140,8 @@ drop policy if exists "Allow anon update app_state" on public.app_state;
 drop policy if exists "app_state_read_authenticated" on public.app_state;
 drop policy if exists "app_state_write_admin_sergeant" on public.app_state;
 drop policy if exists "app_state_update_admin_sergeant" on public.app_state;
+drop policy if exists "app_state_write_authenticated" on public.app_state;
+drop policy if exists "app_state_update_authenticated" on public.app_state;
 drop policy if exists "patrol_overrides_read_authenticated" on public.patrol_overrides;
 drop policy if exists "patrol_overrides_write_admin_sergeant" on public.patrol_overrides;
 drop policy if exists "overtime_queue_read_authenticated" on public.overtime_queue;
@@ -163,18 +165,18 @@ for select
 to authenticated
 using (true);
 
-create policy "app_state_write_admin_sergeant"
+create policy "app_state_write_authenticated"
 on public.app_state
 for insert
 to authenticated
-with check (public.current_app_role() in ('admin', 'sergeant'));
+with check (true);
 
-create policy "app_state_update_admin_sergeant"
+create policy "app_state_update_authenticated"
 on public.app_state
 for update
 to authenticated
-using (public.current_app_role() in ('admin', 'sergeant'))
-with check (public.current_app_role() in ('admin', 'sergeant'));
+using (true)
+with check (true);
 
 create policy "patrol_overrides_read_authenticated"
 on public.patrol_overrides

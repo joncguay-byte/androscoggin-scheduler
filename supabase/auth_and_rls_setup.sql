@@ -222,13 +222,15 @@ to authenticated
 using (true);
 
 drop policy if exists "app_state_write_admin_sergeant" on public.app_state;
-create policy "app_state_write_admin_sergeant"
+drop policy if exists "app_state_write_authenticated" on public.app_state;
+create policy "app_state_write_authenticated"
 on public.app_state
 for insert
 to authenticated
-with check (public.is_admin_or_sergeant());
+with check (true);
 
 drop policy if exists "app_state_update_admin_sergeant" on public.app_state;
+drop policy if exists "app_state_update_authenticated" on public.app_state;
 drop policy if exists "patrol_overrides_read_authenticated" on public.patrol_overrides;
 drop policy if exists "patrol_overrides_write_admin_sergeant" on public.patrol_overrides;
 drop policy if exists "overtime_queue_read_authenticated" on public.overtime_queue;
@@ -245,12 +247,12 @@ drop policy if exists "notification_deliveries_read_authenticated" on public.not
 drop policy if exists "notification_deliveries_write_admin_sergeant" on public.notification_deliveries;
 drop policy if exists "notification_provider_config_read_authenticated" on public.notification_provider_config;
 drop policy if exists "notification_provider_config_write_admin_sergeant" on public.notification_provider_config;
-create policy "app_state_update_admin_sergeant"
+create policy "app_state_update_authenticated"
 on public.app_state
 for update
 to authenticated
-using (public.is_admin_or_sergeant())
-with check (public.is_admin_or_sergeant());
+using (true)
+with check (true);
 
 create policy "patrol_overrides_read_authenticated"
 on public.patrol_overrides
