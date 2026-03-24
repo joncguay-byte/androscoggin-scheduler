@@ -830,31 +830,17 @@ export function OvertimePage({
     })
   }
 
-  function assignEmployeeToRequest(requestId: string, employeeId: string) {
-    pushUndoSnapshot()
-    updateOvertimeRequests((current) =>
-      current.map((request) =>
-        request.id === requestId
-          ? {
-              ...request,
-              assignedEmployeeId: request.assignedEmployeeId === employeeId ? null : employeeId
-            }
-          : request
-      )
-    )
+  function persistReplacementForRequest(
+    request: OvertimeShiftRequest,
+    replacementEmployeeId: string | null,
+    options?: { pushUndo?: boolean }
+  ) {
+    if (options?.pushUndo !== false) {
+      pushUndoSnapshot()
+    }
 
-    const employee = employeeMap.get(employeeId)
-    onAuditEvent(
-      "Overtime Shift Candidate Selected",
-      `${employee ? `${employee.firstName} ${employee.lastName}` : "Employee"} selected for overtime shift.`,
-      requestId
-    )
-  }
-
-  function saveReplacementToPatrol(request: OvertimeShiftRequest) {
-    pushUndoSnapshot()
-    const replacementEmployee = request.assignedEmployeeId
-      ? employeeMap.get(request.assignedEmployeeId) || null
+    const replacementEmployee = replacementEmployeeId
+      ? employeeMap.get(replacementEmployeeId) || null
       : null
 
     const existingRow =
@@ -950,6 +936,37 @@ export function OvertimePage({
     }
   }
 
+  function assignAndSaveReplacement(requestId: string, employeeId: string) {
+    const request = overtimeRequestsRef.current.find((entry) => entry.id === requestId) || null
+    if (!request) return
+    persistReplacementForRequest(request, employeeId)
+  }
+
+  function assignEmployeeToRequest(requestId: string, employeeId: string) {
+    pushUndoSnapshot()
+    updateOvertimeRequests((current) =>
+      current.map((request) =>
+        request.id === requestId
+          ? {
+              ...request,
+              assignedEmployeeId: request.assignedEmployeeId === employeeId ? null : employeeId
+            }
+          : request
+      )
+    )
+
+    const employee = employeeMap.get(employeeId)
+    onAuditEvent(
+      "Overtime Shift Candidate Selected",
+      `${employee ? `${employee.firstName} ${employee.lastName}` : "Employee"} selected for overtime shift.`,
+      requestId
+    )
+  }
+
+  function saveReplacementToPatrol(request: OvertimeShiftRequest) {
+    persistReplacementForRequest(request, request.assignedEmployeeId)
+  }
+
   const overtimeShiftsColumn = (
     <Card>
       <CardHeader>
@@ -992,6 +1009,14 @@ export function OvertimePage({
                 .filter((employee): employee is Employee => Boolean(employee))
                 .map((employee) => employee.lastName)
               const recommendedResponders = recommendationByRequestId.get(request.id) || []
+              const recommendedEmployees = recommendedResponders
+                .map((lastName) =>
+                  request.responses
+                    .filter((response) => response.status === "Interested" || response.status === "Accepted")
+                    .map((response) => employeeMap.get(response.employeeId))
+                    .find((employee) => employee?.lastName === lastName) || null
+                )
+                .filter((employee): employee is Employee => Boolean(employee))
 
               return (
                 <div
@@ -1053,6 +1078,28 @@ export function OvertimePage({
                       Recommendation: {recommendedResponders.length > 0 ? recommendedResponders.join(", ") : "None"}
                     </div>
                   </div>
+                  {recommendedEmployees.length > 0 ? (
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {recommendedEmployees.map((employee, index) => (
+                        <button
+                          key={`${request.id}-recommended-${employee.id}`}
+                          onClick={() => assignAndSaveReplacement(request.id, employee.id)}
+                          style={{
+                            border: "1px solid #16a34a",
+                            background: index === 0 ? "#dcfce7" : "#ffffff",
+                            color: "#166534",
+                            borderRadius: "999px",
+                            padding: "5px 10px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            cursor: "pointer"
+                          }}
+                        >
+                          Assign + Save {employee.lastName}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", fontSize: "12px", color: "#64748b" }}>
                     <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155" }}>
                       Replacement: {replacementName}
@@ -1143,23 +1190,39 @@ export function OvertimePage({
                 })}
               </div>
               {activeFillRequest && employeeRespondedAvailable(activeFillRequest, employee.id) ? (
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "11px",
-                    color: "#334155",
-                    marginTop: "2px"
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={activeFillRequest.assignedEmployeeId === employee.id}
-                    onChange={() => assignEmployeeToRequest(activeFillRequest.id, employee.id)}
-                  />
-                  Available for selected fill shift
-                </label>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "2px" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "11px",
+                      color: "#334155"
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={activeFillRequest.assignedEmployeeId === employee.id}
+                      onChange={() => assignEmployeeToRequest(activeFillRequest.id, employee.id)}
+                    />
+                    Available for selected fill shift
+                  </label>
+                  <button
+                    onClick={() => assignAndSaveReplacement(activeFillRequest.id, employee.id)}
+                    style={{
+                      border: "1px solid #16a34a",
+                      background: "#dcfce7",
+                      color: "#166534",
+                      borderRadius: "8px",
+                      padding: "4px 8px",
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      cursor: "pointer"
+                    }}
+                  >
+                    Assign + Save
+                  </button>
+                </div>
               ) : null}
             </div>
           )})}
@@ -1240,6 +1303,24 @@ export function OvertimePage({
                     onChange={() => assignEmployeeToRequest(activeFillRequest.id, employee.id)}
                   />
                   Select for active fill shift
+                  {employeeRespondedAvailable(activeFillRequest, employee.id) ? (
+                    <button
+                      onClick={() => assignAndSaveReplacement(activeFillRequest.id, employee.id)}
+                      style={{
+                        marginLeft: "auto",
+                        border: "1px solid #16a34a",
+                        background: "#dcfce7",
+                        color: "#166534",
+                        borderRadius: "8px",
+                        padding: "4px 8px",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Assign
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
