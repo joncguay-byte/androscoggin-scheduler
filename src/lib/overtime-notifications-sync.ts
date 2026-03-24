@@ -286,49 +286,45 @@ export async function saveSupabaseOvertimeNotificationsState(
       error_message: delivery.errorMessage || null
     }))
 
-    const operations = [
-      supabase.from("overtime_queue").delete().gte("queue_position", 0),
-      supabase.from("overtime_shift_requests").delete().neq("id", ""),
-      supabase.from("overtime_entries").delete().neq("id", ""),
-      supabase.from("notification_preferences").delete().neq("employee_id", ""),
-      supabase.from("notification_campaigns").delete().neq("id", ""),
-      supabase.from("notification_deliveries").delete().neq("id", "")
-    ]
-
-    for (const operation of operations) {
-      const { error } = await operation
-      if (error) {
-        return { ok: false, error: toErrorMessage(error) }
-      }
-    }
-
     if (queuePayload.length > 0) {
-      const { error } = await supabase.from("overtime_queue").insert(queuePayload)
+      const { error } = await supabase
+        .from("overtime_queue")
+        .upsert(queuePayload, { onConflict: "employee_id" })
       if (error) return { ok: false, error: toErrorMessage(error) }
     }
 
     if (requestsPayload.length > 0) {
-      const { error } = await supabase.from("overtime_shift_requests").insert(requestsPayload)
+      const { error } = await supabase
+        .from("overtime_shift_requests")
+        .upsert(requestsPayload, { onConflict: "id" })
       if (error) return { ok: false, error: toErrorMessage(error) }
     }
 
     if (entriesPayload.length > 0) {
-      const { error } = await supabase.from("overtime_entries").insert(entriesPayload)
+      const { error } = await supabase
+        .from("overtime_entries")
+        .upsert(entriesPayload, { onConflict: "id" })
       if (error) return { ok: false, error: toErrorMessage(error) }
     }
 
     if (preferencesPayload.length > 0) {
-      const { error } = await supabase.from("notification_preferences").insert(preferencesPayload)
+      const { error } = await supabase
+        .from("notification_preferences")
+        .upsert(preferencesPayload, { onConflict: "employee_id" })
       if (error) return { ok: false, error: toErrorMessage(error) }
     }
 
     if (campaignsPayload.length > 0) {
-      const { error } = await supabase.from("notification_campaigns").insert(campaignsPayload)
+      const { error } = await supabase
+        .from("notification_campaigns")
+        .upsert(campaignsPayload, { onConflict: "id" })
       if (error) return { ok: false, error: toErrorMessage(error) }
     }
 
     if (deliveriesPayload.length > 0) {
-      const { error } = await supabase.from("notification_deliveries").insert(deliveriesPayload)
+      const { error } = await supabase
+        .from("notification_deliveries")
+        .upsert(deliveriesPayload, { onConflict: "id" })
       if (error) return { ok: false, error: toErrorMessage(error) }
     }
 
