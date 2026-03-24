@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { buildDeliveryLink, buildNotificationDeliveries, canSendDeliveryLive, formatNotificationShiftSummary, sendNotificationDelivery } from "../../lib/notifications"
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, SelectItem } from "../../components/ui/simple-ui"
@@ -85,6 +85,26 @@ export function NotificationsPage({
     () => employees.filter((employee) => employee.status === "Active").sort((a, b) => a.lastName.localeCompare(b.lastName)),
     [employees]
   )
+
+  useEffect(() => {
+    if (activeEmployees.length === 0 || notificationPreferences.length > 0) return
+
+    setNotificationPreferences(
+      activeEmployees.map((employee) => ({
+        employeeId: employee.id,
+        emailAddress: "",
+        phoneNumber: "",
+        allowEmail: true,
+        allowText: false,
+        overtimeAvailability: true,
+        overtimeAssignment: true,
+        patrolUpdates: false,
+        forceUpdates: false,
+        detailUpdates: false
+      }))
+    )
+  }, [activeEmployees, notificationPreferences.length, setNotificationPreferences])
+
   const employeeMap = useMemo(() => new Map(activeEmployees.map((employee) => [employee.id, employee])), [activeEmployees])
   const preferenceMap = useMemo(() => new Map(notificationPreferences.map((entry) => [entry.employeeId, entry])), [notificationPreferences])
   const requestMap = useMemo(() => new Map(overtimeShiftRequests.map((request) => [request.id, request])), [overtimeShiftRequests])
