@@ -14,6 +14,16 @@ import type {
   OvertimeShiftRequest
 } from "../../types"
 
+type RecipientScope =
+  | "all"
+  | "patrol"
+  | "days_a"
+  | "days_b"
+  | "nights_a"
+  | "nights_b"
+  | "supervisors"
+  | "deputies"
+
 type NotificationsPageProps = {
   currentUserRole: AppRole
   employees: Employee[]
@@ -83,6 +93,7 @@ export function NotificationsPage({
   const [campaignChannel, setCampaignChannel] = useState<NotificationChannel>("email")
   const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([])
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
+  const [recipientScope, setRecipientScope] = useState<RecipientScope>("patrol")
   const [selectedCampaignId, setSelectedCampaignId] = useState("")
   const [selectedDeliveryId, setSelectedDeliveryId] = useState("")
 
@@ -97,11 +108,38 @@ export function NotificationsPage({
   const filteredRecipients = useMemo(
     () =>
       notificationPreferences.filter((preference) => {
+        const employee = employeeMap.get(preference.employeeId)
+        if (!employee) return false
+
+        const inScope = (() => {
+          switch (recipientScope) {
+            case "all":
+              return true
+            case "patrol":
+              return ["Days A", "Days B", "Nights A", "Nights B"].includes(employee.team)
+            case "days_a":
+              return employee.team === "Days A"
+            case "days_b":
+              return employee.team === "Days B"
+            case "nights_a":
+              return employee.team === "Nights A"
+            case "nights_b":
+              return employee.team === "Nights B"
+            case "supervisors":
+              return employee.rank === "Sgt" || employee.rank === "Cpl"
+            case "deputies":
+              return employee.rank === "Deputy" || employee.rank === "Poland Deputy"
+            default:
+              return true
+          }
+        })()
+
+        if (!inScope) return false
         if (campaignChannel === "email") return preference.allowEmail && preference.emailAddress.trim().length > 0
         if (campaignChannel === "text") return preference.allowText && preference.phoneNumber.trim().length > 0
         return (preference.allowEmail && preference.emailAddress.trim().length > 0) || (preference.allowText && preference.phoneNumber.trim().length > 0)
       }),
-    [campaignChannel, notificationPreferences]
+    [campaignChannel, employeeMap, notificationPreferences, recipientScope]
   )
 
   const selectedCampaign = notificationCampaigns.find((campaign) => campaign.id === selectedCampaignId) || null
@@ -356,11 +394,49 @@ export function NotificationsPage({
                 </div>
 
                 <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", marginBottom: "6px" }}>
-                    <div style={{ fontWeight: 700 }}>Recipients</div>
-                    <button type="button" onClick={() => setSelectedRecipientIds(filteredRecipients.map((entry) => entry.employeeId))} style={{ border: "none", background: "transparent", color: "#1d4ed8", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
-                      Select All Eligible
-                    </button>
+                  <div style={{ display: "grid", gap: "8px", marginBottom: "6px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+                      <div style={{ fontWeight: 700 }}>Recipients</div>
+                      <button type="button" onClick={() => setSelectedRecipientIds(filteredRecipients.map((entry) => entry.employeeId))} style={{ border: "none", background: "transparent", color: "#1d4ed8", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
+                        Select All Eligible
+                      </button>
+                    </div>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {([
+                        ["patrol", "Patrol"],
+                        ["days_a", "Days A"],
+                        ["days_b", "Days B"],
+                        ["nights_a", "Nights A"],
+                        ["nights_b", "Nights B"],
+                        ["supervisors", "Supervisors"],
+                        ["deputies", "Deputies"],
+                        ["all", "All Active"]
+                      ] as const).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            setRecipientScope(value)
+                            setSelectedRecipientIds([])
+                          }}
+                          style={{
+                            border: recipientScope === value ? "1px solid #1d4ed8" : "1px solid #cbd5e1",
+                            background: recipientScope === value ? "#eff6ff" : "#ffffff",
+                            color: recipientScope === value ? "#1d4ed8" : "#334155",
+                            borderRadius: "999px",
+                            padding: "5px 10px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            cursor: "pointer"
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#64748b" }}>
+                      Showing {filteredRecipients.length} eligible recipient(s) for the current channel and target group.
+                    </div>
                   </div>
                   <div style={{ display: "grid", gap: "8px", maxHeight: "260px", overflowY: "auto" }}>
                     {filteredRecipients.map((preference) => {
@@ -373,6 +449,7 @@ export function NotificationsPage({
                           <input type="checkbox" checked={selectedRecipientIds.includes(preference.employeeId)} onChange={() => setSelectedRecipientIds((current) => toggleSelection(current, preference.employeeId))} />
                           <div style={{ display: "grid", gap: "2px" }}>
                             <div style={{ fontWeight: 700 }}>{employee.firstName} {employee.lastName}</div>
+                            <div style={{ fontSize: "12px", color: "#64748b" }}>{employee.team} | {employee.rank}</div>
                             <div style={{ fontSize: "12px", color: "#64748b" }}>{canReceiveEmail ? preference.emailAddress : "No email"} | {canReceiveText ? preference.phoneNumber : "No text"}</div>
                           </div>
                         </label>

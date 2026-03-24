@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Button, Card, CardContent, CardHeader, CardTitle, Select, SelectItem } from "../../components/ui/simple-ui"
 import type { DetailRecord, Employee, ForceHistoryRow, NotificationDelivery, OvertimeAvailabilityStatus, OvertimeShiftRequest, PatrolScheduleRow } from "../../types"
@@ -46,6 +46,13 @@ export function MobilePage({
   const [mobileView, setMobileView] = useState<MobileView>("patrol")
   const [responseToken, setResponseToken] = useState(initialResponseToken)
 
+  useEffect(() => {
+    if (initialResponseToken) {
+      setResponseToken(initialResponseToken)
+      setMobileView("overtime")
+    }
+  }, [initialResponseToken])
+
   const activeResponseDelivery = useMemo(
     () => notificationDeliveries.find((delivery) => delivery.responseToken === responseToken) || null,
     [notificationDeliveries, responseToken]
@@ -54,6 +61,7 @@ export function MobilePage({
   const responseEmployee = activeResponseDelivery
     ? previewEmployees.find((employee) => employee.id === activeResponseDelivery.employeeId) || null
     : null
+  const inResponsePortal = !!activeResponseDelivery && !!responseEmployee
 
   const selectedEmployee = previewEmployees.find((employee) => employee.id === selectedEmployeeId) || null
   const effectiveSelectedEmployee = responseEmployee || selectedEmployee
@@ -117,6 +125,36 @@ export function MobilePage({
       .filter((request): request is OvertimeShiftRequest => !!request)
   }, [activeResponseDelivery, overtimeShiftRequests])
 
+  const responseSummary = useMemo(() => {
+    if (!responseEmployee) return null
+
+    const summary = {
+      pending: 0,
+      interested: 0,
+      accepted: 0,
+      declined: 0
+    }
+
+    for (const request of responseShifts) {
+      const response = request.responses.find((entry) => entry.employeeId === responseEmployee.id)
+      switch (response?.status) {
+        case "Interested":
+          summary.interested += 1
+          break
+        case "Accepted":
+          summary.accepted += 1
+          break
+        case "Declined":
+          summary.declined += 1
+          break
+        default:
+          summary.pending += 1
+      }
+    }
+
+    return summary
+  }, [responseEmployee, responseShifts])
+
   function setResponse(requestId: string, employeeId: string, status: OvertimeAvailabilityStatus) {
     setOvertimeShiftRequests((current) =>
       current.map((request) => {
@@ -149,53 +187,55 @@ export function MobilePage({
           <CardTitle>Mobile Preview</CardTitle>
         </CardHeader>
         <CardContent>
-          <div style={{ display: "grid", gridTemplateColumns: "260px minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
-            <div style={{ display: "grid", gap: "12px" }}>
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: "4px" }}>Preview Employee</div>
-                <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                  {previewEmployees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.firstName} {employee.lastName}
-                    </SelectItem>
-                  ))}
-                </Select>
-              </div>
-
-              <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.35 }}>
-                This is the employee-facing mobile view for Patrol, Force, Detail, and Overtime. It gives you a phone-style preview before we connect it to a true mobile login flow.
-              </div>
-
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: "4px" }}>Response Link Token</div>
-                <input
-                  value={responseToken}
-                  onChange={(event) => setResponseToken(event.target.value)}
-                  placeholder="Paste response token or open response link"
-                  style={{ width: "100%", padding: 6, border: "1px solid #cbd5e1", borderRadius: 6 }}
-                />
-              </div>
-
-              {activeResponseDelivery && responseEmployee && (
-                <div style={{ border: "1px solid #bfdbfe", borderRadius: "12px", padding: "10px", background: "#eff6ff", display: "grid", gap: "8px" }}>
-                  <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Overtime Response View</div>
-                  <div style={{ fontSize: "12px", color: "#334155" }}>
-                    {responseEmployee.firstName} {responseEmployee.lastName} can respond to {responseShifts.length} overtime shift(s) from this phone view.
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    <Button
-                      onClick={() => {
-                        setResponseToken("")
-                        onClearResponseToken?.()
-                      }}
-                    >
-                      Exit Response View
-                    </Button>
-                    <Button onClick={() => setMobileView("overtime")}>Open OT</Button>
-                  </div>
+          <div style={{ display: "grid", gridTemplateColumns: inResponsePortal ? "minmax(0, 1fr)" : "260px minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
+            {!inResponsePortal && (
+              <div style={{ display: "grid", gap: "12px" }}>
+                <div>
+                  <div style={{ fontWeight: 700, marginBottom: "4px" }}>Preview Employee</div>
+                  <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+                    {previewEmployees.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.firstName} {employee.lastName}
+                      </SelectItem>
+                    ))}
+                  </Select>
                 </div>
-              )}
-            </div>
+
+                <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.35 }}>
+                  This is the employee-facing mobile view for Patrol, Force, Detail, and Overtime. It gives you a phone-style preview before we connect it to a true mobile login flow.
+                </div>
+
+                <div>
+                  <div style={{ fontWeight: 700, marginBottom: "4px" }}>Response Link Token</div>
+                  <input
+                    value={responseToken}
+                    onChange={(event) => setResponseToken(event.target.value)}
+                    placeholder="Paste response token or open response link"
+                    style={{ width: "100%", padding: 6, border: "1px solid #cbd5e1", borderRadius: 6 }}
+                  />
+                </div>
+
+                {activeResponseDelivery && responseEmployee && (
+                  <div style={{ border: "1px solid #bfdbfe", borderRadius: "12px", padding: "10px", background: "#eff6ff", display: "grid", gap: "8px" }}>
+                    <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Overtime Response View</div>
+                    <div style={{ fontSize: "12px", color: "#334155" }}>
+                      {responseEmployee.firstName} {responseEmployee.lastName} can respond to {responseShifts.length} overtime shift(s) from this phone view.
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <Button
+                        onClick={() => {
+                          setResponseToken("")
+                          onClearResponseToken?.()
+                        }}
+                      >
+                        Exit Response View
+                      </Button>
+                      <Button onClick={() => setMobileView("overtime")}>Open OT</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div
               style={{
@@ -209,36 +249,93 @@ export function MobilePage({
                 boxShadow: "0 20px 36px rgba(15, 23, 42, 0.18)"
               }}
             >
-              <div style={{ padding: "10px 14px", background: "#0f172a", color: "#f8fafc", fontWeight: 700 }}>
-                {effectiveSelectedEmployee ? `${effectiveSelectedEmployee.firstName} ${effectiveSelectedEmployee.lastName}` : "Mobile Preview"}
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", borderBottom: "1px solid #dbe3ee" }}>
-                {([
-                  ["patrol", "Patrol"],
-                  ["force", "Force"],
-                  ["detail", "Detail"],
-                  ["overtime", "OT"]
-                ] as const).map(([value, label]) => (
+              <div style={{ padding: "10px 14px", background: "#0f172a", color: "#f8fafc", fontWeight: 700, display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+                <span>
+                  {inResponsePortal
+                    ? "Overtime Response"
+                    : (effectiveSelectedEmployee ? `${effectiveSelectedEmployee.firstName} ${effectiveSelectedEmployee.lastName}` : "Mobile Preview")}
+                </span>
+                {inResponsePortal && (
                   <button
-                    key={value}
-                    onClick={() => setMobileView(value)}
+                    onClick={() => {
+                      setResponseToken("")
+                      onClearResponseToken?.()
+                    }}
                     style={{
-                      border: "none",
-                      borderRight: "1px solid #dbe3ee",
-                      background: mobileView === value ? "#e0ecff" : "#ffffff",
-                      color: "#0f172a",
-                      padding: "10px 6px",
+                      border: "1px solid rgba(255,255,255,0.35)",
+                      background: "transparent",
+                      color: "#f8fafc",
+                      borderRadius: "999px",
+                      padding: "4px 10px",
+                      fontSize: "11px",
                       fontWeight: 700,
                       cursor: "pointer"
                     }}
                   >
-                    {label}
+                    Exit
                   </button>
-                ))}
+                )}
               </div>
 
+              {!inResponsePortal && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", borderBottom: "1px solid #dbe3ee" }}>
+                  {([
+                    ["patrol", "Patrol"],
+                    ["force", "Force"],
+                    ["detail", "Detail"],
+                    ["overtime", "OT"]
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setMobileView(value)}
+                      style={{
+                        border: "none",
+                        borderRight: "1px solid #dbe3ee",
+                        background: mobileView === value ? "#e0ecff" : "#ffffff",
+                        color: "#0f172a",
+                        padding: "10px 6px",
+                        fontWeight: 700,
+                        cursor: "pointer"
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div style={{ padding: "12px", display: "grid", gap: "10px", maxHeight: "620px", overflowY: "auto" }}>
+                {activeResponseDelivery && responseEmployee && responseSummary && (
+                  <div style={{ border: "1px solid #bfdbfe", borderRadius: "14px", padding: "12px", background: "#eff6ff", display: "grid", gap: "8px" }}>
+                    <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Overtime Response Portal</div>
+                    <div style={{ fontSize: "12px", color: "#334155" }}>
+                      {responseEmployee.firstName} {responseEmployee.lastName} is responding to {responseShifts.length} shift(s).
+                    </div>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {[
+                        ["Pending", responseSummary.pending, "#f8fafc", "#475569"],
+                        ["Interested", responseSummary.interested, "#eff6ff", "#1d4ed8"],
+                        ["Accepted", responseSummary.accepted, "#ecfdf5", "#166534"],
+                        ["Declined", responseSummary.declined, "#fff1f2", "#be123c"]
+                      ].map(([label, count, background, color]) => (
+                        <div
+                          key={label as string}
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: "999px",
+                            background: background as string,
+                            color: color as string,
+                            fontSize: "11px",
+                            fontWeight: 800
+                          }}
+                        >
+                          {label}: {count as number}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {mobileView === "patrol" && (
                   <>
                     {patrolPreview.length === 0 && <div style={{ color: "#64748b", fontSize: "13px" }}>No Patrol rows found for this employee.</div>}
@@ -280,42 +377,49 @@ export function MobilePage({
                   </>
                 )}
 
-                {mobileView === "overtime" && (
+                {(mobileView === "overtime" || inResponsePortal) && (
                   <>
                     {activeResponseDelivery && responseEmployee && (
                       <>
                         <div style={{ border: "1px solid #bfdbfe", borderRadius: "12px", padding: "10px", background: "#eff6ff", display: "grid", gap: "8px" }}>
                           <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Respond To Overtime Availability</div>
                           <div style={{ fontSize: "12px", color: "#334155" }}>
-                            Choose your status for each available shift below.
+                            Choose your status for each shift below. Only your requested shifts are shown here.
                           </div>
                         </div>
 
                         {responseShifts.map((request) => {
                           const response = request.responses.find((entry) => entry.employeeId === responseEmployee.id)
                           return (
-                            <div key={`response-${request.id}`} style={{ border: "1px solid #dbe3ee", borderRadius: "12px", padding: "10px", background: "#ffffff", display: "grid", gap: "8px" }}>
-                              <div style={{ fontWeight: 800 }}>{formatDate(request.assignmentDate)}</div>
-                              <div style={{ color: "#334155", fontSize: "13px" }}>
-                                {request.shiftType} | {request.description}
+                            <div key={`response-${request.id}`} style={{ border: "1px solid #dbe3ee", borderRadius: "14px", padding: "12px", background: "#ffffff", display: "grid", gap: "10px" }}>
+                              <div style={{ display: "grid", gap: "3px" }}>
+                                <div style={{ fontWeight: 800 }}>{formatDate(request.assignmentDate)}</div>
+                                <div style={{ color: "#334155", fontSize: "13px" }}>
+                                  {request.shiftType} | {request.description}
+                                </div>
                               </div>
                               <div style={{ fontSize: "12px", color: "#64748b" }}>
                                 Current Response: {response?.status || "Pending"}
                               </div>
-                              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                                {(["Interested", "Accepted", "Declined"] as OvertimeAvailabilityStatus[]).map((status) => (
+                              <div style={{ display: "grid", gap: "6px" }}>
+                                {([
+                                  ["Interested", "#eff6ff", "#1d4ed8"],
+                                  ["Accepted", "#ecfdf5", "#166534"],
+                                  ["Declined", "#fff1f2", "#be123c"]
+                                ] as const).map(([status, background, color]) => (
                                   <button
                                     key={`${request.id}-${status}`}
                                     onClick={() => setResponse(request.id, responseEmployee.id, status)}
                                     style={{
-                                      border: response?.status === status ? "1px solid #1d4ed8" : "1px solid #cbd5e1",
-                                      background: response?.status === status ? "#eff6ff" : "#ffffff",
-                                      color: response?.status === status ? "#1d4ed8" : "#334155",
-                                      borderRadius: "8px",
-                                      padding: "6px 8px",
-                                      fontSize: "11px",
+                                      border: response?.status === status ? `1px solid ${color}` : "1px solid #cbd5e1",
+                                      background: response?.status === status ? background : "#ffffff",
+                                      color: response?.status === status ? color : "#334155",
+                                      borderRadius: "10px",
+                                      padding: "9px 10px",
+                                      fontSize: "12px",
                                       fontWeight: 700,
-                                      cursor: "pointer"
+                                      cursor: "pointer",
+                                      textAlign: "left"
                                     }}
                                   >
                                     {status}
@@ -328,8 +432,8 @@ export function MobilePage({
                       </>
                     )}
 
-                    {overtimePreview.length === 0 && <div style={{ color: "#64748b", fontSize: "13px" }}>No open overtime shifts are visible right now.</div>}
-                    {overtimePreview.map((request) => (
+                    {!inResponsePortal && overtimePreview.length === 0 && <div style={{ color: "#64748b", fontSize: "13px" }}>No open overtime shifts are visible right now.</div>}
+                    {!inResponsePortal && overtimePreview.map((request) => (
                       <div key={request.id} style={{ border: "1px solid #dbe3ee", borderRadius: "12px", padding: "10px", background: "#ffffff" }}>
                         <div style={{ fontWeight: 800 }}>{formatDate(request.assignmentDate)}</div>
                         <div style={{ marginTop: "4px", color: "#334155", fontSize: "13px" }}>
