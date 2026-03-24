@@ -1,47 +1,171 @@
-import React from "react";
+type HeaderProps = {
+  user?: {
+    username?: string
+    secondary?: string
+  }
+  variant?: "command-brass" | "ops-strip" | "clean-ledger"
+  title?: string
+  colorSettings?: {
+    accent: string
+    border: string
+    cardBackground: string
+  }
+  badgeSrc?: string
+  onSignOut?: () => void
+}
 
-export default function Header({ user, onRoleChange }) {
+const headerStyles = {
+  "command-brass": {
+    border: "2px solid #112b5c",
+    background: "linear-gradient(135deg, #132b57 0%, #1b3f7e 100%)",
+    titleColor: "#e0b85d",
+    userColor: "#e5e7eb",
+    eyebrowColor: "#d7c089"
+  },
+  "ops-strip": {
+    border: "1px solid #91a4bf",
+    background: "linear-gradient(135deg, #f7fbff 0%, #e6eef8 100%)",
+    titleColor: "#173a63",
+    userColor: "#334155",
+    eyebrowColor: "#4b6b94"
+  },
+  "clean-ledger": {
+    border: "1px solid #d0d4d8",
+    background: "linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%)",
+    titleColor: "#111827",
+    userColor: "#4b5563",
+    eyebrowColor: "#6b7280"
+  }
+} as const
+
+export default function Header({
+  user,
+  variant = "command-brass",
+  title = "Androscoggin Patrol Schedule",
+  colorSettings,
+  badgeSrc,
+  onSignOut
+}: HeaderProps) {
+
+  const username = user?.username || "Admin"
+  const secondary = user?.secondary || ""
+  const style = headerStyles[variant]
+
   return (
-    <div className="rounded-3xl bg-slate-950 px-6 py-6 text-white shadow-xl">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="text-sm font-medium uppercase tracking-[0.2em] text-amber-300">
-            Androscoggin Sheriff's Office
+
+    <div
+      style={{
+        width: "100%",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "10px",
+        border: style.border,
+        borderRadius: "18px",
+        padding: "12px 18px",
+        boxSizing: "border-box",
+        background: style.background,
+        borderColor: colorSettings?.border || undefined
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        {badgeSrc ? (
+          <div
+            style={{
+              width: "82px",
+              height: "82px",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "999px",
+              background: "transparent"
+            }}
+          >
+            <img
+              src={badgeSrc}
+              alt="Androscoggin County Sheriff's Office badge"
+              style={{
+                width: "82px",
+                height: "82px",
+                objectFit: "contain",
+                flexShrink: 0,
+                filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.18))"
+              }}
+            />
           </div>
-
-          <h1 className="mt-2 text-3xl font-bold tracking-tight">
-            Androscoggin Patrol Schedule
-          </h1>
-
-          <p className="mt-2 text-sm text-slate-300">
-            Professional modular scheduling system
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 self-start rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 font-semibold text-slate-950">
-            {user.username.slice(0,2).toUpperCase()}
-          </div>
-
-          <div>
-            <div className="text-sm font-medium">{user.username}</div>
-            <div className="text-xs text-slate-400">
-              Signed in as {user.role}
+        ) : (
+          <div
+            style={{
+              width: "64px",
+              height: "64px",
+              flexShrink: 0,
+              clipPath: "polygon(50% 0%, 61% 18%, 82% 12%, 76% 33%, 100% 50%, 76% 67%, 82% 88%, 61% 82%, 50% 100%, 39% 82%, 18% 88%, 24% 67%, 0% 50%, 24% 33%, 18% 12%, 39% 18%)",
+              background: "linear-gradient(180deg, #f6df9a 0%, #cda33a 100%)",
+              border: "2px solid rgba(127, 90, 22, 0.8)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 10px rgba(0,0,0,0.18)"
+            }}
+          >
+            <div
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "999px",
+                background: "#112b5c",
+                color: "#f7e6af",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "11px",
+                fontWeight: 800
+              }}
+            >
+              ACO
             </div>
           </div>
+        )}
 
-          <select
-            value={user.role}
-            onChange={(e)=>onRoleChange(e.target.value)}
-            style={{marginLeft:10,padding:6}}
-          >
-            <option>Admin</option>
-            <option>Sergeant</option>
-            <option>Detective</option>
-            <option>Deputy</option>
-          </select>
-        </div>
+        <h2 style={{ margin: 0, color: colorSettings?.accent || style.titleColor, fontSize: "30px" }}>
+          {title}
+        </h2>
       </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: "14px", color: style.userColor, fontWeight: 600 }}>
+            {username}
+          </div>
+          {secondary && (
+            <div style={{ fontSize: "11px", color: style.userColor, opacity: 0.85 }}>
+              {secondary}
+            </div>
+          )}
+        </div>
+
+        {onSignOut && (
+          <button
+            data-no-print="true"
+            onClick={onSignOut}
+            style={{
+              padding: "6px 10px",
+              borderRadius: "999px",
+              border: "1px solid rgba(255,255,255,0.35)",
+              background: "rgba(255,255,255,0.12)",
+              color: style.userColor,
+              cursor: "pointer",
+              fontWeight: 700
+            }}
+          >
+            Sign Out
+          </button>
+        )}
+      </div>
+
     </div>
-  );
+
+  )
+
 }

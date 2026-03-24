@@ -1,10 +1,72 @@
-import React from "react"
+import type { LucideIcon } from "lucide-react"
+
+type ModuleKey =
+  | "command"
+  | "audit"
+  | "patrol"
+  | "overtime"
+  | "cid"
+  | "force"
+  | "detail"
+  | "mobile"
+  | "notifications"
+  | "reports"
+  | "employees"
+  | "settings"
+
+type ModuleDefinition = {
+  key: ModuleKey
+  label: string
+  icon: LucideIcon
+}
+
+type ModuleTabsProps = {
+  active: ModuleKey
+  onChange: (key: ModuleKey) => void
+  moduleOrder: ModuleDefinition[]
+  visibleModules?: ModuleKey[]
+  variant?: "command-brass" | "ops-strip" | "clean-ledger"
+  colorSettings?: {
+    accent: string
+    border: string
+    cardBackground: string
+  }
+}
+
+const tabStyles = {
+  "command-brass": {
+    activeBackground: "#122a58",
+    activeColor: "#f6e4b8",
+    inactiveBackground: "#fffdf7",
+    inactiveColor: "#1f2937",
+    border: "1px solid #d8c79d"
+  },
+  "ops-strip": {
+    activeBackground: "#163b67",
+    activeColor: "#eef6ff",
+    inactiveBackground: "#eef4fb",
+    inactiveColor: "#173a63",
+    border: "1px solid #bfd1e6"
+  },
+  "clean-ledger": {
+    activeBackground: "#111827",
+    activeColor: "#f9fafb",
+    inactiveBackground: "#f9fafb",
+    inactiveColor: "#1f2937",
+    border: "1px solid #d1d5db"
+  }
+} as const
 
 export default function ModuleTabs({
   active,
   onChange,
-  moduleOrder
-}: any) {
+  moduleOrder,
+  visibleModules,
+  variant = "command-brass",
+  colorSettings
+}: ModuleTabsProps) {
+  const style = tabStyles[variant]
+  const allowedModules = visibleModules || moduleOrder.map((module) => module.key)
 
   return (
 
@@ -17,7 +79,7 @@ export default function ModuleTabs({
       }}
     >
 
-      {moduleOrder.map((m: any) => {
+      {moduleOrder.filter((module) => allowedModules.includes(module.key)).map((m) => {
 
         const Icon = m.icon
 
@@ -32,13 +94,13 @@ export default function ModuleTabs({
               display: "flex",
               alignItems: "center",
               gap: "6px",
-              padding: "8px 14px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-              background: isActive ? "#1e293b" : "#f8fafc",
-              color: isActive ? "white" : "#0f172a",
+              padding: "10px 16px",
+              borderRadius: "999px",
+              border: `1px solid ${colorSettings?.border || style.border.replace("1px solid ", "")}`,
+              background: isActive ? colorSettings?.accent || style.activeBackground : colorSettings?.cardBackground || style.inactiveBackground,
+              color: isActive ? style.activeColor : style.inactiveColor,
               cursor: "pointer",
-              fontWeight: "600"
+              fontWeight: "700"
             }}
           >
 

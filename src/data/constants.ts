@@ -1,10 +1,10 @@
-import { PatrolPositionCode, PatrolStatus, ScheduleView } from "../types"
+import type { PatrolPositionCode, PatrolStatus, ScheduleView } from "../types"
 
 export const patrolPositions = [
-  { code: "SUP1" as PatrolPositionCode, label: "Supervisor 1" },
-  { code: "SUP2" as PatrolPositionCode, label: "Supervisor 2" },
-  { code: "DEP1" as PatrolPositionCode, label: "Deputy 1" },
-  { code: "DEP2" as PatrolPositionCode, label: "Deputy 2" },
+  { code: "SUP1" as PatrolPositionCode, label: "Supervisor" },
+  { code: "SUP2" as PatrolPositionCode, label: "Supervisor" },
+  { code: "DEP1" as PatrolPositionCode, label: "Deputy" },
+  { code: "DEP2" as PatrolPositionCode, label: "Deputy" },
   { code: "POL" as PatrolPositionCode, label: "Poland" }
 ]
 

@@ -1,6 +1,10 @@
-import React from "react"
+import type { ButtonHTMLAttributes, ReactNode } from "react"
 
-export function Button({ children, ...props }: any) {
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  children?: ReactNode
+}
+
+export function Button({ children, style, ...props }: ButtonProps) {
   return (
     <button
       {...props}
@@ -9,7 +13,8 @@ export function Button({ children, ...props }: any) {
         border: "1px solid #ccc",
         borderRadius: 6,
         cursor: "pointer",
-        background: "#f5f5f5"
+        background: "#f5f5f5",
+        ...style
       }}
     >
       {children}

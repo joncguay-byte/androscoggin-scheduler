@@ -1,41 +1,1576 @@
-import React, { useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import Header from "./components/Header"
 import SummaryCards from "./components/SummaryCards"
 import ModuleTabs from "./components/ModuleTabs"
+import LoginPage from "./modules/auth/LoginPage"
 
 import { PatrolPage } from "./modules/patrol/PatrolPage"
+import { CommandPage } from "./modules/command/CommandPage"
+import { AuditPage } from "./modules/audit/AuditPage"
+import { OvertimePage } from "./modules/overtime/OvertimePage"
+import { MobilePage } from "./modules/mobile/MobilePage"
+import { NotificationsPage } from "./modules/notifications/NotificationsPage"
+import { CIDPage } from "./modules/cid/CIDPage"
+import { DetailPage } from "./modules/detail/DetailPage"
 import EmployeesPage from "./modules/employees/EmployeesPage"
+import { ForcePage } from "./modules/force/ForcePage"
+import { ReportsPage } from "./modules/reports/ReportsPage"
+import { SettingsPage } from "./modules/settings/SettingsPage"
+import type { AppSettings, ReferenceSettings } from "./modules/settings/SettingsPage"
+import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/simple-ui"
 
 import { initialEmployees } from "./data/employees"
+import {
+  getEffectiveCidOnCallForDate,
+  toIsoDate
+} from "./lib/cid-schedule"
+import { fetchPatrolScheduleRange, invalidatePatrolScheduleCache } from "./lib/patrol-schedule"
+import { loadSupabaseAppStates, saveSupabaseAppStates } from "./lib/app-state-sync"
+import { loadSupabasePatrolOverrides, saveSupabasePatrolOverrides } from "./lib/patrol-overrides-sync"
+import {
+  loadSupabaseOvertimeNotificationsState,
+  saveSupabaseOvertimeNotificationsState
+} from "./lib/overtime-notifications-sync"
+import { getCurrentProfileRole, getLocalAccessUser, resolveAppRole, resolveDisplayName, signOut } from "./lib/auth"
+import { isForceRequired, isShiftCovered } from "./lib/staffing-engine"
+import { supabase } from "./lib/supabase"
 
-import { Shield, Users, AlertTriangle } from "lucide-react"
+import {
+  Shield,
+  LayoutDashboard,
+  ScrollText,
+  Hourglass,
+  Users,
+  AlertTriangle,
+  FileText,
+  Settings,
+  Briefcase,
+  Clock3,
+  Smartphone,
+  Bell
+} from "lucide-react"
+import type { LucideIcon } from "lucide-react"
+import type {
+  AppLayoutVariant,
+  AppRole,
+  AuditEvent,
+  DetailQueueEvent,
+  DetailRecord,
+  Employee,
+  ForceHistoryRow,
+  NotificationCampaign,
+  NotificationProviderConfig,
+  NotificationDelivery,
+  NotificationPreference,
+  PatrolPositionCode,
+  ShiftType,
+  OvertimeShiftRequest,
+  OvertimeEntry
+} from "./types"
 
 
 type ModuleKey =
+  | "command"
+  | "audit"
   | "patrol"
+  | "overtime"
   | "cid"
   | "force"
   | "detail"
+  | "mobile"
+  | "notifications"
   | "reports"
   | "employees"
   | "settings"
 
 
-const moduleOrder = [
+const moduleOrder: ModuleDefinition[] = [
+
+  { key: "command", label: "Command", icon: LayoutDashboard },
+
   { key: "patrol", label: "Patrol", icon: Shield },
+
+  { key: "overtime", label: "Overtime", icon: Hourglass },
+
+  { key: "cid", label: "CID", icon: Clock3 },
+
   { key: "force", label: "Force", icon: AlertTriangle },
-  { key: "employees", label: "Employees", icon: Users }
+
+  { key: "detail", label: "Detail", icon: Briefcase },
+
+  { key: "mobile", label: "Mobile", icon: Smartphone },
+
+  { key: "notifications", label: "Notifications", icon: Bell },
+
+  { key: "reports", label: "Reports", icon: FileText },
+
+  { key: "employees", label: "Employees", icon: Users },
+
+  { key: "settings", label: "Settings", icon: Settings },
+
+  { key: "audit", label: "Audit", icon: ScrollText }
+
 ]
+
+type ModuleDefinition = {
+  key: ModuleKey
+  label: string
+  icon: LucideIcon
+}
+
+type LayoutTheme = {
+  pageBackground: string
+  shellBackground: string
+  shellBorder: string
+  shellShadow: string
+  sectionSpacing: string
+}
+
+type PersistedSchedulerState = {
+  employees: Employee[]
+  settings: AppSettings
+  referenceSettings: ReferenceSettings
+  cidRotationStartDate: string
+  cidDailyOverrides: Record<string, string>
+  detailRecords: DetailRecord[]
+  detailQueueEvents: DetailQueueEvent[]
+  detailQueueIds: string[]
+  overtimeQueueIds: string[]
+  overtimeShiftRequests: OvertimeShiftRequest[]
+  overtimeEntries: OvertimeEntry[]
+  notificationPreferences: NotificationPreference[]
+  notificationCampaigns: NotificationCampaign[]
+  notificationDeliveries: NotificationDelivery[]
+  notificationProviderConfig: NotificationProviderConfig
+  auditEvents: AuditEvent[]
+}
+
+type PersistedStaffState = Pick<PersistedSchedulerState, "employees" | "settings" | "referenceSettings">
+type PersistedCidDetailState = Pick<
+  PersistedSchedulerState,
+  "cidRotationStartDate" | "cidDailyOverrides" | "detailRecords" | "detailQueueEvents" | "detailQueueIds"
+>
+type PersistedAuditState = Pick<PersistedSchedulerState, "auditEvents">
+
+const layoutVariants: { value: AppLayoutVariant, label: string }[] = [
+  { value: "command-brass", label: "Command Brass" },
+  { value: "ops-strip", label: "Operations Strip" },
+  { value: "clean-ledger", label: "Clean Ledger" }
+]
+
+const layoutThemes: Record<AppLayoutVariant, LayoutTheme> = {
+  "command-brass": {
+    pageBackground: "linear-gradient(180deg, #f4efe2 0%, #efe7d3 100%)",
+    shellBackground: "#fffaf0",
+    shellBorder: "1px solid #c7b68a",
+    shellShadow: "0 16px 40px rgba(68, 47, 20, 0.12)",
+    sectionSpacing: "24px"
+  },
+  "ops-strip": {
+    pageBackground: "linear-gradient(180deg, #e7edf5 0%, #d8e1ee 100%)",
+    shellBackground: "#f7fbff",
+    shellBorder: "1px solid #9fb3cc",
+    shellShadow: "0 18px 42px rgba(15, 23, 42, 0.12)",
+    sectionSpacing: "20px"
+  },
+  "clean-ledger": {
+    pageBackground: "linear-gradient(180deg, #f7f7f6 0%, #ecece8 100%)",
+    shellBackground: "#ffffff",
+    shellBorder: "1px solid #d4d4cf",
+    shellShadow: "0 12px 28px rgba(17, 24, 39, 0.08)",
+    sectionSpacing: "18px"
+  }
+}
+
+const CID_ROTATION_START_STORAGE_KEY = "androscoggin-cid-rotation-start-date"
+const EMPLOYEES_STORAGE_KEY = "androscoggin-employees"
+const SETTINGS_STORAGE_KEY = "androscoggin-settings"
+const REFERENCE_SETTINGS_STORAGE_KEY = "androscoggin-reference-settings"
+const CID_OVERRIDES_STORAGE_KEY = "androscoggin-cid-daily-overrides"
+const DETAIL_RECORDS_STORAGE_KEY = "androscoggin-detail-records"
+const DETAIL_QUEUE_EVENTS_STORAGE_KEY = "androscoggin-detail-queue-events"
+const DETAIL_QUEUE_IDS_STORAGE_KEY = "androscoggin-detail-queue-ids"
+const OVERTIME_QUEUE_IDS_STORAGE_KEY = "androscoggin-overtime-queue-ids"
+const OVERTIME_QUEUE_VERSION_STORAGE_KEY = "androscoggin-overtime-queue-version"
+const OVERTIME_SHIFT_REQUESTS_STORAGE_KEY = "androscoggin-overtime-shift-requests"
+const OVERTIME_ENTRIES_STORAGE_KEY = "androscoggin-overtime-entries"
+const NOTIFICATION_PREFERENCES_STORAGE_KEY = "androscoggin-notification-preferences"
+const NOTIFICATION_CAMPAIGNS_STORAGE_KEY = "androscoggin-notification-campaigns"
+const NOTIFICATION_DELIVERIES_STORAGE_KEY = "androscoggin-notification-deliveries"
+const NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY = "androscoggin-notification-provider-config"
+const AUDIT_EVENTS_STORAGE_KEY = "androscoggin-audit-events"
+const SUPABASE_APP_STATE_KEYS = {
+  staff: "scheduler_staff_state",
+  cidDetail: "scheduler_cid_detail_state",
+  audit: "scheduler_audit_state"
+} as const
+const LEGACY_SUPABASE_APP_STATE_KEY = "scheduler_state"
+const DEFAULT_CID_ROTATION_START_DATE = "2026-03-23"
+const LOCAL_PATROL_OVERRIDES_KEY = "androscoggin-local-patrol-overrides"
+const CURRENT_OVERTIME_QUEUE_VERSION = "6"
+
+function readStoredValue<T>(key: string, fallback: T) {
+  if (typeof window === "undefined") return fallback
+
+  try {
+    const raw = window.localStorage.getItem(key)
+    return raw ? JSON.parse(raw) as T : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function readLocalPatrolOverrides<T>(fallback: T) {
+  if (typeof window === "undefined") return fallback
+
+  try {
+    const raw = window.localStorage.getItem(LOCAL_PATROL_OVERRIDES_KEY)
+    return raw ? JSON.parse(raw) as T : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function shouldResetStoredOvertimeQueue() {
+  if (typeof window === "undefined") return false
+  return window.localStorage.getItem(OVERTIME_QUEUE_VERSION_STORAGE_KEY) !== CURRENT_OVERTIME_QUEUE_VERSION
+}
+
+function getPatrolSummaryRowKey(row: {
+  assignment_date: string
+  shift_type: "Days" | "Nights"
+  position_code: "SUP1" | "SUP2" | "DEP1" | "DEP2" | "POL"
+}) {
+  return `${row.assignment_date}-${row.shift_type}-${row.position_code}`
+}
+
+function mergePatrolSummaryRows<T extends {
+  assignment_date: string
+  shift_type: "Days" | "Nights"
+  position_code: "SUP1" | "SUP2" | "DEP1" | "DEP2" | "POL"
+}>(baseRows: T[], overrideRows: T[]) {
+  const merged = new Map<string, T>()
+
+  for (const row of baseRows) {
+    merged.set(getPatrolSummaryRowKey(row), row)
+  }
+
+  for (const row of overrideRows) {
+    merged.set(getPatrolSummaryRowKey(row), row)
+  }
+
+  return [...merged.values()].sort((a, b) => {
+    if (a.assignment_date !== b.assignment_date) return a.assignment_date.localeCompare(b.assignment_date)
+    if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
+    return a.position_code.localeCompare(b.position_code)
+  })
+}
+
+function getCalendarDayDiff(date: Date, anchor: Date) {
+  const utcDate = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+  const utcAnchor = Date.UTC(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())
+  return Math.round((utcDate - utcAnchor) / 86400000)
+}
+
+function getActiveTeamForSummary(date: Date, shift: ShiftType) {
+  const pitman = [0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0]
+  const start = new Date("2026-03-01T12:00:00")
+  const diff = getCalendarDayDiff(date, start)
+  const idx = pitman[((diff % pitman.length) + pitman.length) % pitman.length]
+
+  if (shift === "Days") return idx ? "Days A" : "Days B"
+  return idx ? "Nights A" : "Nights B"
+}
+
+function getDefaultEmployeeForSummaryPosition(
+  employees: Employee[],
+  shift: ShiftType,
+  date: Date,
+  positionCode: PatrolPositionCode
+) {
+  const activeTeam = getActiveTeamForSummary(date, shift)
+  const teamEmployees = employees.filter(
+    (employee) => employee.status === "Active" && employee.team === activeTeam
+  )
+
+  switch (positionCode) {
+    case "SUP1":
+      return teamEmployees.find((employee) => employee.rank === "Sgt") || null
+    case "SUP2":
+      return teamEmployees.find((employee) => employee.rank === "Cpl") || null
+    case "DEP1":
+      return teamEmployees.filter((employee) => employee.rank === "Deputy")[0] || null
+    case "DEP2":
+      return teamEmployees.filter((employee) => employee.rank === "Deputy")[1] || null
+    case "POL":
+      return teamEmployees.find((employee) => employee.rank === "Poland Deputy") || null
+    default:
+      return null
+  }
+}
 
 
 export default function App() {
+  type PatrolScheduleSummaryRow = {
+    id?: string
+    assignment_date: string
+    shift_type: "Days" | "Nights"
+    position_code: "SUP1" | "SUP2" | "DEP1" | "DEP2" | "POL"
+    employee_id: string | null
+    vehicle: string | null
+    shift_hours: string | null
+    status: string | null
+    replacement_employee_id: string | null
+    replacement_vehicle: string | null
+    replacement_hours: string | null
+  }
 
-  const [employees, setEmployees] = useState(initialEmployees)
+  function buildInitialDetailQueue(staff: Employee[]) {
+    return [...staff]
+      .sort((a, b) => a.hireDate.localeCompare(b.hireDate))
+      .map((employee) => employee.id)
+  }
+
+  function buildInitialOvertimeQueue(staff: Employee[]) {
+    return [...staff]
+      .filter((employee) => employee.status === "Active")
+      .sort((a, b) => a.hireDate.localeCompare(b.hireDate))
+      .map((employee) => employee.id)
+  }
+
+  function buildInitialNotificationPreferences(staff: Employee[]) {
+    return [...staff]
+      .filter((employee) => employee.status === "Active")
+      .sort((a, b) => a.lastName.localeCompare(b.lastName))
+      .map((employee) => ({
+        employeeId: employee.id,
+        emailAddress: "",
+        phoneNumber: "",
+        allowEmail: true,
+        allowText: false,
+        overtimeAvailability: true,
+        overtimeAssignment: true,
+        patrolUpdates: false,
+        forceUpdates: false,
+        detailUpdates: false
+      }))
+  }
+
+  function hasMeaningfulOvertimeQueueActivity(
+    requests: OvertimeShiftRequest[],
+    entries: OvertimeEntry[]
+  ) {
+    if (entries.length > 0) return true
+
+    return requests.some(
+      (request) =>
+        !!request.assignedEmployeeId ||
+        request.responses.some((response) =>
+          response.status === "Accepted" ||
+          response.status === "Declined" ||
+          response.status === "No Response" ||
+          response.status === "Assigned"
+        )
+    )
+  }
+
+  function buildDefaultNotificationProviderConfig(): NotificationProviderConfig {
+    return {
+      mode: "draft_only",
+      emailWebhookUrl: "",
+      textWebhookUrl: "",
+      authToken: "",
+      senderName: "Androscoggin Scheduler",
+      senderEmail: "",
+      senderPhone: ""
+    }
+  }
+
+  function normalizePersistedState(
+    payload: Partial<PersistedSchedulerState> | null,
+    fallback: PersistedSchedulerState
+  ): PersistedSchedulerState {
+    return {
+      employees: payload?.employees ?? fallback.employees,
+      settings: payload?.settings ?? fallback.settings,
+      referenceSettings: payload?.referenceSettings ?? fallback.referenceSettings,
+      cidRotationStartDate: payload?.cidRotationStartDate ?? fallback.cidRotationStartDate,
+      cidDailyOverrides: payload?.cidDailyOverrides ?? fallback.cidDailyOverrides,
+      detailRecords: payload?.detailRecords ?? fallback.detailRecords,
+      detailQueueEvents: payload?.detailQueueEvents ?? fallback.detailQueueEvents,
+      detailQueueIds: payload?.detailQueueIds ?? fallback.detailQueueIds,
+      overtimeQueueIds: shouldResetStoredOvertimeQueue()
+        ? fallback.overtimeQueueIds
+        : payload?.overtimeQueueIds ?? fallback.overtimeQueueIds,
+      overtimeShiftRequests: payload?.overtimeShiftRequests ?? fallback.overtimeShiftRequests,
+      overtimeEntries: payload?.overtimeEntries ?? fallback.overtimeEntries,
+      notificationPreferences: payload?.notificationPreferences ?? fallback.notificationPreferences,
+      notificationCampaigns: payload?.notificationCampaigns ?? fallback.notificationCampaigns,
+      notificationDeliveries: payload?.notificationDeliveries ?? fallback.notificationDeliveries,
+      notificationProviderConfig: payload?.notificationProviderConfig ?? fallback.notificationProviderConfig,
+      auditEvents: payload?.auditEvents ?? fallback.auditEvents
+    }
+  }
+
+  const defaultSettings: AppSettings = {
+    departmentTitle: "Androscoggin Patrol Schedule",
+    defaultLayoutVariant: "command-brass",
+    defaultPatrolView: "month",
+    defaultReportType: "overtime",
+    printHeaderTitle: "Androscoggin Patrol Schedule",
+    visibleModules: moduleOrder.map((module) => module.key),
+    useCustomColors: false,
+    colors: {
+      accent: "#d4af37",
+      border: "#112b5c",
+      cardBackground: "#fffdf7",
+      cardBorder: "#d8c79d",
+      cellBackground: "#ffffff",
+      cellHighlight: "#fde68a"
+    }
+  }
+  const defaultReferenceSettings: ReferenceSettings = {
+    vehicles: initialEmployees
+      .map((employee) => employee.defaultVehicle)
+      .filter((value, index, array) => array.indexOf(value) === index),
+    shiftTemplates: ["5a-5p", "5p-5a", "8a-4p"],
+    teams: ["Days A", "Days B", "Nights A", "Nights B", "CID", "SRO", "None"],
+    ranks: ["Sgt", "Cpl", "Deputy", "Poland Deputy", "Detective"],
+    patrolStatuses: [
+      "Scheduled",
+      "Sick",
+      "Vacation",
+      "Court",
+      "Training",
+      "FMLA",
+      "Professional Leave",
+      "Bereavement",
+      "Call Out",
+      "Detail",
+      "Extra",
+      "Swap",
+      "Open Shift",
+      "Off"
+    ]
+  }
+
+  const [employees, setEmployees] = useState<Employee[]>(() =>
+    readStoredValue<Employee[]>(EMPLOYEES_STORAGE_KEY, initialEmployees)
+  )
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authUser, setAuthUser] = useState<{
+    email?: string | null
+    user_metadata?: Record<string, unknown> | null
+    app_metadata?: Record<string, unknown> | null
+  } | null>(null)
+  const [profileRole, setProfileRole] = useState<AppRole | null>(null)
+  const [settings, setSettings] = useState<AppSettings>(() =>
+    readStoredValue<AppSettings>(SETTINGS_STORAGE_KEY, defaultSettings)
+  )
+  const [referenceSettings, setReferenceSettings] = useState<ReferenceSettings>(() =>
+    readStoredValue<ReferenceSettings>(REFERENCE_SETTINGS_STORAGE_KEY, defaultReferenceSettings)
+  )
+  const [layoutVariant, setLayoutVariant] = useState<AppLayoutVariant>("command-brass")
+  const [cidRotationStartDate, setCidRotationStartDate] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_CID_ROTATION_START_DATE
+    }
+
+    return window.localStorage.getItem(CID_ROTATION_START_STORAGE_KEY) || DEFAULT_CID_ROTATION_START_DATE
+  })
+  const [cidDailyOverrides, setCidDailyOverrides] = useState<Record<string, string>>(() =>
+    readStoredValue<Record<string, string>>(CID_OVERRIDES_STORAGE_KEY, {})
+  )
+  const [detailRecords, setDetailRecords] = useState<DetailRecord[]>(() =>
+    readStoredValue<DetailRecord[]>(DETAIL_RECORDS_STORAGE_KEY, [])
+  )
+  const [detailQueueEvents, setDetailQueueEvents] = useState<DetailQueueEvent[]>(() =>
+    readStoredValue<DetailQueueEvent[]>(DETAIL_QUEUE_EVENTS_STORAGE_KEY, [])
+  )
+  const [detailQueueIds, setDetailQueueIds] = useState<string[]>(() =>
+    readStoredValue<string[]>(DETAIL_QUEUE_IDS_STORAGE_KEY, buildInitialDetailQueue(initialEmployees))
+  )
+  const [overtimeQueueIds, setOvertimeQueueIds] = useState<string[]>(() =>
+    shouldResetStoredOvertimeQueue()
+      ? buildInitialOvertimeQueue(initialEmployees)
+      : readStoredValue<string[]>(OVERTIME_QUEUE_IDS_STORAGE_KEY, buildInitialOvertimeQueue(initialEmployees))
+  )
+  const [overtimeShiftRequests, setOvertimeShiftRequests] = useState<OvertimeShiftRequest[]>(() =>
+    readStoredValue<OvertimeShiftRequest[]>(OVERTIME_SHIFT_REQUESTS_STORAGE_KEY, [])
+  )
+  const [overtimeEntries, setOvertimeEntries] = useState<OvertimeEntry[]>(() =>
+    readStoredValue<OvertimeEntry[]>(OVERTIME_ENTRIES_STORAGE_KEY, [])
+  )
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference[]>(() =>
+    readStoredValue<NotificationPreference[]>(
+      NOTIFICATION_PREFERENCES_STORAGE_KEY,
+      buildInitialNotificationPreferences(initialEmployees)
+    )
+  )
+  const [notificationCampaigns, setNotificationCampaigns] = useState<NotificationCampaign[]>(() =>
+    readStoredValue<NotificationCampaign[]>(NOTIFICATION_CAMPAIGNS_STORAGE_KEY, [])
+  )
+  const [notificationDeliveries, setNotificationDeliveries] = useState<NotificationDelivery[]>(() =>
+    readStoredValue<NotificationDelivery[]>(NOTIFICATION_DELIVERIES_STORAGE_KEY, [])
+  )
+  const [notificationProviderConfig, setNotificationProviderConfig] = useState<NotificationProviderConfig>(() =>
+    readStoredValue<NotificationProviderConfig>(
+      NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY,
+      buildDefaultNotificationProviderConfig()
+    )
+  )
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(() =>
+    readStoredValue<AuditEvent[]>(AUDIT_EVENTS_STORAGE_KEY, [])
+  )
+  const [patrolSummaryRows, setPatrolSummaryRows] = useState<PatrolScheduleSummaryRow[]>([])
+  const [localPatrolOverrideRows, setLocalPatrolOverrideRows] = useState<PatrolScheduleSummaryRow[]>(() =>
+    readLocalPatrolOverrides<PatrolScheduleSummaryRow[]>([])
+  )
+  const [forceHistoryRows, setForceHistoryRows] = useState<ForceHistoryRow[]>([])
+  const [activeSummaryCard, setActiveSummaryCard] = useState<"open_shifts" | "staffing_alerts" | null>(null)
+  const [appStateSyncStatus, setAppStateSyncStatus] = useState<{
+    mode: "checking" | "connected" | "local"
+    message: string
+  }>({
+    mode: "checking",
+    message: "Checking Supabase sync for local modules..."
+  })
 
   const [activeModule, setActiveModule] =
     useState<ModuleKey>("patrol")
+  const [mobileResponseToken, setMobileResponseToken] = useState("")
+  const hasHydratedSupabaseState = useRef(false)
+  const hasHydratedPatrolOverrides = useRef(false)
+  const hasHydratedOvertimeNotifications = useRef(false)
+  const lastSupabaseSnapshotRef = useRef("")
+  const lastSupabasePatrolOverridesRef = useRef("")
+  const lastSupabaseOvertimeNotificationsRef = useRef("")
+  const lastSupabaseSyncActorRef = useRef("")
+  const lastSupabasePatrolSyncActorRef = useRef("")
+  const lastSupabaseOvertimeNotificationsActorRef = useRef("")
+  const patrolSummaryRefreshTimeoutRef = useRef<number | null>(null)
+  const forceHistoryRefreshTimeoutRef = useRef<number | null>(null)
+  const currentUserRole = useMemo<AppRole>(() => profileRole || resolveAppRole(authUser), [authUser, profileRole])
+  const currentUserDisplayName = useMemo(() => resolveDisplayName(authUser), [authUser])
+  const currentSyncActorKey = useMemo(
+    () => `${authUser && typeof authUser.email === "string" ? authUser.email : "anonymous"}|${currentUserRole}`,
+    [authUser, currentUserRole]
+  )
+  const effectivePatrolSummaryRows = useMemo(
+    () => mergePatrolSummaryRows(patrolSummaryRows, localPatrolOverrideRows),
+    [patrolSummaryRows, localPatrolOverrideRows]
+  )
+  const coverageEvaluatedPatrolSummaryRows = useMemo(() => {
+    const positions: PatrolPositionCode[] = ["SUP1", "SUP2", "DEP1", "DEP2", "POL"]
+    const shifts: ShiftType[] = ["Days", "Nights"]
+    const today = new Date()
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const end = new Date(start)
+    end.setDate(end.getDate() + 45)
 
+    const seededRows: PatrolScheduleSummaryRow[] = []
+
+    for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+      for (const shift of shifts) {
+        for (const position of positions) {
+          const assignedEmployee = getDefaultEmployeeForSummaryPosition(employees, shift, cursor, position)
+          const shiftHours = shift === "Days" ? "5a-5p" : "5p-5a"
+
+          seededRows.push({
+            assignment_date: toIsoDate(cursor),
+            shift_type: shift,
+            position_code: position,
+            employee_id: assignedEmployee?.id || null,
+            vehicle: assignedEmployee?.defaultVehicle || null,
+            shift_hours: assignedEmployee?.defaultShiftHours || shiftHours,
+            status: assignedEmployee ? "Scheduled" : "Open Shift",
+            replacement_employee_id: null,
+            replacement_vehicle: null,
+            replacement_hours: assignedEmployee?.defaultShiftHours || shiftHours
+          })
+        }
+      }
+    }
+
+    return mergePatrolSummaryRows(seededRows, effectivePatrolSummaryRows)
+  }, [effectivePatrolSummaryRows, employees])
+
+  useEffect(() => {
+    let active = true
+
+    async function hydrateAuth() {
+      try {
+        const authResult = await Promise.race([
+          supabase.auth.getUser(),
+          new Promise<{ data: { user: null } }>((resolve) =>
+            window.setTimeout(() => resolve({ data: { user: null } }), 3500)
+          )
+        ])
+        const nextUser = authResult.data.user ?? getLocalAccessUser()
+        const nextProfileRole =
+          nextUser && "id" in nextUser
+            ? await getCurrentProfileRole(
+                typeof nextUser.id === "string" ? nextUser.id : null,
+                typeof nextUser.email === "string" ? nextUser.email : null
+              )
+            : null
+
+        if (!active) return
+
+        setAuthUser(nextUser)
+        setProfileRole(nextProfileRole || resolveAppRole(nextUser))
+      } catch {
+        if (!active) return
+        const localUser = getLocalAccessUser()
+        setAuthUser(localUser)
+        setProfileRole(localUser ? resolveAppRole(localUser) : null)
+      } finally {
+        if (active) {
+          setAuthLoading(false)
+        }
+      }
+    }
+
+    hydrateAuth()
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      void (async () => {
+        try {
+          const nextUser = session?.user ?? getLocalAccessUser()
+          const nextProfileRole =
+            nextUser && "id" in nextUser
+              ? await getCurrentProfileRole(
+                  typeof nextUser.id === "string" ? nextUser.id : null,
+                  typeof nextUser.email === "string" ? nextUser.email : null
+                )
+              : null
+          setAuthUser(nextUser)
+          setProfileRole(nextProfileRole || resolveAppRole(nextUser))
+        } catch {
+          const fallbackUser = session?.user ?? getLocalAccessUser()
+          setAuthUser(fallbackUser)
+          setProfileRole(fallbackUser ? resolveAppRole(fallbackUser) : null)
+        } finally {
+          setAuthLoading(false)
+        }
+      })()
+    })
+
+    return () => {
+      active = false
+      listener.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    async function refreshProfileRoleFromUser() {
+      if (!authUser || !("id" in authUser) || typeof authUser.id !== "string") {
+        setProfileRole(authUser ? resolveAppRole(authUser) : null)
+        return
+      }
+
+      const nextProfileRole = await getCurrentProfileRole(
+        authUser.id,
+        typeof authUser.email === "string" ? authUser.email : null
+      )
+      if (!active) return
+
+      setProfileRole(nextProfileRole || resolveAppRole(authUser))
+    }
+
+    void refreshProfileRoleFromUser()
+
+    return () => {
+      active = false
+    }
+  }, [authUser])
+
+  useEffect(() => {
+    let active = true
+
+    async function hydratePatrolOverrides() {
+      const result = await loadSupabasePatrolOverrides()
+
+      if (!active) return
+
+      if (result.data) {
+        setLocalPatrolOverrideRows(result.data)
+        lastSupabasePatrolOverridesRef.current = JSON.stringify(result.data)
+      }
+
+      hasHydratedPatrolOverrides.current = true
+    }
+
+    void hydratePatrolOverrides()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    let refreshTimeout: number | null = null
+
+    async function refreshPatrolOverrides() {
+      const result = await loadSupabasePatrolOverrides()
+      if (!active || !result.data) return
+      setLocalPatrolOverrideRows(result.data)
+      lastSupabasePatrolOverridesRef.current = JSON.stringify(result.data)
+    }
+
+    const channel = supabase
+      .channel("app_patrol_overrides")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "patrol_overrides"
+        },
+        () => {
+          if (refreshTimeout) {
+            window.clearTimeout(refreshTimeout)
+          }
+
+          refreshTimeout = window.setTimeout(() => {
+            void refreshPatrolOverrides()
+          }, 300)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      active = false
+      if (refreshTimeout) {
+        window.clearTimeout(refreshTimeout)
+      }
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hasHydratedPatrolOverrides.current) return
+
+    const snapshotJson = JSON.stringify(localPatrolOverrideRows)
+    const actorChanged = currentSyncActorKey !== lastSupabasePatrolSyncActorRef.current
+    if (snapshotJson === lastSupabasePatrolOverridesRef.current && !actorChanged) return
+
+    const timeoutId = window.setTimeout(async () => {
+      const result = await saveSupabasePatrolOverrides(localPatrolOverrideRows)
+
+      if (result.ok) {
+        lastSupabasePatrolOverridesRef.current = snapshotJson
+        lastSupabasePatrolSyncActorRef.current = currentSyncActorKey
+      }
+    }, 500)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [currentSyncActorKey, localPatrolOverrideRows])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadForceHistory() {
+      const { data, error } = await supabase
+        .from("force_history")
+        .select("employee_id,forced_date")
+        .order("forced_date", { ascending: false })
+
+      if (error) {
+        console.error("Failed loading force history:", error)
+        return
+      }
+
+      if (active) {
+        setForceHistoryRows((data || []) as ForceHistoryRow[])
+      }
+    }
+
+    function scheduleForceHistoryRefresh() {
+      if (forceHistoryRefreshTimeoutRef.current) {
+        window.clearTimeout(forceHistoryRefreshTimeoutRef.current)
+      }
+
+      forceHistoryRefreshTimeoutRef.current = window.setTimeout(() => {
+        void loadForceHistory()
+      }, 350)
+    }
+
+    void loadForceHistory()
+
+    const channel = supabase
+      .channel("app_force_history")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "force_history"
+        },
+        () => scheduleForceHistoryRefresh()
+      )
+      .subscribe()
+
+    return () => {
+      active = false
+      if (forceHistoryRefreshTimeoutRef.current) {
+        window.clearTimeout(forceHistoryRefreshTimeoutRef.current)
+      }
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const variant = params.get("variant") as AppLayoutVariant | null
+    const moduleParam = params.get("module") as ModuleKey | null
+
+    if (variant && layoutVariants.some((option) => option.value === variant)) {
+      setLayoutVariant(variant)
+    } else {
+      setLayoutVariant(settings.defaultLayoutVariant)
+    }
+
+    if (moduleParam && moduleOrder.some((module) => module.key === moduleParam)) {
+      setActiveModule(moduleParam)
+    }
+  }, [settings.defaultLayoutVariant])
+
+  useEffect(() => {
+    setLayoutVariant(settings.defaultLayoutVariant)
+  }, [settings.defaultLayoutVariant])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CID_ROTATION_START_STORAGE_KEY, cidRotationStartDate)
+    }
+  }, [cidRotationStartDate])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(employees))
+    }
+  }, [employees])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+    }
+  }, [settings])
+
+  useEffect(() => {
+    const requiredModules: ModuleKey[] = ["overtime", "mobile", "notifications"]
+    const missingModules = requiredModules.filter((moduleKey) => !settings.visibleModules.includes(moduleKey))
+
+    if (missingModules.length === 0) return
+
+    setSettings((current) => ({
+      ...current,
+      visibleModules: [...current.visibleModules, ...missingModules]
+    }))
+  }, [settings.visibleModules])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(REFERENCE_SETTINGS_STORAGE_KEY, JSON.stringify(referenceSettings))
+    }
+  }, [referenceSettings])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CID_OVERRIDES_STORAGE_KEY, JSON.stringify(cidDailyOverrides))
+    }
+  }, [cidDailyOverrides])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(DETAIL_RECORDS_STORAGE_KEY, JSON.stringify(detailRecords))
+    }
+  }, [detailRecords])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(DETAIL_QUEUE_EVENTS_STORAGE_KEY, JSON.stringify(detailQueueEvents))
+    }
+  }, [detailQueueEvents])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(DETAIL_QUEUE_IDS_STORAGE_KEY, JSON.stringify(detailQueueIds))
+    }
+  }, [detailQueueIds])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(OVERTIME_QUEUE_IDS_STORAGE_KEY, JSON.stringify(overtimeQueueIds))
+      window.localStorage.setItem(OVERTIME_QUEUE_VERSION_STORAGE_KEY, CURRENT_OVERTIME_QUEUE_VERSION)
+    }
+  }, [overtimeQueueIds])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(OVERTIME_SHIFT_REQUESTS_STORAGE_KEY, JSON.stringify(overtimeShiftRequests))
+    }
+  }, [overtimeShiftRequests])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(OVERTIME_ENTRIES_STORAGE_KEY, JSON.stringify(overtimeEntries))
+    }
+  }, [overtimeEntries])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(NOTIFICATION_PREFERENCES_STORAGE_KEY, JSON.stringify(notificationPreferences))
+    }
+  }, [notificationPreferences])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(NOTIFICATION_CAMPAIGNS_STORAGE_KEY, JSON.stringify(notificationCampaigns))
+    }
+  }, [notificationCampaigns])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(NOTIFICATION_DELIVERIES_STORAGE_KEY, JSON.stringify(notificationDeliveries))
+    }
+  }, [notificationDeliveries])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY, JSON.stringify(notificationProviderConfig))
+    }
+  }, [notificationProviderConfig])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(AUDIT_EVENTS_STORAGE_KEY, JSON.stringify(auditEvents))
+    }
+  }, [auditEvents])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(LOCAL_PATROL_OVERRIDES_KEY, JSON.stringify(localPatrolOverrideRows))
+    }
+  }, [localPatrolOverrideRows])
+
+  const schedulerSnapshot = useMemo<PersistedSchedulerState>(
+    () => ({
+      employees,
+      settings,
+      referenceSettings,
+      cidRotationStartDate,
+      cidDailyOverrides,
+      detailRecords,
+      detailQueueEvents,
+      detailQueueIds,
+      overtimeQueueIds,
+      overtimeShiftRequests,
+      overtimeEntries,
+      notificationPreferences,
+      notificationCampaigns,
+      notificationDeliveries,
+      notificationProviderConfig,
+      auditEvents
+    }),
+    [
+      auditEvents,
+      cidDailyOverrides,
+      cidRotationStartDate,
+      detailQueueEvents,
+      detailQueueIds,
+      detailRecords,
+      employees,
+      overtimeQueueIds,
+      overtimeShiftRequests,
+      overtimeEntries,
+      notificationCampaigns,
+      notificationDeliveries,
+      notificationProviderConfig,
+      notificationPreferences,
+      referenceSettings,
+      settings
+    ]
+  )
+  const staffSnapshot = useMemo<PersistedStaffState>(
+    () => ({
+      employees,
+      settings,
+      referenceSettings
+    }),
+    [employees, referenceSettings, settings]
+  )
+  const cidDetailSnapshot = useMemo<PersistedCidDetailState>(
+    () => ({
+      cidRotationStartDate,
+      cidDailyOverrides,
+      detailRecords,
+      detailQueueEvents,
+      detailQueueIds
+    }),
+    [cidDailyOverrides, cidRotationStartDate, detailQueueEvents, detailQueueIds, detailRecords]
+  )
+  const overtimeNotificationSnapshot = useMemo(
+    () => ({
+      overtimeQueueIds,
+      overtimeShiftRequests,
+      overtimeEntries,
+      notificationPreferences,
+      notificationCampaigns,
+      notificationDeliveries,
+      notificationProviderConfig
+    }),
+    [
+      notificationCampaigns,
+      notificationDeliveries,
+      notificationPreferences,
+      notificationProviderConfig,
+      overtimeEntries,
+      overtimeQueueIds,
+      overtimeShiftRequests
+    ]
+  )
+  const auditSnapshot = useMemo<PersistedAuditState>(
+    () => ({
+      auditEvents
+    }),
+    [auditEvents]
+  )
+
+  useEffect(() => {
+    let active = true
+
+    async function hydrateAppState() {
+      const fallbackSnapshot = schedulerSnapshot
+      const result = await loadSupabaseAppStates<Partial<PersistedSchedulerState>>([
+        ...Object.values(SUPABASE_APP_STATE_KEYS),
+        LEGACY_SUPABASE_APP_STATE_KEY
+      ])
+
+      if (!active) return
+
+      const mergedPayload = {
+        ...(result.data[LEGACY_SUPABASE_APP_STATE_KEY] || {}),
+        ...(result.data[SUPABASE_APP_STATE_KEYS.staff] || {}),
+        ...(result.data[SUPABASE_APP_STATE_KEYS.cidDetail] || {}),
+        ...(result.data[SUPABASE_APP_STATE_KEYS.audit] || {})
+      }
+
+      if (Object.keys(mergedPayload).length > 0) {
+        const normalized = normalizePersistedState(mergedPayload, fallbackSnapshot)
+        setEmployees(normalized.employees)
+        setSettings(normalized.settings)
+        setReferenceSettings(normalized.referenceSettings)
+        setCidRotationStartDate(normalized.cidRotationStartDate)
+        setCidDailyOverrides(normalized.cidDailyOverrides)
+        setDetailRecords(normalized.detailRecords)
+        setDetailQueueEvents(normalized.detailQueueEvents)
+        setDetailQueueIds(normalized.detailQueueIds)
+        setAuditEvents(normalized.auditEvents)
+        lastSupabaseSnapshotRef.current = JSON.stringify(normalized)
+        setAppStateSyncStatus({
+          mode: "connected",
+          message: "Supabase sync is active for Employees, CID, Detail, Settings, and audit."
+        })
+      } else if (result.error) {
+        setAppStateSyncStatus({
+          mode: "local",
+          message: "Using local browser storage for Employees, CID, Detail, Settings, and audit until Supabase app_state is available."
+        })
+      } else {
+        setAppStateSyncStatus({
+          mode: "local",
+          message: "No Supabase app state found yet. Local browser storage is active until app_state is set up."
+        })
+      }
+
+      hasHydratedSupabaseState.current = true
+    }
+
+    hydrateAppState()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    async function hydrateOvertimeNotifications() {
+      const fallbackSnapshot = schedulerSnapshot
+      const result = await loadSupabaseOvertimeNotificationsState()
+
+      if (!active) return
+
+      if (result.data) {
+        const normalized = normalizePersistedState(
+          {
+            ...result.data,
+            notificationProviderConfig: result.data.notificationProviderConfig || undefined
+          },
+          fallbackSnapshot
+        )
+        setOvertimeQueueIds(normalized.overtimeQueueIds)
+        setOvertimeShiftRequests(normalized.overtimeShiftRequests)
+        setOvertimeEntries(normalized.overtimeEntries)
+        setNotificationPreferences(normalized.notificationPreferences)
+        setNotificationCampaigns(normalized.notificationCampaigns)
+        setNotificationDeliveries(normalized.notificationDeliveries)
+        setNotificationProviderConfig(normalized.notificationProviderConfig)
+        lastSupabaseOvertimeNotificationsRef.current = JSON.stringify(result.data)
+      }
+
+      hasHydratedOvertimeNotifications.current = true
+    }
+
+    void hydrateOvertimeNotifications()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hasHydratedSupabaseState.current) return
+
+    const snapshotJson = JSON.stringify(schedulerSnapshot)
+    const actorChanged = currentSyncActorKey !== lastSupabaseSyncActorRef.current
+    if (snapshotJson === lastSupabaseSnapshotRef.current && !actorChanged) return
+
+    const timeoutId = window.setTimeout(async () => {
+      const result = await saveSupabaseAppStates([
+        { stateKey: SUPABASE_APP_STATE_KEYS.staff, payload: staffSnapshot },
+        { stateKey: SUPABASE_APP_STATE_KEYS.cidDetail, payload: cidDetailSnapshot },
+        { stateKey: SUPABASE_APP_STATE_KEYS.audit, payload: auditSnapshot }
+      ])
+
+      if (result.ok) {
+        lastSupabaseSnapshotRef.current = snapshotJson
+        lastSupabaseSyncActorRef.current = currentSyncActorKey
+        setAppStateSyncStatus({
+          mode: "connected",
+          message: "Supabase sync is active for Employees, CID, Detail, Settings, and audit."
+        })
+      } else {
+        setAppStateSyncStatus({
+          mode: "local",
+          message: "Local browser storage is still active. Add the app_state schema in Supabase to turn on cloud sync."
+        })
+      }
+    }, 700)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [auditSnapshot, cidDetailSnapshot, currentSyncActorKey, schedulerSnapshot, staffSnapshot])
+
+  useEffect(() => {
+    if (!hasHydratedOvertimeNotifications.current) return
+
+    const snapshotJson = JSON.stringify(overtimeNotificationSnapshot)
+    const actorChanged = currentSyncActorKey !== lastSupabaseOvertimeNotificationsActorRef.current
+    if (snapshotJson === lastSupabaseOvertimeNotificationsRef.current && !actorChanged) return
+
+    const timeoutId = window.setTimeout(async () => {
+      const result = await saveSupabaseOvertimeNotificationsState(overtimeNotificationSnapshot)
+
+      if (result.ok) {
+        lastSupabaseOvertimeNotificationsRef.current = snapshotJson
+        lastSupabaseOvertimeNotificationsActorRef.current = currentSyncActorKey
+      }
+    }, 700)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [currentSyncActorKey, overtimeNotificationSnapshot])
+
+  useEffect(() => {
+    setDetailQueueIds((currentQueue) => {
+      const initialSorted = buildInitialDetailQueue(employees)
+      const hasMeaningfulDetailQueueActivity =
+        detailQueueEvents.length > 0 || detailRecords.length > 0
+
+      if (!hasMeaningfulDetailQueueActivity) {
+        return initialSorted
+      }
+
+      const currentSet = new Set(currentQueue)
+      const activeEmployeeIds = new Set(employees.map((employee) => employee.id))
+      const retained = currentQueue.filter((id) => activeEmployeeIds.has(id))
+      const added = initialSorted.filter((id) => !currentSet.has(id))
+      return [...retained, ...added]
+    })
+  }, [detailQueueEvents.length, detailRecords.length, employees])
+
+  useEffect(() => {
+    setOvertimeQueueIds((currentQueue) => {
+      const initialSorted = buildInitialOvertimeQueue(employees)
+      const hasMeaningfulQueueMovement = hasMeaningfulOvertimeQueueActivity(overtimeShiftRequests, overtimeEntries)
+
+      if (!hasMeaningfulQueueMovement) {
+        return initialSorted
+      }
+
+      const currentSet = new Set(currentQueue)
+      const activeEmployeeIds = new Set(
+        employees
+          .filter((employee) => employee.status === "Active")
+          .map((employee) => employee.id)
+      )
+      const retained = currentQueue.filter((id) => activeEmployeeIds.has(id))
+      const added = initialSorted.filter((id) => !currentSet.has(id))
+      return [...retained, ...added]
+    })
+  }, [employees, overtimeEntries, overtimeShiftRequests])
+
+  useEffect(() => {
+    setNotificationPreferences((current) => {
+      const defaults = buildInitialNotificationPreferences(employees)
+      const currentMap = new Map(current.map((entry) => [entry.employeeId, entry]))
+      return defaults.map((entry) => currentMap.get(entry.employeeId) || entry)
+    })
+  }, [employees])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadPatrolSummary() {
+      const today = new Date()
+      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      const end = new Date(start)
+      end.setDate(end.getDate() + 45)
+
+      const { data, error } = await fetchPatrolScheduleRange(toIsoDate(start), toIsoDate(end))
+
+      if (error) {
+        console.error("Failed loading patrol summary:", error)
+        return
+      }
+
+      if (active) {
+        setPatrolSummaryRows((data || []) as PatrolScheduleSummaryRow[])
+      }
+    }
+
+    function schedulePatrolSummaryRefresh() {
+      if (patrolSummaryRefreshTimeoutRef.current) {
+        window.clearTimeout(patrolSummaryRefreshTimeoutRef.current)
+      }
+
+      patrolSummaryRefreshTimeoutRef.current = window.setTimeout(() => {
+        void loadPatrolSummary()
+      }, 350)
+    }
+
+    void loadPatrolSummary()
+
+    const channel = supabase
+      .channel("app_patrol_summary")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "patrol_schedule"
+        },
+        () => {
+          invalidatePatrolScheduleCache()
+          schedulePatrolSummaryRefresh()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      active = false
+      if (patrolSummaryRefreshTimeoutRef.current) {
+        window.clearTimeout(patrolSummaryRefreshTimeoutRef.current)
+      }
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  const activeTheme = useMemo(() => layoutThemes[layoutVariant], [layoutVariant])
+  const cidOnCallEmployee = useMemo(
+    () =>
+      getEffectiveCidOnCallForDate(
+        new Date(),
+        employees,
+        cidRotationStartDate,
+        cidDailyOverrides
+      ),
+    [employees, cidRotationStartDate, cidDailyOverrides]
+  )
+  const cidOnCallName = cidOnCallEmployee
+    ? `${cidOnCallEmployee.firstName} ${cidOnCallEmployee.lastName}`
+    : "Not Assigned"
+  const activeColorSettings = settings.useCustomColors ? settings.colors : undefined
+  const canAccessCommandTools = currentUserRole === "admin" || currentUserRole === "sergeant"
+  function appendAuditEvent(
+    module: AuditEvent["module"],
+    action: string,
+    summary: string,
+    details?: string
+  ) {
+    setAuditEvents((current) => [
+      {
+        id: crypto.randomUUID(),
+        module,
+        action,
+        summary,
+        details,
+        actorRole: currentUserRole,
+        createdAt: new Date().toISOString()
+      },
+      ...current
+    ].slice(0, 500))
+  }
+
+  function rebuildQueuesBySeniority() {
+    const nextDetailQueue = buildInitialDetailQueue(employees)
+    const nextOvertimeQueue = buildInitialOvertimeQueue(employees)
+    setDetailQueueIds(nextDetailQueue)
+    setOvertimeQueueIds(nextOvertimeQueue)
+    appendAuditEvent(
+      "Settings",
+      "Queues Rebuilt",
+      "Rebuilt Detail and Overtime queues by hire-date seniority.",
+      `Detail queue: ${nextDetailQueue.length} employees | Overtime queue: ${nextOvertimeQueue.length} employees`
+    )
+  }
+
+  function clearPatrolOverrideCache() {
+    setLocalPatrolOverrideRows([])
+    invalidatePatrolScheduleCache()
+    appendAuditEvent(
+      "Settings",
+      "Local Patrol Overrides Cleared",
+      "Cleared local Patrol override cache from the admin repair tools."
+    )
+  }
+
+  function repairOvertimeFromPatrol() {
+    const overrideRows = localPatrolOverrideRows
+    const overrideMap = new Map(
+      overrideRows.map((row) => [getPatrolSummaryRowKey(row), row])
+    )
+
+    setOvertimeShiftRequests((current) =>
+      current
+        .filter((request) => {
+          if (request.source !== "Patrol Open Shift") return true
+
+          const matchingOverride = overrideMap.get(
+            `${request.assignmentDate}-${request.shiftType}-${request.positionCode}`
+          )
+
+          if (!matchingOverride) return false
+          if (!request.selectionActive) return false
+          if (!matchingOverride.status || matchingOverride.status === "Scheduled") return false
+          if (request.offEmployeeId && matchingOverride.employee_id !== request.offEmployeeId) return false
+
+          return true
+        })
+        .map((request) => {
+          if (request.source !== "Patrol Open Shift") return request
+
+          const matchingOverride =
+            overrideMap.get(`${request.assignmentDate}-${request.shiftType}-${request.positionCode}`) || null
+
+          if (!matchingOverride) return request
+
+          const offEmployee = matchingOverride.employee_id
+            ? employees.find((employee) => employee.id === matchingOverride.employee_id) || null
+            : null
+
+          return {
+            ...request,
+            offEmployeeId: matchingOverride.employee_id ?? request.offEmployeeId ?? null,
+            offEmployeeLastName: offEmployee?.lastName || request.offEmployeeLastName || null,
+            offHours: matchingOverride.shift_hours || request.offHours || null,
+            assignedEmployeeId: matchingOverride.replacement_employee_id || null,
+            workflowStatus:
+              request.workflowStatus === "Force" || request.workflowStatus === "Close"
+                ? request.workflowStatus
+                : matchingOverride.replacement_employee_id
+                  ? "Fill"
+                  : "Open",
+            status:
+              request.workflowStatus === "Close"
+                ? "Closed"
+                : matchingOverride.replacement_employee_id
+                  ? "Assigned"
+                  : "Open"
+          }
+        })
+    )
+
+    setLocalPatrolOverrideRows(overrideRows)
+    invalidatePatrolScheduleCache()
+    appendAuditEvent(
+      "Settings",
+      "Overtime Repaired From Patrol",
+      "Reconciled Patrol-generated overtime shifts against the current Patrol override rows."
+    )
+  }
+
+  const visibleModulesForRole = useMemo(
+    () =>
+      settings.visibleModules.filter((moduleKey) =>
+        moduleKey === "command" || moduleKey === "audit" ? canAccessCommandTools : true
+      ),
+    [canAccessCommandTools, settings.visibleModules]
+  )
+  const openOvertimeRequests = useMemo(
+    () =>
+      [...overtimeShiftRequests]
+        .filter((request) => request.status === "Open" && !request.assignedEmployeeId)
+        .sort(
+          (a, b) =>
+            a.assignmentDate.localeCompare(b.assignmentDate) ||
+            a.shiftType.localeCompare(b.shiftType) ||
+            a.positionCode.localeCompare(b.positionCode)
+        ),
+    [overtimeShiftRequests]
+  )
+  const staffingAlerts = useMemo(() => {
+    const grouped = new Map<string, PatrolScheduleSummaryRow[]>()
+
+    for (const row of coverageEvaluatedPatrolSummaryRows) {
+      const key = `${row.assignment_date}-${row.shift_type}`
+      const existing = grouped.get(key) || []
+      existing.push(row)
+      grouped.set(key, existing)
+    }
+
+    return [...grouped.entries()]
+      .flatMap(([key, rows]) => {
+        if (!rows[0] || !isForceRequired(rows[0], rows)) return []
+
+        const coveredRows = rows.filter((row) => isShiftCovered(row))
+        const coveredSupervisors = coveredRows.filter((row) => row.position_code === "SUP1" || row.position_code === "SUP2")
+        const reasons: string[] = []
+
+        if (coveredSupervisors.length === 0) {
+          reasons.push("No supervisor on duty")
+        }
+
+        if (coveredRows.length < 4) {
+          reasons.push(`Only ${coveredRows.length} covered employees`)
+        }
+
+        return [{
+          key,
+          assignmentDate: rows[0].assignment_date,
+          shiftType: rows[0].shift_type,
+          reasons
+          }]
+        })
+        .sort((a, b) => a.assignmentDate.localeCompare(b.assignmentDate) || a.shiftType.localeCompare(b.shiftType))
+  }, [coverageEvaluatedPatrolSummaryRows, localPatrolOverrideRows])
+
+  useEffect(() => {
+    function syncFromHash() {
+      if (typeof window === "undefined") return
+      const hash = window.location.hash || ""
+      const prefix = "#mobile-response="
+      if (hash.startsWith(prefix)) {
+        const token = decodeURIComponent(hash.slice(prefix.length))
+        setMobileResponseToken(token)
+        setActiveModule("mobile")
+      } else {
+        setMobileResponseToken("")
+      }
+    }
+
+    syncFromHash()
+    if (typeof window !== "undefined") {
+      window.addEventListener("hashchange", syncFromHash)
+      return () => window.removeEventListener("hashchange", syncFromHash)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!visibleModulesForRole.includes(activeModule)) {
+      const fallbackModule = moduleOrder.find((module) => visibleModulesForRole.includes(module.key))
+      if (fallbackModule) {
+        setActiveModule(fallbackModule.key)
+      }
+    }
+  }, [activeModule, visibleModulesForRole])
+
+  function formatSummaryDate(date: string) {
+    return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    })
+  }
+
+  function resolvePositionLabel(code: PatrolScheduleSummaryRow["position_code"]) {
+    const labels: Record<PatrolScheduleSummaryRow["position_code"], string> = {
+      SUP1: "Supervisor 1",
+      SUP2: "Supervisor 2",
+      DEP1: "Deputy 1",
+      DEP2: "Deputy 2",
+      POL: "Poland"
+    }
+
+    return labels[code]
+  }
+
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: activeTheme.pageBackground
+        }}
+      >
+        <div style={{ fontWeight: 700, color: "#334155" }}>
+          Loading secure session...
+        </div>
+      </div>
+    )
+  }
+
+  if (!authUser) {
+    return (
+      <LoginPage
+        onLogin={async (user) => {
+          const nextUser = user as typeof authUser
+          const nextUserId =
+            nextUser && typeof nextUser === "object" && "id" in nextUser
+              ? (nextUser as { id?: unknown }).id
+              : null
+          const nextUserEmail =
+            nextUser && typeof nextUser === "object" && "email" in nextUser
+              ? (nextUser as { email?: unknown }).email
+              : null
+          setAuthUser(nextUser)
+          const nextResolvedRole =
+            typeof nextUserId === "string"
+              ? await getCurrentProfileRole(
+                  nextUserId,
+                  typeof nextUserEmail === "string" ? nextUserEmail : null
+                )
+              : null
+          setProfileRole(nextResolvedRole || resolveAppRole(nextUser))
+          appendAuditEvent(
+            "App",
+            "User Signed In",
+            `${resolveDisplayName(nextUser)} signed in.`,
+            `Role resolved as ${(nextResolvedRole || resolveAppRole(nextUser)).toUpperCase()}.`
+          )
+        }}
+      />
+    )
+  }
 
   return (
 
@@ -43,39 +1578,394 @@ export default function App() {
       style={{
         width: "100%",
         minHeight: "100vh",
-        padding: "20px",
-        boxSizing: "border-box"
+        padding: "12px",
+        boxSizing: "border-box",
+        background: activeTheme.pageBackground
       }}
     >
+      <div
+        style={{
+          maxWidth: "1760px",
+          margin: "0 auto",
+          background: activeTheme.shellBackground,
+          border: activeColorSettings ? `1px solid ${activeColorSettings.border}` : activeTheme.shellBorder,
+          boxShadow: activeTheme.shellShadow,
+          borderRadius: "24px",
+          padding: "18px"
+        }}
+      >
+        <Header
+          variant={layoutVariant}
+          title={settings.departmentTitle}
+          badgeSrc="/sheriff-badge-transparent.png"
+          user={{
+            username: currentUserDisplayName,
+            secondary: currentUserRole.toUpperCase()
+          }}
+          onSignOut={() => {
+            void signOut()
+            appendAuditEvent("App", "User Signed Out", `${currentUserDisplayName} signed out.`)
+          }}
+          colorSettings={
+            activeColorSettings
+              ? {
+                  accent: activeColorSettings.accent,
+                  border: activeColorSettings.border,
+                  cardBackground: activeColorSettings.cardBackground
+                }
+              : undefined
+          }
+        />
 
-      <Header />
+        <div style={{ marginTop: "14px", marginBottom: "14px" }}>
+          <SummaryCards
+            variant={layoutVariant}
+            cidOnCallName={cidOnCallName}
+            openShiftCount={openOvertimeRequests.length}
+            staffingAlertCount={staffingAlerts.length}
+            activeCard={activeSummaryCard}
+            onCardClick={(card) =>
+              setActiveSummaryCard((current) => (current === card ? null : card))
+            }
+            colorSettings={
+              activeColorSettings
+                ? {
+                    accent: activeColorSettings.accent,
+                    border: activeColorSettings.border,
+                    cardBackground: activeColorSettings.cardBackground,
+                    cardBorder: activeColorSettings.cardBorder
+                  }
+                : undefined
+            }
+          />
+        </div>
 
-      <div style={{ marginTop: "20px", marginBottom: "20px" }}>
-        <SummaryCards />
+        <div
+          style={{
+            marginBottom: "14px",
+            borderRadius: "12px",
+            padding: "10px 12px",
+            border: appStateSyncStatus.mode === "connected" ? "1px solid #bfdbfe" : "1px solid #fcd34d",
+            background: appStateSyncStatus.mode === "connected" ? "#eff6ff" : "#fffbeb",
+            color: appStateSyncStatus.mode === "connected" ? "#1d4ed8" : "#92400e",
+            fontSize: "13px",
+            fontWeight: 600
+          }}
+        >
+          {appStateSyncStatus.message}
+        </div>
+
+        {activeSummaryCard && (
+          <div style={{ marginBottom: "14px" }}>
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {activeSummaryCard === "open_shifts" ? "Open Shifts Needing Coverage" : "Staffing Alerts"}
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent>
+                {activeSummaryCard === "open_shifts" && (
+                  <div style={{ display: "grid", gap: "10px" }}>
+                    {openOvertimeRequests.length === 0 && (
+                      <div style={{ color: "#475569", fontSize: "13px" }}>
+                        No upcoming open shifts need coverage right now.
+                      </div>
+                    )}
+
+                    {openOvertimeRequests.map((request) => {
+                      const patrolRow =
+                        effectivePatrolSummaryRows.find(
+                          (row) =>
+                            row.assignment_date === request.assignmentDate &&
+                            row.shift_type === request.shiftType &&
+                            row.position_code === request.positionCode
+                        ) || null
+                      const employee = employees.find((employeeRow) => employeeRow.id === patrolRow?.employee_id)
+
+                      return (
+                        <button
+                          key={request.id}
+                          onClick={() => setActiveModule("overtime")}
+                          style={{
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "12px",
+                            padding: "12px",
+                            background: "#ffffff",
+                            textAlign: "left",
+                            cursor: "pointer"
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
+                            <div style={{ fontWeight: 700 }}>
+                              {formatSummaryDate(request.assignmentDate)} | {request.shiftType} | {resolvePositionLabel(request.positionCode)}
+                            </div>
+                            <div style={{ color: "#ea580c", fontWeight: 700 }}>
+                              {request.status}
+                            </div>
+                          </div>
+                          <div style={{ marginTop: "6px", color: "#475569", fontSize: "13px" }}>
+                            {employee
+                              ? `${employee.firstName} ${employee.lastName} is unavailable and needs coverage.`
+                              : request.description}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {activeSummaryCard === "staffing_alerts" && (
+                  <div style={{ display: "grid", gap: "10px" }}>
+                    {staffingAlerts.length === 0 && (
+                      <div style={{ color: "#475569", fontSize: "13px" }}>
+                        No active staffing alerts right now.
+                      </div>
+                    )}
+
+                    {staffingAlerts.map((alert) => (
+                      <button
+                        key={alert.key}
+                        onClick={() => setActiveModule("patrol")}
+                        style={{
+                          border: "1px solid #fecaca",
+                          borderRadius: "12px",
+                          padding: "12px",
+                          background: "#fff7f7",
+                          textAlign: "left",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
+                          <div style={{ fontWeight: 700 }}>
+                            {formatSummaryDate(alert.assignmentDate)} | {alert.shiftType}
+                          </div>
+                          <div style={{ color: "#dc2626", fontWeight: 700 }}>
+                            Alert
+                          </div>
+                        </div>
+                        <div style={{ marginTop: "6px", color: "#7f1d1d", fontSize: "13px" }}>
+                          {alert.reasons.join(" | ")}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        <ModuleTabs
+          active={activeModule}
+          onChange={setActiveModule}
+          moduleOrder={moduleOrder}
+          visibleModules={visibleModulesForRole as ModuleKey[]}
+          variant={layoutVariant}
+          colorSettings={
+            activeColorSettings
+              ? {
+                  accent: activeColorSettings.accent,
+                  border: activeColorSettings.border,
+                  cardBackground: activeColorSettings.cardBackground
+                }
+              : undefined
+          }
+        />
+
+        {activeModule === "command" && (
+          <CommandPage
+            currentUserRole={currentUserRole}
+            employees={employees}
+            patrolRows={effectivePatrolSummaryRows}
+            cidOnCallName={cidOnCallName}
+            detailRecords={detailRecords}
+            detailQueueEvents={detailQueueEvents}
+            detailQueueIds={detailQueueIds}
+            overtimeEntries={overtimeEntries}
+            forceHistory={forceHistoryRows}
+            auditEvents={auditEvents}
+            onOpenModule={setActiveModule}
+          />
+        )}
+
+        {activeModule === "audit" && (
+          <AuditPage
+            currentUserRole={currentUserRole}
+            auditEvents={auditEvents}
+          />
+        )}
+
+        {activeModule === "patrol" && (
+          <PatrolPage
+            employees={employees}
+            canEdit={true}
+            defaultView={settings.defaultPatrolView}
+            patrolOverrideRows={localPatrolOverrideRows}
+            setPatrolOverrideRows={setLocalPatrolOverrideRows}
+            colorSettings={activeColorSettings}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("Patrol", action, summary, details)}
+          />
+        )}
+
+        {activeModule === "overtime" && (
+          <OvertimePage
+            employees={employees}
+            currentUserRole={currentUserRole}
+            patrolRows={effectivePatrolSummaryRows}
+            patrolOverrideRows={localPatrolOverrideRows}
+            setPatrolOverrideRows={setLocalPatrolOverrideRows}
+            detailRecords={detailRecords}
+            overtimeQueueIds={overtimeQueueIds}
+            setOvertimeQueueIds={setOvertimeQueueIds}
+            overtimeShiftRequests={overtimeShiftRequests}
+            setOvertimeShiftRequests={setOvertimeShiftRequests}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("Overtime", action, summary, details)}
+          />
+        )}
+
+        {activeModule === "mobile" && (
+          <MobilePage
+            employees={employees}
+            patrolRows={effectivePatrolSummaryRows}
+            detailRecords={detailRecords}
+            forceHistory={forceHistoryRows}
+            overtimeShiftRequests={overtimeShiftRequests}
+            setOvertimeShiftRequests={setOvertimeShiftRequests}
+            notificationDeliveries={notificationDeliveries}
+            initialResponseToken={mobileResponseToken}
+            onClearResponseToken={() => {
+              setMobileResponseToken("")
+              if (typeof window !== "undefined" && window.location.hash.startsWith("#mobile-response=")) {
+                window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`)
+              }
+            }}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("Mobile", action, summary, details)}
+          />
+        )}
+
+        {activeModule === "notifications" && (
+          <NotificationsPage
+            currentUserRole={currentUserRole}
+            employees={employees}
+            overtimeShiftRequests={overtimeShiftRequests}
+            setOvertimeShiftRequests={setOvertimeShiftRequests}
+            notificationPreferences={notificationPreferences}
+            setNotificationPreferences={setNotificationPreferences}
+            notificationCampaigns={notificationCampaigns}
+            setNotificationCampaigns={setNotificationCampaigns}
+            notificationDeliveries={notificationDeliveries}
+            setNotificationDeliveries={setNotificationDeliveries}
+            notificationProviderConfig={notificationProviderConfig}
+            setNotificationProviderConfig={setNotificationProviderConfig}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("Notifications", action, summary, details)}
+          />
+        )}
+
+        {activeModule === "force" && (
+          <ForcePage
+            employees={employees}
+            overtimeEntries={overtimeEntries}
+            detailRecords={detailRecords}
+            forceHistory={forceHistoryRows}
+            setForceHistory={setForceHistoryRows}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("Force", action, summary, details)}
+          />
+        )}
+
+        {activeModule === "employees" && (
+          <EmployeesPage
+            employees={employees}
+            setEmployees={setEmployees}
+            onEmployeeAdded={(employee) =>
+              appendAuditEvent(
+                "Employees",
+                "Employee Added",
+                `Added ${employee.firstName} ${employee.lastName}.`,
+                `${employee.rank} | ${employee.team} | ${employee.defaultVehicle}`
+              )
+            }
+            onEmployeeUpdated={(previous, next) =>
+              appendAuditEvent(
+                "Employees",
+                "Employee Updated",
+                `Updated ${next.firstName} ${next.lastName}.`,
+                `Previous: ${previous.rank} ${previous.team} ${previous.defaultVehicle} ${previous.status} | Next: ${next.rank} ${next.team} ${next.defaultVehicle} ${next.status}`
+              )
+            }
+            onEmployeeDeleted={(employee) =>
+              appendAuditEvent(
+                "Employees",
+                "Employee Deleted",
+                `Deleted ${employee.firstName} ${employee.lastName}.`,
+                `${employee.rank} | ${employee.team} | ${employee.defaultVehicle}`
+              )
+            }
+          />
+        )}
+
+        {activeModule === "cid" && (
+          <CIDPage
+            employees={employees}
+            currentUserRole={currentUserRole}
+            rotationStartDate={cidRotationStartDate}
+            setRotationStartDate={setCidRotationStartDate}
+            dailyOverrides={cidDailyOverrides}
+            setDailyOverrides={setCidDailyOverrides}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("CID", action, summary, details)}
+          />
+        )}
+
+        {activeModule === "detail" && (
+          <DetailPage
+            employees={employees}
+            currentUserRole={currentUserRole}
+            detailRecords={detailRecords}
+            setDetailRecords={setDetailRecords}
+            detailQueueEvents={detailQueueEvents}
+            setDetailQueueEvents={setDetailQueueEvents}
+            detailQueueIds={detailQueueIds}
+            setDetailQueueIds={setDetailQueueIds}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("Detail", action, summary, details)}
+          />
+        )}
+
+        {activeModule === "reports" && (
+          <ReportsPage
+            employees={employees}
+            currentUserRole={currentUserRole}
+            overtimeEntries={overtimeEntries}
+            setOvertimeEntries={setOvertimeEntries}
+            detailRecords={detailRecords}
+            forceHistory={forceHistoryRows}
+            cidOnCallName={cidOnCallName}
+            defaultReportType={settings.defaultReportType}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("Reports", action, summary, details)}
+          />
+        )}
+
+        {activeModule === "settings" && (
+          <SettingsPage
+            currentUserRole={currentUserRole}
+            settings={settings}
+            setSettings={setSettings}
+            referenceSettings={referenceSettings}
+            setReferenceSettings={setReferenceSettings}
+            cidRotationStartDate={cidRotationStartDate}
+            setCidRotationStartDate={setCidRotationStartDate}
+            onRepairOvertimeFromPatrol={repairOvertimeFromPatrol}
+            onRebuildQueuesBySeniority={rebuildQueuesBySeniority}
+            onClearPatrolOverrideCache={clearPatrolOverrideCache}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("Settings", action, summary, details)}
+            moduleOptions={moduleOrder.map((module) => ({
+              key: module.key,
+              label: module.label
+            }))}
+          />
+        )}
       </div>
-
-      <ModuleTabs
-        active={activeModule}
-        onChange={setActiveModule}
-        moduleOrder={moduleOrder}
-        visibleModules={moduleOrder.map(m => m.key)}
-      />
-
-      {activeModule === "patrol" && (
-        <PatrolPage
-          employees={employees}
-          canEdit={true}
-        />
-      )}
-
-      {activeModule === "employees" && (
-        <EmployeesPage
-          employees={employees}
-          setEmployees={setEmployees}
-        />
-      )}
-
     </div>
 
   )
+
 }

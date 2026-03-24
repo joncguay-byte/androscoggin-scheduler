@@ -1,240 +1,301 @@
-import React, { useEffect, useMemo, useState } from "react"
-import {
-  calculateForceList,
-  recordForce,
-  moveForceRecord,
-  type ForceRecord,
-  type ForceHistoryEntry,
-} from "./force-engine"
+import { useEffect, useState } from "react"
 
-const FORCE_LIST_KEY = "andro-force-list"
-const FORCE_HISTORY_KEY = "andro-force-history"
+import { supabase } from "../../lib/supabase"
+import { printElementById } from "../../lib/print"
+import type { DetailRecord, Employee, ForceHistoryRow, OvertimeEntry } from "../../types"
 
-export function ForcePage({ employees }: { employees: any[] }) {
-  const [history, setHistory] = useState<ForceHistoryEntry[]>([])
-  const [forceList, setForceList] = useState<ForceRecord[]>([])
-  const [reason, setReason] = useState("Call Out")
+type ForceListRow = Employee & {
+  total: number
+  last1: string
+  last2: string
+  daysSince: number | "Never"
+  totalOvertimeHours: number
+}
+
+export function ForcePage({
+  employees,
+  overtimeEntries,
+  detailRecords,
+  forceHistory,
+  setForceHistory,
+  onAuditEvent
+}: {
+  employees: Employee[]
+  overtimeEntries: OvertimeEntry[]
+  detailRecords: DetailRecord[]
+  forceHistory: ForceHistoryRow[]
+  setForceHistory: React.Dispatch<React.SetStateAction<ForceHistoryRow[]>>
+  onAuditEvent?: (action: string, summary: string, details?: string) => void
+}) {
+  const [draftDatesByEmployee, setDraftDatesByEmployee] = useState<Record<string, { last1: string; last2: string }>>({})
+  const [undoStack, setUndoStack] = useState<Array<{ rows: ForceHistoryRow[]; employeeIds: string[] }>>([])
 
   useEffect(() => {
-    try {
-      const savedList = localStorage.getItem(FORCE_LIST_KEY)
-      const savedHistory = localStorage.getItem(FORCE_HISTORY_KEY)
+    const nextDrafts: Record<string, { last1: string; last2: string }> = {}
 
-      const parsedList = savedList ? JSON.parse(savedList) : []
-      const parsedHistory = savedHistory ? JSON.parse(savedHistory) : []
+    for (const employee of employees) {
+      const records = forceHistory
+        .filter((record) => record.employee_id === employee.id)
+        .sort((a, b) => b.forced_date.localeCompare(a.forced_date))
 
-      setHistory(parsedHistory)
-      setForceList(calculateForceList(employees, parsedList))
-    } catch {
-      setHistory([])
-      setForceList(calculateForceList(employees, []))
+      nextDrafts[employee.id] = {
+        last1: records[0]?.forced_date || "",
+        last2: records[1]?.forced_date || ""
+      }
     }
-  }, [employees])
 
-  useEffect(() => {
-    localStorage.setItem(FORCE_LIST_KEY, JSON.stringify(forceList))
-  }, [forceList])
+    setDraftDatesByEmployee(nextDrafts)
+  }, [employees, forceHistory])
 
-  useEffect(() => {
-    localStorage.setItem(FORCE_HISTORY_KEY, JSON.stringify(history))
-  }, [history])
+  function pushUndoSnapshot(employeeIds: string[]) {
+    const snapshot = forceHistory.map((row) => ({ ...row }))
+    setUndoStack((current) => [{ rows: snapshot, employeeIds }, ...current].slice(0, 10))
+  }
 
-  const recommended = useMemo(() => forceList[0] || null, [forceList])
+  async function syncForceHistoryForEmployees(nextRows: ForceHistoryRow[], employeeIds: string[]) {
+    for (const employeeId of employeeIds) {
+      await supabase
+        .from("force_history")
+        .delete()
+        .eq("employee_id", employeeId)
 
-  const handleForce = (employeeId: string) => {
-    const today = new Date().toISOString().slice(0, 10)
-    const updated = recordForce(forceList, employeeId, today)
-    const deputy = updated.find((p) => p.employeeId === employeeId)
-
-    setForceList(updated)
-
-    if (deputy) {
-      setHistory((prev) => [
-        {
-          id: crypto.randomUUID(),
-          employeeId,
-          name: deputy.name,
-          date: today,
-          reason,
-        },
-        ...prev,
-      ])
+      const employeeRows = nextRows.filter((row) => row.employee_id === employeeId)
+      if (employeeRows.length > 0) {
+        await supabase
+          .from("force_history")
+          .insert(employeeRows.map((row) => ({
+            employee_id: row.employee_id,
+            forced_date: row.forced_date
+          })))
+      }
     }
   }
 
-  const handleManualEdit = (
-    employeeId: string,
-    field: "name" | "lastForced" | "previousForced" | "totalForced",
-    value: string
-  ) => {
-    setForceList((prev) =>
-      prev.map((p) =>
-        p.employeeId === employeeId
-          ? {
-              ...p,
-              [field]: field === "totalForced" ? Number(value || 0) : value,
-            }
-          : p
-      )
+  function buildForceList(): ForceListRow[] {
+    return employees
+      .map((employee) => {
+        const records = forceHistory
+          .filter((record) => record.employee_id === employee.id)
+          .sort((a, b) =>
+            b.forced_date.localeCompare(a.forced_date)
+          )
+
+        const lastDate = records[0]?.forced_date
+        let daysSince: number | "Never" = "Never"
+
+        if (lastDate) {
+          const diff =
+            (new Date().getTime() - new Date(lastDate).getTime()) /
+            86400000
+          daysSince = Math.floor(diff)
+        }
+
+        const manualOvertimeHours = overtimeEntries
+          .filter((entry) => entry.employeeId === employee.id)
+          .reduce((total, entry) => total + entry.hours, 0)
+
+        const detailOvertimeHours = detailRecords
+          .filter((detail) => detail.employeeId === employee.id && detail.status === "Accepted")
+          .reduce((total, detail) => total + detail.hours, 0)
+
+        return {
+          ...employee,
+          total: records.length,
+          last1: records[0]?.forced_date || "-",
+          last2: records[1]?.forced_date || "-",
+          daysSince,
+          totalOvertimeHours: manualOvertimeHours + detailOvertimeHours
+        }
+      })
+      .sort((a, b) => {
+        return a.hireDate.localeCompare(b.hireDate)
+      })
+  }
+
+  async function forceEmployee(empId: string) {
+    const today = new Date().toISOString().slice(0, 10)
+
+    pushUndoSnapshot([empId])
+
+    const nextRows = [
+      { employee_id: empId, forced_date: today },
+      ...forceHistory
+    ]
+
+    setForceHistory(nextRows)
+    setDraftDatesByEmployee((current) => ({
+      ...current,
+      [empId]: {
+        last1: today,
+        last2: current[empId]?.last1 || ""
+      }
+    }))
+
+    await syncForceHistoryForEmployees(nextRows, [empId])
+
+    const employee = employees.find((row) => row.id === empId)
+    onAuditEvent?.(
+      "Force Added",
+      `Added force entry for ${employee ? `${employee.firstName} ${employee.lastName}` : "Unknown employee"}.`,
+      `Forced date: ${today}`
     )
   }
 
-  const moveUp = (index: number) => {
-    if (index === 0) return
-    setForceList((prev) => moveForceRecord(prev, index, index - 1))
+  async function saveForceDates(employeeId: string) {
+    const draft = draftDatesByEmployee[employeeId] || { last1: "", last2: "" }
+    const cleanedDates = [draft.last1, draft.last2]
+      .filter((value) => value.trim().length > 0)
+      .filter((value, index, array) => array.indexOf(value) === index)
+      .sort((a, b) => b.localeCompare(a))
+
+    pushUndoSnapshot([employeeId])
+
+    const remainingRows = forceHistory.filter((row) => row.employee_id !== employeeId)
+    const nextRows = [
+      ...remainingRows,
+      ...cleanedDates.map((forcedDate) => ({
+        employee_id: employeeId,
+        forced_date: forcedDate
+      }))
+    ]
+
+    setForceHistory(nextRows)
+    setDraftDatesByEmployee((current) => ({
+      ...current,
+      [employeeId]: {
+        last1: cleanedDates[0] || "",
+        last2: cleanedDates[1] || ""
+      }
+    }))
+
+    await syncForceHistoryForEmployees(nextRows, [employeeId])
+
+    const employee = employees.find((row) => row.id === employeeId)
+    onAuditEvent?.(
+      "Force Dates Saved",
+      `Updated force dates for ${employee ? `${employee.firstName} ${employee.lastName}` : "employee"}.`,
+      `Last Force: ${cleanedDates[0] || "-"} | Previous Force: ${cleanedDates[1] || "-"}`
+    )
   }
 
-  const moveDown = (index: number) => {
-    if (index === forceList.length - 1) return
-    setForceList((prev) => moveForceRecord(prev, index, index + 1))
+  async function undoForceAction() {
+    const previous = undoStack[0]
+    if (!previous) return
+
+    setUndoStack((current) => current.slice(1))
+    setForceHistory(previous.rows)
+    await syncForceHistoryForEmployees(previous.rows, previous.employeeIds)
+
+    onAuditEvent?.(
+      "Force Undo",
+      "Undid the previous force rotation change."
+    )
   }
+
+  const forceList = buildForceList()
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h2 style={{ fontSize: "20px", fontWeight: "700", marginBottom: "15px" }}>
-        Force List
-      </h2>
-
-      {recommended && (
-        <div
-          style={{
-            marginBottom: "16px",
-            padding: "10px 12px",
-            background: "#eff6ff",
-            border: "1px solid #bfdbfe",
-            borderRadius: "8px",
-          }}
+    <div id="force-print-section" style={{ padding: "20px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "12px",
+          marginBottom: "12px",
+          flexWrap: "wrap"
+        }}
+      >
+        <h2>Force Rotation</h2>
+        <button
+          data-no-print="true"
+          onClick={() => printElementById("force-print-section", "Force Rotation")}
         >
-          <strong>Suggested next up:</strong> {recommended.name}
-        </div>
-      )}
-
-      <div style={{ marginBottom: "12px" }}>
-        <label style={{ marginRight: "8px", fontWeight: 600 }}>Reason</label>
-        <select
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          style={{ padding: "6px", border: "1px solid #cbd5e1", borderRadius: "6px" }}
+          Print Force
+        </button>
+        <button
+          data-no-print="true"
+          onClick={() => void undoForceAction()}
+          disabled={undoStack.length === 0}
         >
-          <option>Call Out</option>
-          <option>Sick</option>
-          <option>Vacation</option>
-          <option>Court</option>
-          <option>Training</option>
-          <option>FMLA</option>
-          <option>Detail</option>
-          <option>Other</option>
-        </select>
+          Undo
+        </button>
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "24px" }}>
-        <thead>
-          <tr style={{ background: "#f1f5f9" }}>
-            <th style={{ padding: "8px", textAlign: "left" }}>Order</th>
-            <th style={{ padding: "8px", textAlign: "left" }}>Deputy</th>
-            <th style={{ padding: "8px", textAlign: "center" }}>Last Forced</th>
-            <th style={{ padding: "8px", textAlign: "center" }}>Previous Forced</th>
-            <th style={{ padding: "8px", textAlign: "center" }}>Total</th>
-            <th style={{ padding: "8px", textAlign: "center" }}>Move</th>
-            <th style={{ padding: "8px", textAlign: "center" }}>Action</th>
-          </tr>
-        </thead>
+      {forceList.map((employee, index) => (
+        <div
+          key={employee.id}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "40px 190px 100px 150px 150px 140px 120px 120px",
+            padding: "8px",
+            borderBottom: "1px solid #e5e7eb",
+            alignItems: "center",
+            background: index === 0 ? "#dcfce7" : "white"
+          }}
+        >
+          <div>{index + 1}</div>
 
-        <tbody>
-          {forceList.map((p, index) => (
-            <tr key={p.employeeId} style={{ borderTop: "1px solid #e2e8f0" }}>
-              <td style={{ padding: "8px", textAlign: "center" }}>{index + 1}</td>
+          <div>
+            {employee.lastName}, {employee.firstName}
+          </div>
 
-              <td style={{ padding: "8px" }}>
-                <input
-                  value={p.name}
-                  onChange={(e) => handleManualEdit(p.employeeId, "name", e.target.value)}
-                  style={{ width: "100%", padding: "6px", border: "1px solid #cbd5e1", borderRadius: "6px" }}
-                />
-              </td>
+          <div>
+            Forced: <strong>{employee.total}</strong>
+          </div>
 
-              <td style={{ padding: "8px", textAlign: "center" }}>
-                <input
-                  value={p.lastForced || ""}
-                  onChange={(e) => handleManualEdit(p.employeeId, "lastForced", e.target.value)}
-                  style={{ width: "120px", padding: "6px", border: "1px solid #cbd5e1", borderRadius: "6px" }}
-                />
-              </td>
+          <div style={{ fontSize: "12px", color: "#475569", display: "grid", gap: "4px" }}>
+            <div>Last Force</div>
+            <input
+              type="date"
+              value={draftDatesByEmployee[employee.id]?.last1 || ""}
+              onChange={(event) =>
+                setDraftDatesByEmployee((current) => ({
+                  ...current,
+                  [employee.id]: {
+                    last1: event.target.value,
+                    last2: current[employee.id]?.last2 || ""
+                  }
+                }))
+              }
+            />
+          </div>
 
-              <td style={{ padding: "8px", textAlign: "center" }}>
-                <input
-                  value={p.previousForced || ""}
-                  onChange={(e) => handleManualEdit(p.employeeId, "previousForced", e.target.value)}
-                  style={{ width: "120px", padding: "6px", border: "1px solid #cbd5e1", borderRadius: "6px" }}
-                />
-              </td>
+          <div style={{ fontSize: "12px", color: "#475569", display: "grid", gap: "4px" }}>
+            <div>Previous Force</div>
+            <input
+              type="date"
+              value={draftDatesByEmployee[employee.id]?.last2 || ""}
+              onChange={(event) =>
+                setDraftDatesByEmployee((current) => ({
+                  ...current,
+                  [employee.id]: {
+                    last1: current[employee.id]?.last1 || "",
+                    last2: event.target.value
+                  }
+                }))
+              }
+            />
+          </div>
 
-              <td style={{ padding: "8px", textAlign: "center" }}>
-                <input
-                  type="number"
-                  value={p.totalForced}
-                  onChange={(e) => handleManualEdit(p.employeeId, "totalForced", e.target.value)}
-                  style={{ width: "70px", padding: "6px", border: "1px solid #cbd5e1", borderRadius: "6px" }}
-                />
-              </td>
+          <div style={{ fontSize: "12px", color: "#16a34a" }}>
+            <div>Lowest total forced: {employee.total}</div>
+            <div>Last forced: {employee.daysSince} days ago</div>
+          </div>
 
-              <td style={{ padding: "8px", textAlign: "center" }}>
-                <button
-                  onClick={() => moveUp(index)}
-                  style={{ marginRight: "6px", padding: "4px 8px", cursor: "pointer" }}
-                >
-                  ↑
-                </button>
-                <button
-                  onClick={() => moveDown(index)}
-                  style={{ padding: "4px 8px", cursor: "pointer" }}
-                >
-                  ↓
-                </button>
-              </td>
+          <div style={{ fontSize: "12px", color: "#1e3a8a", fontWeight: 700 }}>
+            Total Overtime: {employee.totalOvertimeHours.toFixed(1)}
+          </div>
 
-              <td style={{ padding: "8px", textAlign: "center" }}>
-                <button
-                  onClick={() => handleForce(p.employeeId)}
-                  style={{
-                    background: "#2563eb",
-                    color: "white",
-                    border: "none",
-                    padding: "6px 10px",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Force
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          <button onClick={() => void forceEmployee(employee.id)}>
+            Force
+          </button>
 
-      <h3 style={{ fontSize: "18px", fontWeight: "700", marginBottom: "10px" }}>
-        Force History
-      </h3>
-
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ background: "#f8fafc" }}>
-            <th style={{ padding: "8px", textAlign: "left" }}>Date</th>
-            <th style={{ padding: "8px", textAlign: "left" }}>Deputy</th>
-            <th style={{ padding: "8px", textAlign: "left" }}>Reason</th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.map((h) => (
-            <tr key={h.id} style={{ borderTop: "1px solid #e2e8f0" }}>
-              <td style={{ padding: "8px" }}>{h.date}</td>
-              <td style={{ padding: "8px" }}>{h.name}</td>
-              <td style={{ padding: "8px" }}>{h.reason || "-"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          <button onClick={() => void saveForceDates(employee.id)}>
+            Save
+          </button>
+        </div>
+      ))}
     </div>
   )
 }

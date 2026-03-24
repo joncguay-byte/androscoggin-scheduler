@@ -1,3 +1,4 @@
+import type { Employee, PatrolCellRecord, ScheduleView } from "../types"
 import { supabase } from "./supabase"
 
 
@@ -20,7 +21,7 @@ export async function fetchSchedule() {
 }
 
 
-export async function saveScheduleCell(cell:any) {
+export async function saveScheduleCell(cell: Partial<PatrolCellRecord>) {
 
   const { error } = await supabase
     .from("patrol_schedule")
@@ -31,7 +32,7 @@ export async function saveScheduleCell(cell:any) {
 }
 
 
-export function subscribeToSchedule(callback:any) {
+export function subscribeToSchedule(callback:(payload: unknown) => void) {
 
   const channel = supabase
     .channel("schedule_changes")
@@ -77,7 +78,7 @@ export function formatLongDate(d:Date) {
 }
 
 
-export function buildVisibleDates(baseDate:Date, view:string) {
+export function buildVisibleDates(baseDate:Date, view:ScheduleView) {
 
   const dates:Date[] = []
 
@@ -127,7 +128,7 @@ export function buildVisibleDates(baseDate:Date, view:string) {
    PATROL SCHEDULE
 ========================= */
 
-export function buildPatrolCellsForDate(date:any, employees:any[]) {
+export function buildPatrolCellsForDate(_date:Date, _employees:Employee[]) {
 
   return []
 
@@ -143,13 +144,13 @@ export function getActiveTeam(date:Date, shift:"Days"|"Nights") {
 
   const pitman = [0,1,1,0,0,1,1,1,0,0,1,1,0,0]
 
-  const start = new Date("2024-01-01")
+  const start = new Date("2026-03-01T12:00:00")
 
-  const diff = Math.floor(
-    (date.getTime() - start.getTime()) / (1000*60*60*24)
-  )
+  const utcDate = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+  const utcStart = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())
+  const diff = Math.round((utcDate - utcStart) / 86400000)
 
-  const idx = pitman[Math.abs(diff) % pitman.length]
+  const idx = pitman[((diff % pitman.length) + pitman.length) % pitman.length]
 
   if(shift==="Days") {
     return idx ? "Days A" : "Days B"
@@ -165,7 +166,12 @@ export function getActiveTeam(date:Date, shift:"Days"|"Nights") {
    STAFFING VALIDATION
 ========================= */
 
-export function validateMinimumStaffing(cells:any[]) {
+type StaffingCell = {
+  positionCode?: string
+  employeeId?: string | null
+}
+
+export function validateMinimumStaffing(cells:StaffingCell[]) {
 
   const supervisors = cells.filter(c=>c.positionCode?.startsWith("SUP") && c.employeeId)
   const deputies = cells.filter(c=>c.positionCode?.startsWith("DEP") && c.employeeId)

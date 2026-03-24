@@ -1,8 +1,8 @@
-import { Employee } from "../types"
+import type { Employee } from "../types"
 
 export const initialEmployees: Employee[] = [
 
-{ id:"1", firstName:"Jon", lastName:"Guay", rank:"Sgt", team:"Days A", defaultVehicle:"V7", defaultShiftHours:"5a-5p", hireDate:"2011-05-01", status:"Active" },
+{ id:"1", firstName:"Jon", lastName:"Guay", rank:"Sgt", team:"Days A", defaultVehicle:"V7", defaultShiftHours:"5a-5p", hireDate:"2010-10-01", status:"Active" },
 
 { id:"2", firstName:"Dylan", lastName:"Rider", rank:"Cpl", team:"Days A", defaultVehicle:"V17", defaultShiftHours:"5a-5p", hireDate:"2013-06-01", status:"Active" },
 
@@ -43,6 +43,14 @@ export const initialEmployees: Employee[] = [
 
 { id:"19", firstName:"Kurt", lastName:"Fegan", rank:"Deputy", team:"Nights B", defaultVehicle:"V32", defaultShiftHours:"5p-5a", hireDate:"2020-07-07", status:"Active" },
 
-{ id:"20", firstName:"Darian", lastName:"Nadeau", rank:"Poland Deputy", team:"Nights B", defaultVehicle:"V21", defaultShiftHours:"5p-5a", hireDate:"2023-01-30", status:"Active" }
+{ id:"20", firstName:"Darian", lastName:"Nadeau", rank:"Poland Deputy", team:"Nights B", defaultVehicle:"V21", defaultShiftHours:"5p-5a", hireDate:"2023-01-30", status:"Active" },
+
+{ id:"21", firstName:"Moe", lastName:"Drouin", rank:"Sgt", team:"CID", defaultVehicle:"V5", defaultShiftHours:"8a-4p", hireDate:"2009-01-15", status:"Active" },
+
+{ id:"22", firstName:"Troy", lastName:"Young", rank:"Detective", team:"CID", defaultVehicle:"V20", defaultShiftHours:"8a-4p", hireDate:"2012-06-01", status:"Active" },
+
+{ id:"23", firstName:"Nate", lastName:"McNally", rank:"Detective", team:"CID", defaultVehicle:"V11", defaultShiftHours:"8a-4p", hireDate:"2016-04-10", status:"Active" },
+
+{ id:"24", firstName:"Mike", lastName:"Mejia", rank:"Detective", team:"CID", defaultVehicle:"V18", defaultShiftHours:"8a-4p", hireDate:"2018-09-05", status:"Active" }
 
 ]
