@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 
 import { supabase } from "../../lib/supabase"
 import { printElementById } from "../../lib/print"
+import { buildForceRotationOrder, getEmployeeForceSummary } from "../../lib/force-rotation"
 import type { DetailRecord, Employee, ForceHistoryRow, OvertimeEntry } from "../../types"
 
 type ForceListRow = Employee & {
@@ -72,15 +73,11 @@ export function ForcePage({
   }
 
   function buildForceList(): ForceListRow[] {
-    return employees
+    return buildForceRotationOrder(employees, forceHistory)
       .map((employee) => {
-        const records = forceHistory
-          .filter((record) => record.employee_id === employee.id)
-          .sort((a, b) =>
-            b.forced_date.localeCompare(a.forced_date)
-          )
+        const forceSummary = getEmployeeForceSummary(forceHistory, employee.id)
+        const lastDate = forceSummary.last1 !== "-" ? forceSummary.last1 : undefined
 
-        const lastDate = records[0]?.forced_date
         let daysSince: number | "Never" = "Never"
 
         if (lastDate) {
@@ -100,15 +97,12 @@ export function ForcePage({
 
         return {
           ...employee,
-          total: records.length,
-          last1: records[0]?.forced_date || "-",
-          last2: records[1]?.forced_date || "-",
+          total: forceSummary.total,
+          last1: forceSummary.last1,
+          last2: forceSummary.last2,
           daysSince,
           totalOvertimeHours: manualOvertimeHours + detailOvertimeHours
         }
-      })
-      .sort((a, b) => {
-        return a.hireDate.localeCompare(b.hireDate)
       })
   }
 

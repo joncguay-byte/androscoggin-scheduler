@@ -315,7 +315,6 @@ export function MobilePage({
                       {[
                         ["Pending", responseSummary.pending, "#f8fafc", "#475569"],
                         ["Interested", responseSummary.interested, "#eff6ff", "#1d4ed8"],
-                        ["Accepted", responseSummary.accepted, "#ecfdf5", "#166534"],
                         ["Declined", responseSummary.declined, "#fff1f2", "#be123c"]
                       ].map(([label, count, background, color]) => (
                         <div
@@ -404,7 +403,6 @@ export function MobilePage({
                               <div style={{ display: "grid", gap: "6px" }}>
                                 {([
                                   ["Interested", "#eff6ff", "#1d4ed8"],
-                                  ["Accepted", "#ecfdf5", "#166534"],
                                   ["Declined", "#fff1f2", "#be123c"]
                                 ] as const).map(([status, background, color]) => (
                                   <button

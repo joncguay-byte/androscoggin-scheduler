@@ -32,6 +32,7 @@ import {
   loadSupabaseOvertimeNotificationsState,
   saveSupabaseOvertimeNotificationsState
 } from "./lib/overtime-notifications-sync"
+import { buildNotificationDeliveries } from "./lib/notifications"
 import { getCurrentProfileRole, getLocalAccessUser, resolveAppRole, resolveDisplayName, signOut } from "./lib/auth"
 import { isForceRequired, isShiftCovered } from "./lib/staffing-engine"
 import { supabase } from "./lib/supabase"
@@ -540,6 +541,8 @@ export default function App() {
   const [activeModule, setActiveModule] =
     useState<ModuleKey>("patrol")
   const [mobileResponseToken, setMobileResponseToken] = useState("")
+  const [notificationDraftShiftIds, setNotificationDraftShiftIds] = useState<string[]>([])
+  const [notificationDraftRecipientIds, setNotificationDraftRecipientIds] = useState<string[]>([])
   const hasHydratedSupabaseState = useRef(false)
   const hasHydratedPatrolOverrides = useRef(false)
   const hasHydratedOvertimeNotifications = useRef(false)
@@ -562,6 +565,60 @@ export default function App() {
     () => mergePatrolSummaryRows(patrolSummaryRows, localPatrolOverrideRows),
     [patrolSummaryRows, localPatrolOverrideRows]
   )
+  const activeEmployeeMap = useMemo(
+    () => new Map(employees.filter((employee) => employee.status === "Active").map((employee) => [employee.id, employee])),
+    [employees]
+  )
+  const notificationPreferenceMap = useMemo(
+    () => new Map(notificationPreferences.map((entry) => [entry.employeeId, entry])),
+    [notificationPreferences]
+  )
+  const overtimeRequestMap = useMemo(
+    () => new Map(overtimeShiftRequests.map((request) => [request.id, request])),
+    [overtimeShiftRequests]
+  )
+
+  function openNotificationsForShiftIds(shiftIds: string[], recipientIds: string[] = []) {
+    setNotificationDraftShiftIds(shiftIds)
+    setNotificationDraftRecipientIds(recipientIds)
+    setActiveModule("notifications")
+  }
+
+  function queueAssignmentNoticeForShift(requestId: string, employeeId: string) {
+    const request = overtimeRequestMap.get(requestId)
+    const employee = activeEmployeeMap.get(employeeId)
+    if (!request || !employee) return
+
+    const campaign: NotificationCampaign = {
+      id: crypto.randomUUID(),
+      title: `Assignment Notice ${request.assignmentDate}`,
+      type: "overtime_assignment",
+      channel: "both",
+      recipientIds: [employeeId],
+      shiftRequestIds: [requestId],
+      status: "sent",
+      createdAt: new Date().toISOString(),
+      sentAt: new Date().toISOString(),
+      notes: "Queued automatically after overtime assignment"
+    }
+
+    const { deliveries } = buildNotificationDeliveries({
+      campaign,
+      recipients: [employeeId],
+      employeeMap: activeEmployeeMap,
+      preferencesMap: notificationPreferenceMap,
+      shiftMap: overtimeRequestMap
+    })
+
+    setNotificationCampaigns((current) => [campaign, ...current])
+    setNotificationDeliveries((current) => [...deliveries, ...current])
+    appendAuditEvent(
+      "Notifications",
+      "Assignment Notice Queued",
+      `Queued assignment notice for ${employee.firstName} ${employee.lastName}.`,
+      `${request.assignmentDate} | ${request.shiftType} | ${request.positionCode}`
+    )
+  }
 
   function applyOvertimeNotificationsSyncData(data: Awaited<ReturnType<typeof loadSupabaseOvertimeNotificationsState>>["data"]) {
     if (!data) return
@@ -1492,18 +1549,6 @@ export default function App() {
       ),
     [canAccessCommandTools, settings.visibleModules]
   )
-  const openOvertimeRequests = useMemo(
-    () =>
-      [...overtimeShiftRequests]
-        .filter((request) => request.status === "Open" && !request.assignedEmployeeId)
-        .sort(
-          (a, b) =>
-            a.assignmentDate.localeCompare(b.assignmentDate) ||
-            a.shiftType.localeCompare(b.shiftType) ||
-            a.positionCode.localeCompare(b.positionCode)
-        ),
-    [overtimeShiftRequests]
-  )
   const staffingAlerts = useMemo(() => {
     const grouped = new Map<string, PatrolScheduleSummaryRow[]>()
 
@@ -1578,17 +1623,45 @@ export default function App() {
     })
   }
 
-  function resolvePositionLabel(code: PatrolScheduleSummaryRow["position_code"]) {
-    const labels: Record<PatrolScheduleSummaryRow["position_code"], string> = {
-      SUP1: "Supervisor 1",
-      SUP2: "Supervisor 2",
-      DEP1: "Deputy 1",
-      DEP2: "Deputy 2",
-      POL: "Poland"
-    }
+  const queuedOvertimeRequests = useMemo(
+    () => {
+      const patrolTimeOffFeed = [...overtimeShiftRequests].filter(
+        (request) => request.source === "Patrol Open Shift" && request.status !== "Closed"
+      )
+      const groupedRequests = new Map<string, OvertimeShiftRequest[]>()
 
-    return labels[code]
-  }
+      for (const request of patrolTimeOffFeed) {
+        const key = `${request.assignmentDate}-${request.shiftType}`
+        const current = groupedRequests.get(key) || []
+        current.push(request)
+        groupedRequests.set(key, current)
+      }
+
+      return patrolTimeOffFeed
+        .filter((request) => {
+          if (request.manuallyQueued) return true
+
+          const peerRequests = groupedRequests.get(`${request.assignmentDate}-${request.shiftType}`) || []
+          const totalStaffingSlots = 5
+          const totalSupervisorSlots = 2
+          const offCount = peerRequests.length
+          const supervisorOffCount = peerRequests.filter(
+            (peerRequest) => peerRequest.positionCode === "SUP1" || peerRequest.positionCode === "SUP2"
+          ).length
+          const remainingStaffing = totalStaffingSlots - offCount
+          const remainingSupervisors = totalSupervisorSlots - supervisorOffCount
+
+          return remainingSupervisors < 1 || remainingStaffing < 4
+        })
+        .sort(
+          (a, b) =>
+            a.assignmentDate.localeCompare(b.assignmentDate) ||
+            a.shiftType.localeCompare(b.shiftType) ||
+            a.positionCode.localeCompare(b.positionCode)
+        )
+    },
+    [overtimeShiftRequests]
+  )
 
   if (authLoading) {
     return (
@@ -1690,12 +1763,21 @@ export default function App() {
           <SummaryCards
             variant={layoutVariant}
             cidOnCallName={cidOnCallName}
-            openShiftCount={openOvertimeRequests.length}
+            openShiftCount={queuedOvertimeRequests.length}
             staffingAlertCount={staffingAlerts.length}
             activeCard={activeSummaryCard}
-            onCardClick={(card) =>
+            onCardClick={(card) => {
+              if (card === "open_shifts") {
+                setActiveModule("overtime")
+                setActiveSummaryCard(null)
+                if (typeof window !== "undefined") {
+                  window.location.hash = "overtime-queue"
+                }
+                return
+              }
+
               setActiveSummaryCard((current) => (current === card ? null : card))
-            }
+            }}
             colorSettings={
               activeColorSettings
                 ? {
@@ -1724,102 +1806,50 @@ export default function App() {
           {appStateSyncStatus.message}
         </div>
 
-        {activeSummaryCard && (
+        {activeSummaryCard === "staffing_alerts" && (
           <div style={{ marginBottom: "14px" }}>
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {activeSummaryCard === "open_shifts" ? "Open Shifts Needing Coverage" : "Staffing Alerts"}
+                  Staffing Alerts
                 </CardTitle>
               </CardHeader>
 
               <CardContent>
-                {activeSummaryCard === "open_shifts" && (
-                  <div style={{ display: "grid", gap: "10px" }}>
-                    {openOvertimeRequests.length === 0 && (
-                      <div style={{ color: "#475569", fontSize: "13px" }}>
-                        No upcoming open shifts need coverage right now.
-                      </div>
-                    )}
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {staffingAlerts.length === 0 && (
+                    <div style={{ color: "#475569", fontSize: "13px" }}>
+                      No active staffing alerts right now.
+                    </div>
+                  )}
 
-                    {openOvertimeRequests.map((request) => {
-                      const patrolRow =
-                        effectivePatrolSummaryRows.find(
-                          (row) =>
-                            row.assignment_date === request.assignmentDate &&
-                            row.shift_type === request.shiftType &&
-                            row.position_code === request.positionCode
-                        ) || null
-                      const employee = employees.find((employeeRow) => employeeRow.id === patrolRow?.employee_id)
-
-                      return (
-                        <button
-                          key={request.id}
-                          onClick={() => setActiveModule("overtime")}
-                          style={{
-                            border: "1px solid #e2e8f0",
-                            borderRadius: "12px",
-                            padding: "12px",
-                            background: "#ffffff",
-                            textAlign: "left",
-                            cursor: "pointer"
-                          }}
-                        >
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
-                            <div style={{ fontWeight: 700 }}>
-                              {formatSummaryDate(request.assignmentDate)} | {request.shiftType} | {resolvePositionLabel(request.positionCode)}
-                            </div>
-                            <div style={{ color: "#ea580c", fontWeight: 700 }}>
-                              {request.status}
-                            </div>
-                          </div>
-                          <div style={{ marginTop: "6px", color: "#475569", fontSize: "13px" }}>
-                            {employee
-                              ? `${employee.firstName} ${employee.lastName} is unavailable and needs coverage.`
-                              : request.description}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {activeSummaryCard === "staffing_alerts" && (
-                  <div style={{ display: "grid", gap: "10px" }}>
-                    {staffingAlerts.length === 0 && (
-                      <div style={{ color: "#475569", fontSize: "13px" }}>
-                        No active staffing alerts right now.
-                      </div>
-                    )}
-
-                    {staffingAlerts.map((alert) => (
-                      <button
-                        key={alert.key}
-                        onClick={() => setActiveModule("patrol")}
-                        style={{
-                          border: "1px solid #fecaca",
-                          borderRadius: "12px",
-                          padding: "12px",
-                          background: "#fff7f7",
-                          textAlign: "left",
-                          cursor: "pointer"
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
-                          <div style={{ fontWeight: 700 }}>
-                            {formatSummaryDate(alert.assignmentDate)} | {alert.shiftType}
-                          </div>
-                          <div style={{ color: "#dc2626", fontWeight: 700 }}>
-                            Alert
-                          </div>
+                  {staffingAlerts.map((alert) => (
+                    <button
+                      key={alert.key}
+                      onClick={() => setActiveModule("patrol")}
+                      style={{
+                        border: "1px solid #fecaca",
+                        borderRadius: "12px",
+                        padding: "12px",
+                        background: "#fff7f7",
+                        textAlign: "left",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
+                        <div style={{ fontWeight: 700 }}>
+                          {formatSummaryDate(alert.assignmentDate)} | {alert.shiftType}
                         </div>
-                        <div style={{ marginTop: "6px", color: "#7f1d1d", fontSize: "13px" }}>
-                          {alert.reasons.join(" | ")}
+                        <div style={{ color: "#dc2626", fontWeight: 700 }}>
+                          Alert
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                      </div>
+                      <div style={{ marginTop: "6px", color: "#7f1d1d", fontSize: "13px" }}>
+                        {alert.reasons.join(" | ")}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -1872,6 +1902,7 @@ export default function App() {
             defaultView={settings.defaultPatrolView}
             patrolOverrideRows={localPatrolOverrideRows}
             setPatrolOverrideRows={setLocalPatrolOverrideRows}
+            setOvertimeShiftRequests={setOvertimeShiftRequests}
             colorSettings={activeColorSettings}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Patrol", action, summary, details)}
           />
@@ -1885,10 +1916,14 @@ export default function App() {
             patrolOverrideRows={localPatrolOverrideRows}
             setPatrolOverrideRows={setLocalPatrolOverrideRows}
             detailRecords={detailRecords}
+            forceHistory={forceHistoryRows}
+            setForceHistory={setForceHistoryRows}
             overtimeQueueIds={overtimeQueueIds}
             setOvertimeQueueIds={setOvertimeQueueIds}
             overtimeShiftRequests={overtimeShiftRequests}
             setOvertimeShiftRequests={setOvertimeShiftRequests}
+            onOpenNotificationsForShiftIds={openNotificationsForShiftIds}
+            onQueueAssignmentNotice={queueAssignmentNoticeForShift}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Overtime", action, summary, details)}
           />
         )}
@@ -1927,6 +1962,12 @@ export default function App() {
             setNotificationDeliveries={setNotificationDeliveries}
             notificationProviderConfig={notificationProviderConfig}
             setNotificationProviderConfig={setNotificationProviderConfig}
+            initialSelectedShiftIds={notificationDraftShiftIds}
+            initialSelectedRecipientIds={notificationDraftRecipientIds}
+            onConsumeDraftSelections={() => {
+              setNotificationDraftShiftIds([])
+              setNotificationDraftRecipientIds([])
+            }}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Notifications", action, summary, details)}
           />
         )}

@@ -176,7 +176,16 @@ export type OvertimeShiftRequest = {
   offEmployeeId?: string | null
   offEmployeeLastName?: string | null
   offHours?: string | null
+  assignedHours?: string | null
   selectionActive?: boolean
+  manuallyQueued?: boolean
+  autoAssignReason?:
+    | "Checkmark Priority"
+    | "Fairness Override"
+    | "Supervisor Required"
+    | "Manual Assignment"
+    | "Force Assignment"
+    | null
   workflowStatus?: "Open" | "Fill" | "Force" | "Close"
   status: OvertimeShiftRequestStatus
   assignedEmployeeId: string | null

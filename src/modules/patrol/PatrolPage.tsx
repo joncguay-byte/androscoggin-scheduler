@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type {
   Employee,
+  OvertimeShiftRequest,
   PatrolPositionCode,
   Rank,
   ScheduleView,
@@ -29,6 +30,45 @@ type ScheduleRow = {
 }
 
 type EditingRow = ScheduleRow
+
+type TeamShiftEditor = {
+  assignmentDate: string
+  shiftType: ShiftType
+  team: Team
+}
+
+type TeamEmployeeSelection = {
+  employeeId: string
+  positionCode: PatrolPositionCode
+  shiftType: ShiftType
+  assignmentDate: string
+  team: Team
+}
+
+type TimeOffDateSelection = {
+  employeeId: string
+  positionCode: PatrolPositionCode
+  shiftType: ShiftType
+  assignmentDate: string
+  team: Team
+  mode: "single" | "multiple"
+  singleDate: string
+  rangeStart: string
+  rangeEnd: string
+}
+
+type TimeOffReasonSelection = TimeOffDateSelection & {
+  dates: string[]
+  reason: string
+}
+
+type MultiDatePickerSelection = {
+  employeeId: string
+  positionCode: PatrolPositionCode
+  shiftType: ShiftType
+  team: Team
+  selectedDates: string[]
+}
 
 const STATUS_OPTIONS = [
   "Scheduled",
@@ -164,6 +204,28 @@ function chunkDates(dates: Date[], chunkSize: number) {
   return chunks
 }
 
+function buildInclusiveDateRange(startIso: string, endIso: string) {
+  if (!startIso || !endIso) return []
+
+  const start = new Date(`${startIso}T12:00:00`)
+  const end = new Date(`${endIso}T12:00:00`)
+  const dates: string[] = []
+
+  for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+    dates.push(toIsoDate(cursor))
+  }
+
+  return dates
+}
+
+function buildPatrolOvertimeRequestId(assignmentDate: string, shiftType: ShiftType, positionCode: PatrolPositionCode) {
+  return `patrol-open-${assignmentDate}-${shiftType}-${positionCode}`
+}
+
+function positionLabelFromCode(positionCode: PatrolPositionCode) {
+  return patrolPositions.find((position) => position.code === positionCode)?.label || positionCode
+}
+
 function getScheduleRowKey(row: Pick<ScheduleRow, "assignment_date" | "shift_type" | "position_code">) {
   return `${row.assignment_date}-${row.shift_type}-${row.position_code}`
 }
@@ -271,6 +333,7 @@ export function PatrolPage({
   defaultView = "month",
   patrolOverrideRows,
   setPatrolOverrideRows,
+  setOvertimeShiftRequests,
   colorSettings,
   onAuditEvent
 }: {
@@ -279,6 +342,7 @@ export function PatrolPage({
   defaultView?: ScheduleView
   patrolOverrideRows: ScheduleRow[]
   setPatrolOverrideRows: React.Dispatch<React.SetStateAction<ScheduleRow[]>>
+  setOvertimeShiftRequests: React.Dispatch<React.SetStateAction<OvertimeShiftRequest[]>>
   colorSettings?: {
     accent: string
     border: string
@@ -297,8 +361,16 @@ export function PatrolPage({
   const [view, setView] = useState<ScheduleView>(defaultView)
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([])
   const [editingRow, setEditingRow] = useState<EditingRow | null>(null)
+  const [teamEditor, setTeamEditor] = useState<TeamShiftEditor | null>(null)
+  const [teamEmployeeSelection, setTeamEmployeeSelection] = useState<TeamEmployeeSelection | null>(null)
+  const [timeOffDateSelection, setTimeOffDateSelection] = useState<TimeOffDateSelection | null>(null)
+  const [timeOffReasonSelection, setTimeOffReasonSelection] = useState<TimeOffReasonSelection | null>(null)
+  const [multiDatePickerSelection, setMultiDatePickerSelection] = useState<MultiDatePickerSelection | null>(null)
+  const [scrollTargetIso, setScrollTargetIso] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const scheduleRefreshTimeoutRef = useRef<number | null>(null)
+  const weekSectionRefs = useRef<Array<HTMLDivElement | null>>([])
+  const hasAutoScrolledToCurrentWeekRef = useRef(false)
 
   const dates = useMemo(() => buildVisibleDates(baseDate, view), [baseDate, view])
   const effectiveScheduleRows = useMemo(
@@ -491,6 +563,16 @@ export function PatrolPage({
     } else {
       setEditingRow(buildEmptyRow(date, positionCode, shiftType))
     }
+  }
+
+  function openTeamEditor(date: Date, shiftType: ShiftType) {
+    if (!canEdit) return
+
+    setTeamEditor({
+      assignmentDate: toIsoDate(date),
+      shiftType,
+      team: getActiveTeam(date, shiftType)
+    })
   }
 
   function updateEditingRow<K extends keyof EditingRow>(key: K, value: EditingRow[K]) {
@@ -733,6 +815,335 @@ export function PatrolPage({
     setEditingRow(null)
   }
 
+  async function persistScheduleRow(row: EditingRow, options?: { closeEditor?: boolean; auditLabel?: string }) {
+    setSaving(true)
+
+    const basePayload = {
+      assignment_date: row.assignment_date,
+      shift_type: row.shift_type,
+      position_code: row.position_code,
+      employee_id: row.employee_id,
+      vehicle: row.vehicle,
+      shift_hours: row.shift_hours,
+      status: row.status,
+      replacement_employee_id: row.replacement_employee_id,
+      replacement_vehicle: row.replacement_vehicle,
+      replacement_hours: row.replacement_hours
+    }
+    type SaveResult = { error: { message: string } | null }
+
+    async function runSaveAttempt(): Promise<SaveResult> {
+      if (row.id) {
+        return withTimeout(
+          supabase
+            .from("patrol_schedule")
+            .update(basePayload)
+            .eq("id", row.id),
+          8000,
+          "Request timeout"
+        ) as Promise<SaveResult>
+      }
+
+      const existingResult = await withTimeout(
+        supabase
+          .from("patrol_schedule")
+          .select("id")
+          .eq("assignment_date", row.assignment_date)
+          .eq("shift_type", row.shift_type)
+          .eq("position_code", row.position_code)
+          .order("id", { ascending: true }),
+        8000,
+        "Request timeout"
+      ) as { data: Array<{ id: string }> | null; error: { message: string } | null }
+
+      if (existingResult.error) {
+        return { error: existingResult.error }
+      }
+
+      if (existingResult.data && existingResult.data.length > 0) {
+        return withTimeout(
+          supabase
+            .from("patrol_schedule")
+            .update(basePayload)
+            .eq("assignment_date", row.assignment_date)
+            .eq("shift_type", row.shift_type)
+            .eq("position_code", row.position_code),
+          8000,
+          "Request timeout"
+        ) as Promise<SaveResult>
+      }
+
+      return withTimeout(
+        supabase
+          .from("patrol_schedule")
+          .insert(basePayload),
+        8000,
+        "Request timeout"
+      ) as Promise<SaveResult>
+    }
+
+    async function verifySavedRow() {
+      const { data, error } = await withTimeout(
+        supabase
+          .from("patrol_schedule")
+          .select("replacement_employee_id,replacement_vehicle,replacement_hours,employee_id,status")
+          .eq("assignment_date", row.assignment_date)
+          .eq("shift_type", row.shift_type)
+          .eq("position_code", row.position_code)
+          .order("id", { ascending: true }),
+        4000,
+        "Verify timeout"
+      ) as {
+        data: Array<{
+          replacement_employee_id: string | null
+          replacement_vehicle: string | null
+          replacement_hours: string | null
+          employee_id: string | null
+          status: string | null
+        }> | null
+        error: { message: string } | null
+      }
+
+      if (error || !data || data.length === 0) return false
+
+      return data.some((savedRow) => (
+        savedRow.employee_id === row.employee_id &&
+        savedRow.status === row.status &&
+        savedRow.replacement_employee_id === row.replacement_employee_id &&
+        savedRow.replacement_vehicle === row.replacement_vehicle &&
+        savedRow.replacement_hours === row.replacement_hours
+      ))
+    }
+
+    let error = null
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      let result: SaveResult
+
+      try {
+        result = await runSaveAttempt()
+      } catch (requestError) {
+        error = requestError instanceof Error ? requestError : new Error("Request failed")
+        continue
+      }
+
+      if (!result.error) {
+        error = null
+        break
+      }
+
+      error = result.error
+
+      if (!error.message.toLowerCase().includes("timeout")) {
+        break
+      }
+
+      let didPersist = false
+
+      try {
+        didPersist = await verifySavedRow()
+      } catch {
+        didPersist = false
+      }
+      if (didPersist) {
+        error = null
+        break
+      }
+    }
+
+    const localRow: ScheduleRow = {
+      id: row.id,
+      ...basePayload
+    }
+
+    if (error) {
+      const message = error.message.toLowerCase()
+      const isNetworkError =
+        message.includes("timeout") ||
+        message.includes("failed to fetch") ||
+        message.includes("fetch")
+
+      if (isNetworkError) {
+        const nextLocalOverrides = mergeScheduleRows(patrolOverrideRows, [localRow])
+        setPatrolOverrideRows(nextLocalOverrides)
+        setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
+        setSaving(false)
+        if (options?.closeEditor) {
+          setEditingRow(null)
+        }
+        return { ok: true, localOnly: true }
+      }
+
+      setSaving(false)
+      alert(`Failed to save shift: ${error.message}`)
+      return { ok: false, localOnly: false }
+    }
+
+    invalidatePatrolScheduleCache()
+    const persistedWithoutNetworkFailure = mergeScheduleRows(patrolOverrideRows, [localRow])
+    setPatrolOverrideRows(persistedWithoutNetworkFailure)
+    setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
+    setSaving(false)
+    if (options?.closeEditor) {
+      setEditingRow(null)
+    }
+    return { ok: true, localOnly: false }
+  }
+
+  function buildWorkingShiftRows(editor: TeamShiftEditor) {
+    const editorDate = new Date(`${editor.assignmentDate}T12:00:00`)
+
+    return patrolPositions
+      .map((position) => {
+        const row = cellFor(editorDate, position.code, editor.shiftType)
+        if (!row || !row.employee_id) return null
+
+        const employee = employees.find((candidate) => candidate.id === row.employee_id)
+        if (!employee) return null
+
+        return {
+          row,
+          employee,
+          positionLabel: position.label
+        }
+      })
+      .filter((entry): entry is { row: ScheduleRow; employee: Employee; positionLabel: string } => Boolean(entry))
+  }
+
+  function buildDatesFromSelection(selection: TimeOffDateSelection) {
+    if (selection.mode === "single") {
+      return selection.singleDate ? [selection.singleDate] : []
+    }
+
+    return buildInclusiveDateRange(selection.rangeStart, selection.rangeEnd)
+  }
+
+  function toggleMultiDatePick(assignmentDate: string) {
+    if (!multiDatePickerSelection) return
+
+    setMultiDatePickerSelection((current) => {
+      if (!current) return current
+
+      const exists = current.selectedDates.includes(assignmentDate)
+
+      return {
+        ...current,
+        selectedDates: exists
+          ? current.selectedDates.filter((date) => date !== assignmentDate)
+          : [...current.selectedDates, assignmentDate].sort((a, b) => a.localeCompare(b))
+      }
+    })
+  }
+
+  async function saveTeamTimeOffSelection() {
+    if (!timeOffReasonSelection) return
+
+    const employee = employees.find((candidate) => candidate.id === timeOffReasonSelection.employeeId)
+    if (!employee) return
+
+    const validDates = timeOffReasonSelection.dates.filter((isoDate) => {
+      const targetDate = new Date(`${isoDate}T12:00:00`)
+      return getActiveTeam(targetDate, timeOffReasonSelection.shiftType) === employee.team
+    })
+
+    if (validDates.length === 0) {
+      alert("No scheduled dates for that employee were included in the range.")
+      return
+    }
+
+    for (const isoDate of validDates) {
+      const targetDate = new Date(`${isoDate}T12:00:00`)
+      const existingRow =
+        effectiveScheduleRows.find((candidate) =>
+          candidate.assignment_date === isoDate &&
+          candidate.shift_type === timeOffReasonSelection.shiftType &&
+          candidate.position_code === timeOffReasonSelection.positionCode &&
+          candidate.employee_id === timeOffReasonSelection.employeeId
+        ) ||
+        buildDefaultAssignmentRow(
+          employees,
+          targetDate,
+          timeOffReasonSelection.positionCode,
+          timeOffReasonSelection.shiftType
+        )
+
+      if (!existingRow) continue
+
+      const saved = await persistScheduleRow(
+        {
+          ...existingRow,
+          assignment_date: isoDate,
+          shift_type: timeOffReasonSelection.shiftType,
+          position_code: timeOffReasonSelection.positionCode,
+          employee_id: timeOffReasonSelection.employeeId,
+          vehicle: employee.defaultVehicle || existingRow.vehicle,
+          shift_hours: employee.defaultShiftHours || existingRow.shift_hours,
+          status: timeOffReasonSelection.reason,
+          replacement_employee_id: null,
+          replacement_vehicle: null,
+          replacement_hours: existingRow.shift_hours || employee.defaultShiftHours
+        },
+        { closeEditor: false }
+      )
+
+      if (!saved.ok) {
+        return
+      }
+
+      setOvertimeShiftRequests((current) => {
+        const requestId = buildPatrolOvertimeRequestId(
+          isoDate,
+          timeOffReasonSelection.shiftType,
+          timeOffReasonSelection.positionCode
+        )
+        const requestIndex = current.findIndex((request) => request.id === requestId)
+        const nextRequest: OvertimeShiftRequest = {
+          id: requestId,
+          source: "Patrol Open Shift",
+          assignmentDate: isoDate,
+          shiftType: timeOffReasonSelection.shiftType,
+          positionCode: timeOffReasonSelection.positionCode,
+          description: `${positionLabelFromCode(timeOffReasonSelection.positionCode)} time off`,
+          offEmployeeId: employee.id,
+          offEmployeeLastName: employee.lastName,
+          offHours: employee.defaultShiftHours,
+          selectionActive: true,
+          workflowStatus: "Open",
+          status: "Open",
+          assignedEmployeeId: null,
+          createdAt: current[requestIndex]?.createdAt || new Date().toISOString(),
+          responses: current[requestIndex]?.responses || []
+        }
+
+        if (requestIndex >= 0) {
+          const next = [...current]
+          next[requestIndex] = nextRequest
+          return next
+        }
+
+        return [...current, nextRequest]
+      })
+    }
+
+    onAuditEvent?.(
+      "Patrol Team Time Off Saved",
+      `Saved ${timeOffReasonSelection.reason} for ${employee.firstName} ${employee.lastName}.`,
+      `${validDates.join(", ")} | ${timeOffReasonSelection.shiftType} ${positionLabelFromCode(timeOffReasonSelection.positionCode)}`
+    )
+
+    const firstSavedDate = validDates[0]
+    if (firstSavedDate) {
+      const firstSavedDateObject = new Date(`${firstSavedDate}T12:00:00`)
+      setBaseDate(new Date(firstSavedDateObject.getFullYear(), firstSavedDateObject.getMonth(), 1))
+      setScrollTargetIso(firstSavedDate)
+    }
+
+    setTimeOffReasonSelection(null)
+    setTimeOffDateSelection(null)
+    setTeamEmployeeSelection(null)
+    setTeamEditor(null)
+  }
+
   async function deleteEditingRow() {
     if (!editingRow?.id) {
       setEditingRow(null)
@@ -799,6 +1210,16 @@ export function PatrolPage({
     const employee = employees.find((e) => e.id === row.employee_id)
     const replacement = employees.find((e) => e.id === row.replacement_employee_id)
     const leave = isProblemStatus(row.status)
+    const isMultiDateCandidate =
+      !!multiDatePickerSelection &&
+      row.employee_id === multiDatePickerSelection.employeeId &&
+      row.position_code === multiDatePickerSelection.positionCode &&
+      row.shift_type === multiDatePickerSelection.shiftType
+    const isMultiDateSelected =
+      !!multiDatePickerSelection && multiDatePickerSelection.selectedDates.includes(row.assignment_date)
+    const isMultiDateDimmed =
+      !!multiDatePickerSelection &&
+      !isMultiDateCandidate
     const rowDate = new Date(`${row.assignment_date}T12:00:00`)
     const shiftRows = patrolPositions
       .map((position) => cellFor(rowDate, position.code, row.shift_type))
@@ -816,17 +1237,59 @@ export function PatrolPage({
         style={{
           minHeight: compact ? "44px" : "84px",
           padding: compact ? "1px 5px" : "10px",
-          border: `1px solid ${colorSettings?.cardBorder || colorSettings?.border || "#e5e7eb"}`,
+          border: isMultiDateCandidate
+            ? `2px solid ${isMultiDateSelected ? "#2563eb" : "#94a3b8"}`
+            : `1px solid ${colorSettings?.cardBorder || colorSettings?.border || "#e5e7eb"}`,
           borderRadius: "6px",
-          background: colorSettings?.cellBackground || "#ffffff",
+          background: isMultiDateSelected
+            ? "#dbeafe"
+            : isMultiDateCandidate
+              ? "#f8fafc"
+              : colorSettings?.cellBackground || "#ffffff",
           display: "grid",
           gridTemplateRows: compact ? "auto auto" : "1fr auto",
           alignContent: "start",
           gap: compact ? "0px" : "2px",
           fontSize: compact ? "12px" : "13px",
-          cursor: canEdit ? "pointer" : "default"
+          cursor: canEdit ? "pointer" : "default",
+          position: "relative",
+          boxShadow: isMultiDateCandidate ? "0 0 0 1px rgba(148, 163, 184, 0.18)" : "none",
+          opacity: isMultiDateDimmed ? 0.4 : 1,
+          filter: isMultiDateDimmed ? "grayscale(0.2)" : "none"
         }}
       >
+        {isMultiDateCandidate && (
+          <button
+            onClick={(event) => {
+              event.stopPropagation()
+              toggleMultiDatePick(row.assignment_date)
+            }}
+            style={{
+              position: "absolute",
+              top: compact ? "3px" : "6px",
+              right: compact ? "3px" : "6px",
+              width: compact ? "16px" : "20px",
+              height: compact ? "16px" : "20px",
+              borderRadius: "4px",
+              border: `2px solid ${isMultiDateSelected ? "#2563eb" : "#94a3b8"}`,
+              background: isMultiDateSelected ? "#2563eb" : "#ffffff",
+              color: "#ffffff",
+              fontSize: compact ? "10px" : "12px",
+              fontWeight: 800,
+              lineHeight: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              padding: 0,
+              boxShadow: "0 2px 6px rgba(15, 23, 42, 0.16)"
+            }}
+            aria-label={`Select ${row.assignment_date}`}
+          >
+            {isMultiDateSelected ? "✓" : ""}
+          </button>
+        )}
+
         <div style={{ display: "flex", alignItems: "center", gap: compact ? "2px" : "6px" }}>
           <div
             style={{
@@ -847,13 +1310,24 @@ export function PatrolPage({
               display: "grid",
               gridTemplateColumns: compact ? "26px minmax(0, 1fr) 30px" : "36px minmax(0, 1fr) 56px",
               alignItems: "center",
-              columnGap: compact ? "4px" : "8px"
+              columnGap: compact ? "4px" : "8px",
+              outline: isMultiDateCandidate ? "1px solid #94a3b8" : "none"
             }}
           >
             <span style={{ textAlign: "left", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
               {(row.vehicle || "").trim()}
             </span>
-            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                background: isMultiDateCandidate ? "#e5e7eb" : "transparent",
+                borderRadius: "4px",
+                padding: isMultiDateCandidate ? "1px 4px" : "0"
+              }}
+            >
               {employee?.lastName || "OPEN"}
             </span>
             <span style={{ textAlign: "center", whiteSpace: "nowrap" }}>
@@ -1019,6 +1493,35 @@ const next = ranking[0]
         : "Patrol Schedule"
   const weekdayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
   const labelColumnWidth = view === "day" ? "84px" : "90px"
+  const stickyWeekHeaderTop = multiDatePickerSelection ? "108px" : "8px"
+
+  useEffect(() => {
+    if (view !== "month") return
+
+    const targetIso =
+      scrollTargetIso || (!hasAutoScrolledToCurrentWeekRef.current ? toIsoDate(today) : null)
+
+    if (!targetIso) return
+
+    const currentWeekIndex = weekRows.findIndex((week) =>
+      week.some((date) => toIsoDate(date) === targetIso)
+    )
+
+    if (currentWeekIndex < 0) return
+
+    const frame = window.requestAnimationFrame(() => {
+      weekSectionRefs.current[currentWeekIndex]?.scrollIntoView({
+        block: "start",
+        behavior: "smooth"
+      })
+      hasAutoScrolledToCurrentWeekRef.current = true
+      if (scrollTargetIso) {
+        setScrollTargetIso(null)
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [baseDate, view, weekRows, today, scrollTargetIso])
 
   return (
     <>
@@ -1122,6 +1625,9 @@ const next = ranking[0]
           {weekRows.map((week, weekIndex) => (
             <div
               key={`week-${weekIndex}`}
+              ref={(element) => {
+                weekSectionRefs.current[weekIndex] = element
+              }}
               style={{
                border: "1px solid #dbeafe",
                 borderColor: colorSettings?.border || "#dbeafe",
@@ -1138,7 +1644,7 @@ const next = ranking[0]
                       ? `${labelColumnWidth} minmax(0, 1fr)`
                       : `${labelColumnWidth} repeat(7, minmax(0, 1fr))`,
                   position: "sticky",
-                  top: "8px",
+                  top: stickyWeekHeaderTop,
                   zIndex: 6,
                   background: "#f8fafc",
                   borderBottom: "1px solid #dbeafe"
@@ -1255,12 +1761,18 @@ const next = ranking[0]
                           {row.kind === "team"
                             ? (
                               <div
+                                onClick={() => openTeamEditor(date, row.shift)}
                                 style={{
                                   textAlign: "center",
                                   fontSize: "11px",
-                                  fontWeight: 700,
-                                  color: "#475569",
-                                  padding: "7px 2px"
+                                  fontWeight: 800,
+                                  color: "#1e3a8a",
+                                  padding: "7px 2px",
+                                  borderRadius: "8px",
+                                  border: "1px solid #93c5fd",
+                                  background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
+                                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8)",
+                                  cursor: canEdit ? "pointer" : "default"
                                 }}
                               >
                                 {getActiveTeam(date, row.shift)}
@@ -1446,6 +1958,456 @@ const next = ranking[0]
                   {saving ? "Saving..." : "Save"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {teamEditor && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000
+          }}
+        >
+          <div
+            style={{
+              width: "640px",
+              maxWidth: "94vw",
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 18px 40px rgba(15, 23, 42, 0.25)"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
+              <div>
+                <div style={{ fontSize: "18px", fontWeight: 800 }}>Edit {teamEditor.team}</div>
+                <div style={{ fontSize: "13px", color: "#64748b" }}>
+                  {new Date(`${teamEditor.assignmentDate}T12:00:00`).toLocaleDateString(undefined, {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric"
+                  })} | {teamEditor.shiftType}
+                </div>
+              </div>
+
+              <button
+                onClick={() => setTeamEditor(null)}
+                style={{
+                  padding: "8px 12px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#e2e8f0",
+                  cursor: "pointer"
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: "10px" }}>
+              {buildWorkingShiftRows(teamEditor).map(({ row, employee, positionLabel }) => (
+                <div
+                  key={`${row.assignment_date}-${row.shift_type}-${row.position_code}`}
+                  style={{
+                    border: "1px solid #dbe3ee",
+                    borderRadius: "10px",
+                    padding: "12px 14px",
+                    display: "grid",
+                    gridTemplateColumns: "26px minmax(0, 1fr)",
+                    gap: "12px",
+                    alignItems: "center"
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      setTeamEmployeeSelection({
+                        employeeId: employee.id,
+                        positionCode: row.position_code,
+                        shiftType: row.shift_type,
+                        assignmentDate: row.assignment_date,
+                        team: teamEditor.team
+                      })
+                      setTimeOffDateSelection({
+                        employeeId: employee.id,
+                        positionCode: row.position_code,
+                        shiftType: row.shift_type,
+                        assignmentDate: row.assignment_date,
+                        team: teamEditor.team,
+                        mode: "single",
+                        singleDate: row.assignment_date,
+                        rangeStart: row.assignment_date,
+                        rangeEnd: row.assignment_date
+                      })
+                    }}
+                    style={{
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "6px",
+                      border: "2px solid #2563eb",
+                      background: "#eff6ff",
+                      cursor: "pointer"
+                    }}
+                    aria-label={`Select ${employee.firstName} ${employee.lastName}`}
+                  />
+
+                  <div style={{ display: "grid", gap: "3px" }}>
+                    <div style={{ fontWeight: 800, fontSize: "14px", color: "#0f172a" }}>
+                      {positionLabel} | {employee.firstName} {employee.lastName}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#475569" }}>
+                      Vehicle: {row.vehicle || employee.defaultVehicle || "TBD"} | Hours: {row.shift_hours || employee.defaultShiftHours || "TBD"}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {timeOffDateSelection && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.38)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1001
+          }}
+        >
+          <div
+            style={{
+              width: "420px",
+              maxWidth: "92vw",
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 18px 40px rgba(15, 23, 42, 0.25)"
+            }}
+          >
+            <div style={{ fontWeight: 800, fontSize: "18px", marginBottom: "12px" }}>Select Time-Off Date</div>
+
+            <div style={{ display: "grid", gap: "12px" }}>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {(["single", "multiple"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setTimeOffDateSelection({ ...timeOffDateSelection, mode })}
+                    style={{
+                      padding: "8px 12px",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      background: timeOffDateSelection.mode === mode ? "#2563eb" : "#e2e8f0",
+                      color: timeOffDateSelection.mode === mode ? "#ffffff" : "#0f172a",
+                      fontWeight: 700
+                    }}
+                  >
+                    {mode === "single" ? "Single Date" : "Multiple Dates"}
+                  </button>
+                ))}
+              </div>
+
+              {timeOffDateSelection.mode === "single" ? (
+                <label>
+                  <div style={{ fontWeight: 600, marginBottom: "4px" }}>Date</div>
+                  <input
+                    type="date"
+                    value={timeOffDateSelection.singleDate}
+                    onChange={(event) => setTimeOffDateSelection({ ...timeOffDateSelection, singleDate: event.target.value })}
+                    style={{ width: "100%", padding: "8px" }}
+                  />
+                </label>
+              ) : (
+                <div
+                  style={{
+                    padding: "12px",
+                    borderRadius: "10px",
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    fontSize: "13px",
+                    color: "#1e3a8a",
+                    lineHeight: 1.45
+                  }}
+                >
+                  Choosing `Multiple Dates` will bring you back to the Patrol schedule.
+                  The selected employee’s shifts will show clickable boxes so you can pick the exact dates from the calendar.
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px" }}>
+              <button
+                onClick={() => {
+                  setTimeOffDateSelection(null)
+                  setTeamEmployeeSelection(null)
+                }}
+                style={{
+                  padding: "8px 12px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#e2e8f0",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={() => {
+                  if (timeOffDateSelection.mode === "multiple") {
+                    setMultiDatePickerSelection({
+                      employeeId: timeOffDateSelection.employeeId,
+                      positionCode: timeOffDateSelection.positionCode,
+                      shiftType: timeOffDateSelection.shiftType,
+                      team: timeOffDateSelection.team,
+                      selectedDates: []
+                    })
+                    setTimeOffDateSelection(null)
+                    setTeamEditor(null)
+                    return
+                  }
+
+                  const dates = buildDatesFromSelection(timeOffDateSelection)
+                  if (dates.length === 0) return
+
+                  setTimeOffReasonSelection({
+                    ...timeOffDateSelection,
+                    dates,
+                    reason: "Vacation"
+                  })
+                  setTimeOffDateSelection(null)
+                }}
+                style={{
+                  padding: "8px 12px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  cursor: "pointer"
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {multiDatePickerSelection && (
+        <div
+          style={{
+            position: "fixed",
+            top: "16px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 999,
+            width: "min(860px, calc(100vw - 32px))",
+            background: "#0f172a",
+            color: "#ffffff",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            boxShadow: "0 18px 40px rgba(15, 23, 42, 0.3)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "14px",
+            flexWrap: "wrap"
+          }}
+        >
+          <div style={{ display: "grid", gap: "2px" }}>
+            <div style={{ fontWeight: 800, fontSize: "14px" }}>Choose Multiple Patrol Dates</div>
+            <div style={{ fontSize: "12px", color: "#cbd5e1" }}>
+              Click the boxes on that employee’s scheduled shifts. Selected: {multiDatePickerSelection.selectedDates.length}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              onClick={prevMonth}
+              style={{
+                padding: "8px 10px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#1e293b",
+                color: "#ffffff",
+                cursor: "pointer",
+                fontWeight: 700
+              }}
+            >
+              Prev Month
+            </button>
+
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: "8px",
+                background: "#1e293b",
+                color: "#cbd5e1",
+                fontSize: "12px",
+                fontWeight: 700
+              }}
+            >
+              {baseDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+            </div>
+
+            <button
+              onClick={nextMonth}
+              style={{
+                padding: "8px 10px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#1e293b",
+                color: "#ffffff",
+                cursor: "pointer",
+                fontWeight: 700
+              }}
+            >
+              Next Month
+            </button>
+
+            <button
+              onClick={() => {
+                setMultiDatePickerSelection(null)
+                setTeamEmployeeSelection(null)
+              }}
+              style={{
+                padding: "8px 12px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#334155",
+                color: "#ffffff",
+                cursor: "pointer"
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={() => {
+                if (multiDatePickerSelection.selectedDates.length === 0) return
+
+                setTimeOffReasonSelection({
+                  employeeId: multiDatePickerSelection.employeeId,
+                  positionCode: multiDatePickerSelection.positionCode,
+                  shiftType: multiDatePickerSelection.shiftType,
+                  assignmentDate: multiDatePickerSelection.selectedDates[0],
+                  team: multiDatePickerSelection.team,
+                  mode: "multiple",
+                  singleDate: multiDatePickerSelection.selectedDates[0],
+                  rangeStart: multiDatePickerSelection.selectedDates[0],
+                  rangeEnd: multiDatePickerSelection.selectedDates[multiDatePickerSelection.selectedDates.length - 1],
+                  dates: multiDatePickerSelection.selectedDates,
+                  reason: "Vacation"
+                })
+                setMultiDatePickerSelection(null)
+              }}
+              style={{
+                padding: "8px 12px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#2563eb",
+                color: "#ffffff",
+                cursor: "pointer"
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {timeOffReasonSelection && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.42)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1002
+          }}
+        >
+          <div
+            style={{
+              width: "420px",
+              maxWidth: "92vw",
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 18px 40px rgba(15, 23, 42, 0.25)"
+            }}
+          >
+            <div style={{ fontWeight: 800, fontSize: "18px", marginBottom: "12px" }}>Select Time-Off Reason</div>
+
+            <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "10px" }}>
+              Dates: {timeOffReasonSelection.dates.join(", ")}
+            </div>
+
+            <label>
+              <div style={{ fontWeight: 600, marginBottom: "4px" }}>Reason</div>
+              <select
+                value={timeOffReasonSelection.reason}
+                onChange={(event) => setTimeOffReasonSelection({ ...timeOffReasonSelection, reason: event.target.value })}
+                style={{ width: "100%", padding: "8px" }}
+              >
+                {STATUS_OPTIONS.filter((status) => status !== "Scheduled" && status !== "Open Shift").map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px" }}>
+              <button
+                onClick={() => {
+                  setTimeOffReasonSelection(null)
+                  if (teamEmployeeSelection) {
+                    setTimeOffDateSelection({
+                      ...teamEmployeeSelection,
+                      mode: "single",
+                      singleDate: teamEmployeeSelection.assignmentDate,
+                      rangeStart: teamEmployeeSelection.assignmentDate,
+                      rangeEnd: teamEmployeeSelection.assignmentDate
+                    })
+                  }
+                }}
+                style={{
+                  padding: "8px 12px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#e2e8f0",
+                  cursor: "pointer"
+                }}
+              >
+                Back
+              </button>
+
+              <button
+                onClick={() => void saveTeamTimeOffSelection()}
+                disabled={saving}
+                style={{
+                  padding: "8px 12px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  cursor: "pointer"
+                }}
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
             </div>
           </div>
         </div>

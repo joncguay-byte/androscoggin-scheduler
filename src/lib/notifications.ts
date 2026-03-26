@@ -27,7 +27,7 @@ function formatShiftSummary(request: OvertimeShiftRequest) {
     POL: "Poland"
   }
 
-  return `${formatDate(request.assignmentDate)}, ${shiftLabel}, ${roleMap[request.positionCode]}, ${request.offEmployeeLastName || "Open"}, ${request.offHours || "Hours TBD"}`
+  return `${formatDate(request.assignmentDate)}, ${shiftLabel}, ${roleMap[request.positionCode]}, ${request.offEmployeeLastName || "Open"}, ${request.assignedHours || request.offHours || "Hours TBD"}`
 }
 
 function getCampaignSubject(campaign: NotificationCampaign) {
@@ -52,7 +52,7 @@ function buildAvailabilityBody(
     "The following overtime shifts are available:",
     shiftLines || "No shifts selected.",
     "",
-    "Reply with the shifts you are interested in working.",
+    "Reply with the shifts you are interested in working. Command staff will make the final assignment.",
     responseLink ? `Response link: ${responseLink}` : "",
     "",
     `Campaign: ${campaign.title}`

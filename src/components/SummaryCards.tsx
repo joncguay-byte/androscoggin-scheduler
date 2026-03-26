@@ -52,7 +52,7 @@ export default function SummaryCards({
     },
     {
       key: "open_shifts",
-      label: "Open Shifts",
+      label: "Open Shifts In Queue",
       value: String(openShiftCount),
       color: "#ea580c"
     },
@@ -79,6 +79,9 @@ export default function SummaryCards({
           onClick={() => {
             if (card.key === "open_shifts" || card.key === "staffing_alerts") {
               onCardClick?.(card.key)
+              if (card.key === "open_shifts" && typeof window !== "undefined") {
+                window.location.hash = "overtime-queue"
+              }
             }
           }}
           style={{

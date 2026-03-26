@@ -92,7 +92,10 @@ export function CIDPage({
   const [selectedDateIso, setSelectedDateIso] = useState(toIsoDate(today))
   const [previewRole, setPreviewRole] = useState<AppRole>(currentUserRole)
 
-  const canEdit = previewRole === "sergeant" || previewRole === "detective"
+  const canEdit =
+    previewRole === "admin" ||
+    previewRole === "sergeant" ||
+    previewRole === "detective"
   const cidRoster = useMemo(() => getCidRoster(employees), [employees])
   const calendarDays = useMemo(() => buildCalendarDays(baseDate), [baseDate])
   const selectedDate = useMemo(() => new Date(`${selectedDateIso}T12:00:00`), [selectedDateIso])
@@ -161,7 +164,6 @@ export function CIDPage({
     }
   }
 
-  const selectedOverride = dailyOverrides[selectedDateIso] || ""
   const months = Array.from({ length: 12 }, (_, index) =>
     new Date(2026, index, 1).toLocaleDateString(undefined, { month: "long" })
   )
@@ -327,11 +329,11 @@ export function CIDPage({
                 const isToday = iso === toIsoDate(today)
 
                 return (
-                  <button
+                  <div
                     key={iso}
                     onClick={() => setSelectedDateIso(iso)}
                     style={{
-                      minHeight: "118px",
+                      minHeight: "146px",
                       borderRadius: "12px",
                       border: isSelected ? "2px solid #1d4ed8" : "1px solid #dbeafe",
                       background: inCurrentMonth ? "#ffffff" : "#f8fafc",
@@ -339,7 +341,9 @@ export function CIDPage({
                       textAlign: "left",
                       cursor: "pointer",
                       opacity: inCurrentMonth ? 1 : 0.7,
-                      boxShadow: isToday ? "0 0 0 2px rgba(212,175,55,0.25)" : "none"
+                      boxShadow: isToday ? "0 0 0 2px rgba(212,175,55,0.25)" : "none",
+                      display: "grid",
+                      alignContent: "start"
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
@@ -351,17 +355,49 @@ export function CIDPage({
                       )}
                     </div>
 
-                    <div style={{ fontSize: "12px", color: "#475569" }}>Primary</div>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
-                      {primary ? `${primary.firstName} ${primary.lastName}` : "Unassigned"}
+                    <div style={{ fontSize: "12px", color: "#475569" }}>On-Call</div>
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: override ? "#1d4ed8" : "#0f172a",
+                        background: override ? "#dbeafe" : "transparent",
+                        border: override ? "1px solid #93c5fd" : "1px solid transparent",
+                        borderRadius: "8px",
+                        padding: override ? "4px 6px" : "0"
+                      }}
+                    >
+                      {override
+                        ? `${override.firstName} ${override.lastName}`
+                        : primary
+                          ? `${primary.firstName} ${primary.lastName}`
+                          : "Unassigned"}
                     </div>
 
-                    {override && (
-                      <div style={{ marginTop: "8px", fontSize: "12px", color: "#1d4ed8", fontWeight: 700 }}>
-                        Override: {override.firstName} {override.lastName}
-                      </div>
-                    )}
-                  </button>
+                    <div style={{ marginTop: "4px" }}>
+                      <select
+                        value={overrideId || ""}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => updateOverride(iso, event.target.value)}
+                        disabled={!canEdit}
+                        style={{
+                          width: "100%",
+                          padding: "6px 8px",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "12px",
+                          background: "#ffffff"
+                        }}
+                      >
+                        <option value="">Primary Rotation</option>
+                        {cidRoster.map((employee) => (
+                          <option key={employee.id} value={employee.id}>
+                            {employee.firstName} {employee.lastName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 )
               })}
             </div>
@@ -395,32 +431,17 @@ export function CIDPage({
             </div>
 
             <div style={{ marginBottom: "12px" }}>
-              <div style={{ fontSize: "12px", color: "#64748b" }}>Daily Override</div>
-              {canEdit ? (
-                <Select
-                  value={selectedOverride}
-                  onValueChange={(value) => updateOverride(selectedDateIso, value)}
-                >
-                  <SelectItem value="">No override</SelectItem>
-                  {cidRoster.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.firstName} {employee.lastName}
-                    </SelectItem>
-                  ))}
-                </Select>
-              ) : (
-                <div style={{ fontWeight: 700 }}>
-                  {selectedEffectiveOnCall
-                    ? `${selectedEffectiveOnCall.firstName} ${selectedEffectiveOnCall.lastName}`
-                    : "No override"}
-                </div>
-              )}
+              <div style={{ fontSize: "12px", color: "#64748b" }}>Effective On-Call</div>
+              <div style={{ fontWeight: 700 }}>
+                {selectedEffectiveOnCall
+                  ? `${selectedEffectiveOnCall.firstName} ${selectedEffectiveOnCall.lastName}`
+                  : "Unassigned"}
+              </div>
             </div>
 
             <div style={{ fontSize: "13px", color: "#475569" }}>
-              Weekly CID rotation now turns over on Monday at 5:00 AM. Daily overrides replace the
-              weekly primary for that date only. The app now tries to sync this through the shared
-              Supabase app state record when that schema is available.
+              Weekly CID rotation now turns over on Monday at 5:00 AM. The dropdown inside each CID
+              calendar cell replaces the weekly primary for that date only.
             </div>
           </div>
         </div>

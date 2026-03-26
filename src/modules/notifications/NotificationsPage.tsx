@@ -37,6 +37,9 @@ type NotificationsPageProps = {
   setNotificationDeliveries: React.Dispatch<React.SetStateAction<NotificationDelivery[]>>
   notificationProviderConfig: NotificationProviderConfig
   setNotificationProviderConfig: React.Dispatch<React.SetStateAction<NotificationProviderConfig>>
+  initialSelectedShiftIds?: string[]
+  initialSelectedRecipientIds?: string[]
+  onConsumeDraftSelections?: () => void
   onAuditEvent: (action: string, summary: string, details?: string) => void
 }
 
@@ -78,6 +81,9 @@ export function NotificationsPage({
   setNotificationDeliveries,
   notificationProviderConfig,
   setNotificationProviderConfig,
+  initialSelectedShiftIds = [],
+  initialSelectedRecipientIds = [],
+  onConsumeDraftSelections,
   onAuditEvent
 }: NotificationsPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
@@ -116,6 +122,18 @@ export function NotificationsPage({
   const [recipientScope, setRecipientScope] = useState<RecipientScope>("patrol")
   const [selectedCampaignId, setSelectedCampaignId] = useState("")
   const [selectedDeliveryId, setSelectedDeliveryId] = useState("")
+
+  useEffect(() => {
+    if (initialSelectedShiftIds.length === 0) return
+    setSelectedShiftIds(initialSelectedShiftIds)
+    onConsumeDraftSelections?.()
+  }, [initialSelectedShiftIds, onConsumeDraftSelections])
+
+  useEffect(() => {
+    if (initialSelectedRecipientIds.length === 0) return
+    setSelectedRecipientIds(initialSelectedRecipientIds)
+    onConsumeDraftSelections?.()
+  }, [initialSelectedRecipientIds, onConsumeDraftSelections])
 
   const openShiftRequests = useMemo(
     () => overtimeShiftRequests.filter((request) => request.status === "Open").sort((a, b) => a.assignmentDate.localeCompare(b.assignmentDate) || a.shiftType.localeCompare(b.shiftType)),
@@ -628,7 +646,7 @@ export function NotificationsPage({
                             <div style={{ fontSize: "12px", color: "#64748b" }}>{response?.status || "Pending"}</div>
                           </div>
                           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                            {(["Interested", "Accepted", "Declined", "No Response"] as OvertimeAvailabilityStatus[]).map((status) => (
+                            {(["Interested", "Declined", "No Response"] as OvertimeAvailabilityStatus[]).map((status) => (
                               <button
                                 key={`${employeeId}-${status}`}
                                 onClick={() => setResponse(responseTargetShift.id, employeeId, status)}
