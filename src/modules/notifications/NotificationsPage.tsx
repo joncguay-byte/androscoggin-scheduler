@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
-import { buildDeliveryLink, buildNotificationDeliveries, canSendDeliveryLive, formatNotificationShiftSummary, sendNotificationDelivery } from "../../lib/notifications"
+import { buildDeliveryLink, buildEmailHtmlPreview, buildNotificationDeliveries, canSendDeliveryLive, formatNotificationShiftSummary, sendNotificationDelivery } from "../../lib/notifications"
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, SelectItem } from "../../components/ui/simple-ui"
 import type {
   AppRole,
@@ -183,6 +183,13 @@ export function NotificationsPage({
   const selectedCampaign = notificationCampaigns.find((campaign) => campaign.id === selectedCampaignId) || null
   const selectedDelivery = notificationDeliveries.find((delivery) => delivery.id === selectedDeliveryId) || notificationDeliveries[0] || null
   const activeDeliveryCampaign = selectedDelivery ? notificationCampaigns.find((campaign) => campaign.id === selectedDelivery.campaignId) || null : null
+  const selectedDeliveryResponseLink = selectedDelivery?.responseToken ? buildDeliveryLink(selectedDelivery) : ""
+  const selectedDeliveryEmailHtml = selectedDelivery?.channel === "email"
+    ? buildEmailHtmlPreview(selectedDelivery, {
+        senderName: notificationProviderConfig.senderName,
+        responseLink: selectedDeliveryResponseLink
+      })
+    : ""
   const responseTargetShift = selectedCampaign?.shiftRequestIds[0]
     ? overtimeShiftRequests.find((request) => request.id === selectedCampaign.shiftRequestIds[0]) || null
     : openShiftRequests[0] || null
@@ -348,7 +355,7 @@ export function NotificationsPage({
         </CardHeader>
         <CardContent>
           <div style={{ display: "grid", gap: "12px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: "4px" }}>Mode</div>
                 <Select value={notificationProviderConfig.mode} onValueChange={(value) => updateProviderConfig({ mode: value as NotificationProviderConfig["mode"] })}>
@@ -361,7 +368,7 @@ export function NotificationsPage({
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" }}>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: "4px" }}>Email Webhook URL</div>
                 <Input value={notificationProviderConfig.emailWebhookUrl} onChange={(event) => updateProviderConfig({ emailWebhookUrl: event.target.value })} placeholder="https://your-provider/email" />
@@ -372,7 +379,7 @@ export function NotificationsPage({
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: "4px" }}>Sender Name</div>
                 <Input value={notificationProviderConfig.senderName} onChange={(event) => updateProviderConfig({ senderName: event.target.value })} />
@@ -395,7 +402,7 @@ export function NotificationsPage({
         </CardContent>
       </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "18px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "18px" }}>
         <Card>
           <CardHeader>
             <CardTitle>Send Overtime Availability</CardTitle>
@@ -404,7 +411,7 @@ export function NotificationsPage({
             {!canEdit && <div style={{ color: "#64748b", fontSize: "13px" }}>Read-only. Only admins and sergeants can stage or send notifications.</div>}
             {canEdit && (
               <div style={{ display: "grid", gap: "12px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 180px", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
                   <div>
                     <div style={{ fontWeight: 700, marginBottom: "4px" }}>Campaign Title</div>
                     <Input value={campaignTitle} onChange={(event) => setCampaignTitle(event.target.value)} />
@@ -510,7 +517,7 @@ export function NotificationsPage({
           </CardHeader>
           <CardContent>
             <div style={{ display: "grid", gap: "12px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
                 <div style={{ display: "grid", gap: "8px", maxHeight: "560px", overflowY: "auto" }}>
                   {notificationDeliveries.length === 0 && <div style={{ color: "#64748b", fontSize: "13px" }}>No deliveries are queued yet.</div>}
                   {notificationDeliveries.map((delivery) => {
@@ -546,7 +553,7 @@ export function NotificationsPage({
                   {!selectedDelivery && <div style={{ color: "#64748b", fontSize: "13px" }}>Pick a delivery to preview the message body and controls.</div>}
                   {selectedDelivery && (
                     <>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start", flexWrap: "wrap" }}>
                         <div style={{ display: "grid", gap: "4px" }}>
                           <div style={{ fontWeight: 800 }}>{selectedDelivery.subject}</div>
                           <div style={{ fontSize: "12px", color: "#475569" }}>{selectedDelivery.channel.toUpperCase()} to {selectedDelivery.destination}</div>
@@ -581,11 +588,45 @@ export function NotificationsPage({
                         />
                       </div>
 
+                      {selectedDelivery.channel === "email" && (
+                        <div style={{ display: "grid", gap: "8px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                            <div style={{ fontWeight: 700, fontSize: "13px" }}>Mobile Email Preview</div>
+                            <div style={{ fontSize: "12px", color: "#64748b" }}>
+                              Phone-sized rendering of the outbound email card.
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "center" }}>
+                            <div
+                              style={{
+                                width: "320px",
+                                maxWidth: "100%",
+                                border: "10px solid #0f172a",
+                                borderRadius: "30px",
+                                overflow: "hidden",
+                                background: "#0f172a",
+                                boxShadow: "0 20px 36px rgba(15, 23, 42, 0.18)"
+                              }}
+                            >
+                              <div style={{ padding: "10px 14px", background: "#0f172a", color: "#f8fafc", fontWeight: 700, fontSize: "12px", display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                                <span>Email</span>
+                                <span>{selectedDelivery.destination}</span>
+                              </div>
+                              <iframe
+                                title={`Email preview ${selectedDelivery.id}`}
+                                srcDoc={selectedDeliveryEmailHtml}
+                                style={{ width: "100%", height: "540px", border: "none", background: "#e2e8f0" }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {selectedDelivery.responseToken && (
                         <div style={{ display: "grid", gap: "6px" }}>
                           <div style={{ fontWeight: 700, fontSize: "13px" }}>Employee Response Link</div>
                           <input
-                            value={buildDeliveryLink(selectedDelivery)}
+                            value={selectedDeliveryResponseLink}
                             readOnly
                             style={{ width: "100%", padding: 8, border: "1px solid #cbd5e1", borderRadius: "10px", fontSize: "12px", color: "#334155" }}
                           />
@@ -609,7 +650,7 @@ export function NotificationsPage({
         </Card>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "18px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "18px" }}>
         <Card>
           <CardHeader>
             <CardTitle>Record Responses</CardTitle>

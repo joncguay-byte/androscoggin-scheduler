@@ -78,6 +78,39 @@ function buildAssignmentBody(
   ].join("\n")
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+}
+
+function buildParagraphs(body: string) {
+  return body
+    .split(/\n\s*\n/)
+    .map((section) => section.trim())
+    .filter(Boolean)
+    .map((section) => {
+      const lines = section.split("\n").map((line) => line.trim()).filter(Boolean)
+      const isList = lines.every((line) => /^(\d+\.|-)\s/.test(line))
+
+      if (isList) {
+        const items = lines
+          .map((line) => line.replace(/^(\d+\.|-)\s*/, "").trim())
+          .filter(Boolean)
+          .map((line) => `<li style="margin:0 0 8px;">${escapeHtml(line)}</li>`)
+          .join("")
+
+        return `<ul style="margin:0;padding-left:20px;color:#334155;font-size:14px;line-height:1.6;">${items}</ul>`
+      }
+
+      return `<p style="margin:0;color:#334155;font-size:14px;line-height:1.7;">${lines.map((line) => escapeHtml(line)).join("<br />")}</p>`
+    })
+    .join("")
+}
+
 function getChannels(channel: NotificationChannel) {
   if (channel === "both") return ["email", "text"] as NotificationDeliveryMethod[]
   return [channel]
@@ -187,6 +220,54 @@ export function buildDeliveryLink(delivery: NotificationDelivery) {
   return `sms:${encodeURIComponent(delivery.destination)}?body=${encodeURIComponent(delivery.body)}`
 }
 
+export function buildEmailHtmlPreview(
+  delivery: NotificationDelivery,
+  options?: {
+    senderName?: string
+    responseLink?: string
+  }
+) {
+  const senderName = options?.senderName?.trim() || "Androscoggin Scheduler"
+  const responseLink = options?.responseLink?.trim() || ""
+  const previewBadge = delivery.responseToken ? "Availability Request" : "Assignment Notice"
+  const actionLabel = delivery.responseToken ? "Open Overtime Response" : "Open Scheduler Notice"
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(delivery.subject)}</title>
+  </head>
+  <body style="margin:0;padding:24px 12px;background:#e2e8f0;font-family:Arial,Helvetica,sans-serif;">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(15,23,42,0.18);">
+      <div style="padding:18px 22px;background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);color:#f8fafc;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.82;">${escapeHtml(senderName)}</div>
+        <div style="margin-top:10px;font-size:24px;font-weight:800;line-height:1.25;">${escapeHtml(delivery.subject)}</div>
+        <div style="margin-top:12px;display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.14);font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;">${escapeHtml(previewBadge)}</div>
+      </div>
+      <div style="padding:22px;display:grid;gap:16px;">
+        <div style="display:grid;gap:12px;">
+          ${buildParagraphs(delivery.body)}
+        </div>
+        ${responseLink ? `
+        <div style="padding:16px;border:1px solid #bfdbfe;border-radius:16px;background:#eff6ff;">
+          <div style="font-size:12px;color:#1d4ed8;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;">Mobile Response</div>
+          <div style="margin-top:8px;color:#334155;font-size:13px;line-height:1.6;">Tap below to open the employee overtime response screen on mobile.</div>
+          <a href="${escapeHtml(responseLink)}" style="display:inline-block;margin-top:12px;padding:10px 16px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:999px;font-size:13px;font-weight:700;">${escapeHtml(actionLabel)}</a>
+        </div>
+        ` : ""}
+      </div>
+      <div style="padding:14px 22px;border-top:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.6;">
+        Sent to ${escapeHtml(delivery.destination)} via ${escapeHtml(delivery.channel.toUpperCase())}.
+      </div>
+    </div>
+  </body>
+</html>
+`.trim()
+}
+
 export function formatNotificationShiftSummary(request: OvertimeShiftRequest) {
   return formatShiftSummary(request)
 }
@@ -216,6 +297,12 @@ export async function sendNotificationDelivery(
   }
 
   try {
+    const responseLink = delivery.responseToken
+      ? (typeof window !== "undefined"
+        ? `${window.location.origin}${window.location.pathname}#mobile-response=${encodeURIComponent(delivery.responseToken)}`
+        : `#mobile-response=${encodeURIComponent(delivery.responseToken)}`)
+      : ""
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -227,6 +314,12 @@ export async function sendNotificationDelivery(
         destination: delivery.destination,
         subject: delivery.subject,
         body: delivery.body,
+        htmlBody: delivery.channel === "email"
+          ? buildEmailHtmlPreview(delivery, {
+              senderName: providerConfig.senderName,
+              responseLink
+            })
+          : null,
         responseToken: delivery.responseToken || null,
         campaignId: delivery.campaignId,
         deliveryId: delivery.id,
