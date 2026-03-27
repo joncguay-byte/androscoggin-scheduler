@@ -620,6 +620,91 @@ export default function App() {
     )
   }
 
+  async function pushLocalOvertimeToSupabase() {
+    const queuePayload = overtimeQueueIds.map((employeeId, index) => ({
+      employee_id: employeeId,
+      queue_position: index,
+      updated_at: new Date().toISOString()
+    }))
+    const requestsPayload = overtimeShiftRequests.map((request) => ({
+      id: request.id,
+      source: request.source,
+      batch_id: request.batchId || null,
+      batch_name: request.batchName || null,
+      assignment_date: request.assignmentDate,
+      shift_type: request.shiftType,
+      position_code: request.positionCode,
+      description: request.description,
+      off_employee_id: request.offEmployeeId || null,
+      off_employee_last_name: request.offEmployeeLastName || null,
+      off_hours: request.offHours || null,
+      selection_active: Boolean(request.selectionActive),
+      workflow_status: request.workflowStatus || null,
+      status: request.status,
+      assigned_employee_id: request.assignedEmployeeId || null,
+      created_at: request.createdAt,
+      responses: request.responses
+    }))
+    const entriesPayload = overtimeEntries.map((entry) => ({
+      id: entry.id,
+      employee_id: entry.employeeId,
+      date: entry.date,
+      hours: entry.hours,
+      reason: entry.reason,
+      source: entry.source,
+      created_at: entry.createdAt
+    }))
+
+    const queueResult = queuePayload.length > 0
+      ? await supabase.from("overtime_queue").upsert(queuePayload, { onConflict: "employee_id" })
+      : { error: null }
+    if (queueResult.error) {
+      window.alert(`Failed to push overtime queue: ${queueResult.error.message}`)
+      appendAuditEvent(
+        "Settings",
+        "Push Local Overtime Failed",
+        "Failed to copy the overtime queue into Supabase.",
+        queueResult.error.message
+      )
+      return
+    }
+
+    const requestsResult = requestsPayload.length > 0
+      ? await supabase.from("overtime_shift_requests").upsert(requestsPayload, { onConflict: "id" })
+      : { error: null }
+    if (requestsResult.error) {
+      window.alert(`Failed to push overtime shifts: ${requestsResult.error.message}`)
+      appendAuditEvent(
+        "Settings",
+        "Push Local Overtime Failed",
+        "Failed to copy overtime shift requests into Supabase.",
+        requestsResult.error.message
+      )
+      return
+    }
+
+    const entriesResult = entriesPayload.length > 0
+      ? await supabase.from("overtime_entries").upsert(entriesPayload, { onConflict: "id" })
+      : { error: null }
+    if (entriesResult.error) {
+      window.alert(`Failed to push overtime entries: ${entriesResult.error.message}`)
+      appendAuditEvent(
+        "Settings",
+        "Push Local Overtime Failed",
+        "Failed to copy overtime entries into Supabase.",
+        entriesResult.error.message
+      )
+      return
+    }
+
+    window.alert("Local overtime queue and shifts were pushed to Supabase successfully.")
+    appendAuditEvent(
+      "Settings",
+      "Pushed Local Overtime To Supabase",
+      "Copied local overtime queue and shift data into Supabase."
+    )
+  }
+
   function applyOvertimeNotificationsSyncData(data: Awaited<ReturnType<typeof loadSupabaseOvertimeNotificationsState>>["data"]) {
     if (!data) return
 
@@ -2066,6 +2151,7 @@ export default function App() {
             onRepairOvertimeFromPatrol={repairOvertimeFromPatrol}
             onRebuildQueuesBySeniority={rebuildQueuesBySeniority}
             onClearPatrolOverrideCache={clearPatrolOverrideCache}
+            onPushLocalOvertimeToSupabase={() => void pushLocalOvertimeToSupabase()}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Settings", action, summary, details)}
             moduleOptions={moduleOrder.map((module) => ({
               key: module.key,

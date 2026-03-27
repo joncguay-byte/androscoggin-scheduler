@@ -366,11 +366,9 @@ export function PatrolPage({
   const [timeOffDateSelection, setTimeOffDateSelection] = useState<TimeOffDateSelection | null>(null)
   const [timeOffReasonSelection, setTimeOffReasonSelection] = useState<TimeOffReasonSelection | null>(null)
   const [multiDatePickerSelection, setMultiDatePickerSelection] = useState<MultiDatePickerSelection | null>(null)
-  const [scrollTargetIso, setScrollTargetIso] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const scheduleRefreshTimeoutRef = useRef<number | null>(null)
   const weekSectionRefs = useRef<Array<HTMLDivElement | null>>([])
-  const hasAutoScrolledToCurrentWeekRef = useRef(false)
 
   const dates = useMemo(() => buildVisibleDates(baseDate, view), [baseDate, view])
   const effectiveScheduleRows = useMemo(
@@ -1131,12 +1129,11 @@ export function PatrolPage({
       `${validDates.join(", ")} | ${timeOffReasonSelection.shiftType} ${positionLabelFromCode(timeOffReasonSelection.positionCode)}`
     )
 
-    const firstSavedDate = validDates[0]
-    if (firstSavedDate) {
-      const firstSavedDateObject = new Date(`${firstSavedDate}T12:00:00`)
-      setBaseDate(new Date(firstSavedDateObject.getFullYear(), firstSavedDateObject.getMonth(), 1))
-      setScrollTargetIso(firstSavedDate)
-    }
+      const firstSavedDate = validDates[0]
+      if (firstSavedDate) {
+        const firstSavedDateObject = new Date(`${firstSavedDate}T12:00:00`)
+        setBaseDate(new Date(firstSavedDateObject.getFullYear(), firstSavedDateObject.getMonth(), 1))
+      }
 
     setTimeOffReasonSelection(null)
     setTimeOffDateSelection(null)
@@ -1494,34 +1491,6 @@ const next = ranking[0]
   const weekdayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
   const labelColumnWidth = view === "day" ? "84px" : "90px"
   const stickyWeekHeaderTop = multiDatePickerSelection ? "108px" : "8px"
-
-  useEffect(() => {
-    if (view !== "month") return
-
-    const targetIso =
-      scrollTargetIso || (!hasAutoScrolledToCurrentWeekRef.current ? toIsoDate(today) : null)
-
-    if (!targetIso) return
-
-    const currentWeekIndex = weekRows.findIndex((week) =>
-      week.some((date) => toIsoDate(date) === targetIso)
-    )
-
-    if (currentWeekIndex < 0) return
-
-    const frame = window.requestAnimationFrame(() => {
-      weekSectionRefs.current[currentWeekIndex]?.scrollIntoView({
-        block: "start",
-        behavior: "smooth"
-      })
-      hasAutoScrolledToCurrentWeekRef.current = true
-      if (scrollTargetIso) {
-        setScrollTargetIso(null)
-      }
-    })
-
-    return () => window.cancelAnimationFrame(frame)
-  }, [baseDate, view, weekRows, today, scrollTargetIso])
 
   return (
     <>

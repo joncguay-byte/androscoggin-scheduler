@@ -56,6 +56,7 @@ type SettingsPageProps = {
   onRepairOvertimeFromPatrol?: () => void
   onRebuildQueuesBySeniority?: () => void
   onClearPatrolOverrideCache?: () => void
+  onPushLocalOvertimeToSupabase?: () => void
   onAuditEvent?: (action: string, summary: string, details?: string) => void
 }
 
@@ -112,6 +113,7 @@ export function SettingsPage({
   onRepairOvertimeFromPatrol,
   onRebuildQueuesBySeniority,
   onClearPatrolOverrideCache,
+  onPushLocalOvertimeToSupabase,
   onAuditEvent
 }: SettingsPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
@@ -590,7 +592,7 @@ export function SettingsPage({
           )}
 
           {canEdit && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" }}>
               <button
                 onClick={() => onRepairOvertimeFromPatrol?.()}
                 style={{
@@ -645,6 +647,25 @@ export function SettingsPage({
                 </div>
                 <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.35 }}>
                   Clears locally saved Patrol override rows when a replacement, off-status, or yellow highlight gets stuck on screen.
+                </div>
+              </button>
+
+              <button
+                onClick={() => onPushLocalOvertimeToSupabase?.()}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "12px",
+                  background: "#ffffff",
+                  padding: "14px",
+                  textAlign: "left",
+                  cursor: "pointer"
+                }}
+              >
+                <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
+                  Push Local Overtime To Supabase
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.35 }}>
+                  Copies the current local overtime queue, queue shifts, and notification data into Supabase so the live site matches localhost.
                 </div>
               </button>
             </div>
