@@ -212,7 +212,7 @@ export function OvertimePage({
     () =>
       overtimeShiftQueue.map((request) => {
         const responders = request.responses
-          .filter((response) => response.status === "Interested" || response.status === "Accepted")
+          .filter((response) => response.status === "Interested")
           .map((response) => ({
             response,
             employee: employeeMap.get(response.employeeId) || null
@@ -1490,7 +1490,7 @@ export function OvertimePage({
               {overtimeShiftQueue.map((request) => (
                 (() => {
                   const interestedResponders = request.responses
-                    .filter((response) => response.status === "Interested" || response.status === "Accepted")
+                    .filter((response) => response.status === "Interested")
                     .map((response) => ({
                       response,
                       employee: employeeMap.get(response.employeeId) || null
@@ -1567,6 +1567,9 @@ export function OvertimePage({
                   </div>
                   <div style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a" }}>
                     {request.offHours || "Hours pending"}
+                  </div>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: interestedResponders.length > 0 ? "#1d4ed8" : "#64748b" }}>
+                    Interested Responses: {interestedResponders.length}
                   </div>
                   {request.assignedEmployeeId && request.autoAssignReason && (
                     <div
@@ -1827,8 +1830,8 @@ export function OvertimePage({
                             gap: "8px",
                             fontSize: "11px",
                             borderRadius: "6px",
-                            background: response.status === "Accepted" ? "#ecfdf5" : "#eff6ff",
-                            color: response.status === "Accepted" ? "#166534" : "#1d4ed8",
+                            background: "#eff6ff",
+                            color: "#1d4ed8",
                             padding: "4px 6px"
                           }}
                         >
