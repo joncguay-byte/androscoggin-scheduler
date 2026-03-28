@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { buildDeliveryLink, buildEmailHtmlPreview, buildNotificationDeliveries, canSendDeliveryLive, formatNotificationShiftSummary, sendNotificationDelivery } from "../../lib/notifications"
+import { supabase } from "../../lib/supabase"
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, SelectItem } from "../../components/ui/simple-ui"
 import type {
   AppRole,
@@ -87,6 +88,7 @@ export function NotificationsPage({
   onAuditEvent
 }: NotificationsPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
+  const providerConfigSaveTimeoutRef = useRef<number | null>(null)
   const activeEmployees = useMemo(
     () => employees.filter((employee) => employee.status === "Active").sort((a, b) => a.lastName.localeCompare(b.lastName)),
     [employees]
@@ -228,8 +230,40 @@ export function NotificationsPage({
   }
 
   function updateProviderConfig(patch: Partial<NotificationProviderConfig>) {
-    setNotificationProviderConfig((current) => ({ ...current, ...patch }))
+    setNotificationProviderConfig((current) => {
+      const next = { ...current, ...patch }
+
+      if (providerConfigSaveTimeoutRef.current) {
+        window.clearTimeout(providerConfigSaveTimeoutRef.current)
+      }
+
+      providerConfigSaveTimeoutRef.current = window.setTimeout(() => {
+        void supabase
+          .from("notification_provider_config")
+          .upsert({
+            config_key: "default",
+            mode: next.mode,
+            email_webhook_url: next.emailWebhookUrl,
+            text_webhook_url: next.textWebhookUrl,
+            auth_token: next.authToken,
+            sender_name: next.senderName,
+            sender_email: next.senderEmail,
+            sender_phone: next.senderPhone,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "config_key" })
+      }, 150)
+
+      return next
+    })
   }
+
+  useEffect(() => {
+    return () => {
+      if (providerConfigSaveTimeoutRef.current) {
+        window.clearTimeout(providerConfigSaveTimeoutRef.current)
+      }
+    }
+  }, [])
 
   function createCampaign(
     type: NotificationCampaign["type"],
