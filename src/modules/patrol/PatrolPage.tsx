@@ -1014,47 +1014,12 @@ export function PatrolPage({
       return next
     })
 
-    try {
-      await Promise.all([
-        supabase
-          .from("patrol_overrides")
-          .upsert(
-            rowsToApply.map((row) => toPatrolOverridePayload(row)),
-            { onConflict: "assignment_date,shift_type,position_code" }
-          ),
-        supabase
-          .from("overtime_shift_requests")
-          .upsert(
-            nextRequests.map((request) => ({
-              id: request.id,
-              source: request.source,
-              batch_id: null,
-              batch_name: null,
-              assignment_date: request.assignmentDate,
-              shift_type: request.shiftType,
-              position_code: request.positionCode,
-              description: request.description,
-              off_employee_id: request.offEmployeeId || null,
-              off_employee_last_name: request.offEmployeeLastName || null,
-              off_hours: request.offHours || null,
-              selection_active: true,
-              workflow_status: "Open",
-              status: "Open",
-              assigned_employee_id: null,
-              created_at: request.createdAt,
-              responses: request.responses
-            })),
-            { onConflict: "id" }
-          )
-      ])
-    } catch (error) {
-      console.error("Failed to batch save patrol time off selection:", error)
-      setSaving(false)
-      alert("Time off saved locally, but the cloud update was slower than expected. Refresh in a moment if needed.")
-      return
-    }
-
     invalidatePatrolScheduleCache()
+    setSaving(false)
+    setTimeOffReasonSelection(null)
+    setTimeOffDateSelection(null)
+    setTeamEmployeeSelection(null)
+    setTeamEditor(null)
 
     onAuditEvent?.(
       "Patrol Team Time Off Saved",
@@ -1062,17 +1027,49 @@ export function PatrolPage({
       `${validDates.join(", ")} | ${timeOffReasonSelection.shiftType} ${positionLabelFromCode(timeOffReasonSelection.positionCode)}`
     )
 
-      const firstSavedDate = validDates[0]
-      if (firstSavedDate) {
-        const firstSavedDateObject = new Date(`${firstSavedDate}T12:00:00`)
-        setBaseDate(new Date(firstSavedDateObject.getFullYear(), firstSavedDateObject.getMonth(), 1))
-      }
+    const firstSavedDate = validDates[0]
+    if (firstSavedDate) {
+      const firstSavedDateObject = new Date(`${firstSavedDate}T12:00:00`)
+      setBaseDate(new Date(firstSavedDateObject.getFullYear(), firstSavedDateObject.getMonth(), 1))
+    }
 
-    setSaving(false)
-    setTimeOffReasonSelection(null)
-    setTimeOffDateSelection(null)
-    setTeamEmployeeSelection(null)
-    setTeamEditor(null)
+    void Promise.all([
+      supabase
+        .from("patrol_overrides")
+        .upsert(
+          rowsToApply.map((row) => toPatrolOverridePayload(row)),
+          { onConflict: "assignment_date,shift_type,position_code" }
+        ),
+      supabase
+        .from("overtime_shift_requests")
+        .upsert(
+          nextRequests.map((request) => ({
+            id: request.id,
+            source: request.source,
+            batch_id: null,
+            batch_name: null,
+            assignment_date: request.assignmentDate,
+            shift_type: request.shiftType,
+            position_code: request.positionCode,
+            description: request.description,
+            off_employee_id: request.offEmployeeId || null,
+            off_employee_last_name: request.offEmployeeLastName || null,
+            off_hours: request.offHours || null,
+            selection_active: true,
+            workflow_status: "Open",
+            status: "Open",
+            assigned_employee_id: null,
+            created_at: request.createdAt,
+            responses: request.responses
+          })),
+          { onConflict: "id" }
+        )
+    ]).catch((error) => {
+      console.error("Failed to batch save patrol time off selection:", error)
+      window.setTimeout(() => {
+        alert("Time off saved locally, but the cloud update was delayed. Refresh in a moment if needed.")
+      }, 0)
+    })
   }
 
   async function deleteEditingRow() {
