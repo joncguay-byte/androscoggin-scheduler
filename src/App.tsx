@@ -194,6 +194,7 @@ const DETAIL_QUEUE_EVENTS_STORAGE_KEY = "androscoggin-detail-queue-events"
 const DETAIL_QUEUE_IDS_STORAGE_KEY = "androscoggin-detail-queue-ids"
 const OVERTIME_QUEUE_IDS_STORAGE_KEY = "androscoggin-overtime-queue-ids"
 const OVERTIME_QUEUE_VERSION_STORAGE_KEY = "androscoggin-overtime-queue-version"
+const OVERTIME_NOTIFICATIONS_SAFETY_SNAPSHOT_KEY = "androscoggin-overtime-notifications-safety-snapshot"
 const AUDIT_EVENTS_STORAGE_KEY = "androscoggin-audit-events"
 const SUPABASE_APP_STATE_KEYS = {
   staff: "scheduler_staff_state",
@@ -219,6 +220,34 @@ function readStoredValue<T>(key: string, fallback: T) {
 function shouldResetStoredOvertimeQueue() {
   if (typeof window === "undefined") return false
   return window.localStorage.getItem(OVERTIME_QUEUE_VERSION_STORAGE_KEY) !== CURRENT_OVERTIME_QUEUE_VERSION
+}
+
+function writeOvertimeNotificationsSafetySnapshot(value: unknown) {
+  if (typeof window === "undefined") return
+
+  try {
+    window.localStorage.setItem(
+      OVERTIME_NOTIFICATIONS_SAFETY_SNAPSHOT_KEY,
+      JSON.stringify({
+        savedAt: new Date().toISOString(),
+        data: value
+      })
+    )
+  } catch {
+    // Ignore storage backup failures. Supabase remains the primary source of truth.
+  }
+}
+
+function hasMeaningfulNotificationProviderConfig(config: NotificationProviderConfig | null | undefined) {
+  if (!config) return false
+
+  return (
+    config.emailWebhookUrl.trim().length > 0 ||
+    config.textWebhookUrl.trim().length > 0 ||
+    config.authToken.trim().length > 0 ||
+    config.senderEmail.trim().length > 0 ||
+    config.senderPhone.trim().length > 0
+  )
 }
 
 function getPatrolSummaryRowKey(row: {
@@ -782,7 +811,11 @@ export default function App() {
         : defaultPreferences
     const nextCampaigns = data.notificationCampaigns
     const nextDeliveries = data.notificationDeliveries
-    const nextProviderConfig = data.notificationProviderConfig || notificationProviderConfig
+    const nextProviderConfig = hasMeaningfulNotificationProviderConfig(data.notificationProviderConfig)
+      ? data.notificationProviderConfig!
+      : hasMeaningfulNotificationProviderConfig(notificationProviderConfig)
+        ? notificationProviderConfig
+        : buildDefaultNotificationProviderConfig()
 
     setOvertimeQueueIds(nextQueueIds)
     setOvertimeShiftRequests(nextShiftRequests)
@@ -803,6 +836,15 @@ export default function App() {
       notificationProviderConfig: nextProviderConfig
     })
     lastSupabaseNotificationProviderConfigRef.current = JSON.stringify(nextProviderConfig)
+    writeOvertimeNotificationsSafetySnapshot({
+      overtimeQueueIds: nextQueueIds,
+      overtimeShiftRequests: nextShiftRequests,
+      overtimeEntries: nextEntries,
+      notificationPreferences: nextPreferences,
+      notificationCampaigns: nextCampaigns,
+      notificationDeliveries: nextDeliveries,
+      notificationProviderConfig: nextProviderConfig
+    })
   }
   const coverageEvaluatedPatrolSummaryRows = useMemo(() => {
     const positions: PatrolPositionCode[] = ["SUP1", "SUP2", "DEP1", "DEP2", "POL"]
@@ -1310,9 +1352,11 @@ export default function App() {
 
       if (result.data) {
         applyOvertimeNotificationsSyncData(result.data)
+        hasHydratedOvertimeNotifications.current = true
+        return
       }
 
-      hasHydratedOvertimeNotifications.current = true
+      console.error("Skipping overtime/notification autosave because no Supabase baseline was loaded.", result.error)
     }
 
     void hydrateOvertimeNotifications()
@@ -1406,6 +1450,7 @@ export default function App() {
       if (result.ok) {
         lastSupabaseOvertimeNotificationsRef.current = snapshotJson
         lastSupabaseOvertimeNotificationsActorRef.current = currentSyncActorKey
+        writeOvertimeNotificationsSafetySnapshot(overtimeNotificationSnapshot)
       }
     }, 700)
 

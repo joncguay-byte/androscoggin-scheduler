@@ -54,33 +54,6 @@ function ensureResponses(value: unknown) {
   })
 }
 
-async function deleteMissingRowsByIds(
-  table: string,
-  idColumn: string,
-  currentIds: string[]
-) {
-  const { data, error } = await supabase.from(table).select(idColumn)
-  if (error) {
-    return { ok: false, error: toErrorMessage(error) }
-  }
-
-  const existingIds = ((data || []) as unknown as Array<Record<string, unknown>>)
-    .map((row) => row[idColumn])
-    .filter((value): value is string => typeof value === "string")
-
-  const idsToDelete = existingIds.filter((id) => !currentIds.includes(id))
-  if (idsToDelete.length === 0) {
-    return { ok: true, error: null }
-  }
-
-  const { error: deleteError } = await supabase.from(table).delete().in(idColumn, idsToDelete)
-  if (deleteError) {
-    return { ok: false, error: toErrorMessage(deleteError) }
-  }
-
-  return { ok: true, error: null }
-}
-
 export async function loadSupabaseOvertimeNotificationsState(): Promise<SyncResult<OvertimeNotificationsState>> {
   try {
     const [
@@ -98,7 +71,7 @@ export async function loadSupabaseOvertimeNotificationsState(): Promise<SyncResu
         .order("queue_position", { ascending: true }),
       supabase
         .from("overtime_shift_requests")
-        .select("id,source,batch_id,batch_name,assignment_date,shift_type,position_code,description,off_employee_id,off_employee_last_name,off_hours,selection_active,workflow_status,status,assigned_employee_id,created_at,responses")
+        .select("id,source,batch_id,batch_name,assignment_date,shift_type,position_code,description,off_employee_id,off_employee_last_name,off_hours,off_reason,assigned_hours,selection_active,manually_queued,auto_assign_reason,workflow_status,status,assigned_employee_id,created_at,responses")
         .order("assignment_date", { ascending: true }),
       supabase
         .from("overtime_entries")
@@ -155,7 +128,11 @@ export async function loadSupabaseOvertimeNotificationsState(): Promise<SyncResu
           offEmployeeId: (row.off_employee_id as string | null) || null,
           offEmployeeLastName: (row.off_employee_last_name as string | null) || null,
           offHours: (row.off_hours as string | null) || null,
+          offReason: (row.off_reason as string | null) || null,
+          assignedHours: (row.assigned_hours as string | null) || null,
           selectionActive: Boolean(row.selection_active),
+          manuallyQueued: Boolean(row.manually_queued),
+          autoAssignReason: (row.auto_assign_reason as OvertimeShiftRequest["autoAssignReason"] | null) || null,
           workflowStatus: (row.workflow_status as OvertimeShiftRequest["workflowStatus"] | null) || undefined,
           status: row.status as OvertimeShiftRequest["status"],
           assignedEmployeeId: (row.assigned_employee_id as string | null) || null,
@@ -255,7 +232,11 @@ export async function saveSupabaseOvertimeNotificationsState(
       off_employee_id: request.offEmployeeId || null,
       off_employee_last_name: request.offEmployeeLastName || null,
       off_hours: request.offHours || null,
+      off_reason: request.offReason || null,
+      assigned_hours: request.assignedHours || null,
       selection_active: Boolean(request.selectionActive),
+      manually_queued: Boolean(request.manuallyQueued),
+      auto_assign_reason: request.autoAssignReason || null,
       workflow_status: request.workflowStatus || null,
       status: request.status,
       assigned_employee_id: request.assignedEmployeeId || null,
@@ -313,48 +294,6 @@ export async function saveSupabaseOvertimeNotificationsState(
       error_message: delivery.errorMessage || null
     }))
 
-    const queueDeleteResult = await deleteMissingRowsByIds(
-      "overtime_queue",
-      "employee_id",
-      state.overtimeQueueIds
-    )
-    if (!queueDeleteResult.ok) return queueDeleteResult
-
-    const requestDeleteResult = await deleteMissingRowsByIds(
-      "overtime_shift_requests",
-      "id",
-      state.overtimeShiftRequests.map((request) => request.id)
-    )
-    if (!requestDeleteResult.ok) return requestDeleteResult
-
-    const entryDeleteResult = await deleteMissingRowsByIds(
-      "overtime_entries",
-      "id",
-      state.overtimeEntries.map((entry) => entry.id)
-    )
-    if (!entryDeleteResult.ok) return entryDeleteResult
-
-    const preferenceDeleteResult = await deleteMissingRowsByIds(
-      "notification_preferences",
-      "employee_id",
-      state.notificationPreferences.map((preference) => preference.employeeId)
-    )
-    if (!preferenceDeleteResult.ok) return preferenceDeleteResult
-
-    const campaignDeleteResult = await deleteMissingRowsByIds(
-      "notification_campaigns",
-      "id",
-      state.notificationCampaigns.map((campaign) => campaign.id)
-    )
-    if (!campaignDeleteResult.ok) return campaignDeleteResult
-
-    const deliveryDeleteResult = await deleteMissingRowsByIds(
-      "notification_deliveries",
-      "id",
-      state.notificationDeliveries.map((delivery) => delivery.id)
-    )
-    if (!deliveryDeleteResult.ok) return deliveryDeleteResult
-
     if (queuePayload.length > 0) {
       const { error } = await supabase
         .from("overtime_queue")
@@ -395,26 +334,6 @@ export async function saveSupabaseOvertimeNotificationsState(
         .from("notification_deliveries")
         .upsert(deliveriesPayload, { onConflict: "id" })
       if (error) return { ok: false, error: toErrorMessage(error) }
-    }
-
-    const configPayload = {
-      config_key: "default",
-      mode: state.notificationProviderConfig?.mode || "draft_only",
-      email_webhook_url: state.notificationProviderConfig?.emailWebhookUrl || "",
-      text_webhook_url: state.notificationProviderConfig?.textWebhookUrl || "",
-      auth_token: state.notificationProviderConfig?.authToken || "",
-      sender_name: state.notificationProviderConfig?.senderName || "",
-      sender_email: state.notificationProviderConfig?.senderEmail || "",
-      sender_phone: state.notificationProviderConfig?.senderPhone || "",
-      updated_at: new Date().toISOString()
-    }
-
-    const { error: configError } = await supabase
-      .from("notification_provider_config")
-      .upsert(configPayload, { onConflict: "config_key" })
-
-    if (configError) {
-      return { ok: false, error: toErrorMessage(configError) }
     }
 
     return {
