@@ -61,7 +61,14 @@ export function MobilePage({
   const responseEmployee = activeResponseDelivery
     ? previewEmployees.find((employee) => employee.id === activeResponseDelivery.employeeId) || null
     : null
+  const hasResponseToken = responseToken.trim().length > 0
   const inResponsePortal = !!activeResponseDelivery && !!responseEmployee
+
+  useEffect(() => {
+    if (responseEmployee) {
+      setSelectedEmployeeId(responseEmployee.id)
+    }
+  }, [responseEmployee])
 
   const selectedEmployee = previewEmployees.find((employee) => employee.id === selectedEmployeeId) || null
   const effectiveSelectedEmployee = responseEmployee || selectedEmployee
@@ -184,11 +191,11 @@ export function MobilePage({
     <div style={{ display: "grid", gap: "18px" }}>
       <Card>
         <CardHeader>
-          <CardTitle>Mobile Preview</CardTitle>
+          <CardTitle>{hasResponseToken ? "Overtime Response" : "Mobile Preview"}</CardTitle>
         </CardHeader>
         <CardContent>
           <div style={{ display: "grid", gridTemplateColumns: inResponsePortal ? "minmax(0, 1fr)" : "260px minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
-            {!inResponsePortal && (
+            {!hasResponseToken && (
               <div style={{ display: "grid", gap: "12px" }}>
                 <div>
                   <div style={{ fontWeight: 700, marginBottom: "4px" }}>Preview Employee</div>
@@ -251,11 +258,11 @@ export function MobilePage({
             >
               <div style={{ padding: "10px 14px", background: "#0f172a", color: "#f8fafc", fontWeight: 700, display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
                 <span>
-                  {inResponsePortal
+                  {hasResponseToken
                     ? "Overtime Response"
                     : (effectiveSelectedEmployee ? `${effectiveSelectedEmployee.firstName} ${effectiveSelectedEmployee.lastName}` : "Mobile Preview")}
                 </span>
-                {inResponsePortal && (
+                {hasResponseToken && (
                   <button
                     onClick={() => {
                       setResponseToken("")
@@ -277,7 +284,7 @@ export function MobilePage({
                 )}
               </div>
 
-              {!inResponsePortal && (
+              {!hasResponseToken && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", borderBottom: "1px solid #dbe3ee" }}>
                   {([
                     ["patrol", "Patrol"],
@@ -305,6 +312,18 @@ export function MobilePage({
               )}
 
               <div style={{ padding: "12px", display: "grid", gap: "10px", maxHeight: "620px", overflowY: "auto" }}>
+                {hasResponseToken && !inResponsePortal && (
+                  <div style={{ border: "1px solid #dbe3ee", borderRadius: "14px", padding: "12px", background: "#ffffff", display: "grid", gap: "8px" }}>
+                    <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Loading Overtime Response</div>
+                    <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.5 }}>
+                      We found a response link and are loading the matching overtime delivery for this employee.
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#64748b", wordBreak: "break-all" }}>
+                      Token: {responseToken}
+                    </div>
+                  </div>
+                )}
+
                 {activeResponseDelivery && responseEmployee && responseSummary && (
                   <div style={{ border: "1px solid #bfdbfe", borderRadius: "14px", padding: "12px", background: "#eff6ff", display: "grid", gap: "8px" }}>
                     <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Overtime Response Portal</div>
