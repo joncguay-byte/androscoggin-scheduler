@@ -27,6 +27,16 @@ function formatDate(value: string) {
   })
 }
 
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    month: "numeric",
+    day: "numeric",
+    year: "2-digit",
+    hour: "numeric",
+    minute: "2-digit"
+  })
+}
+
 export function MobilePage({
   employees,
   patrolRows,
@@ -452,6 +462,10 @@ export function MobilePage({
                     <div style={{ fontSize: "12px", color: "#334155" }}>
                       {responseEmployee.firstName} {responseEmployee.lastName} is responding to {responseShifts.length} shift(s).
                     </div>
+                    <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.5 }}>
+                      Shifts in this notification: sent {formatDateTime(activeResponseDelivery.createdAt)}.
+                      Desktop overtime may have changed since this message was sent.
+                    </div>
                     <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                       {[
                         ["Pending", responseSummary.pending, "#f8fafc", "#475569"],
@@ -522,9 +536,9 @@ export function MobilePage({
                     {activeResponseDelivery && responseEmployee && (
                       <>
                         <div style={{ border: "1px solid #bfdbfe", borderRadius: "12px", padding: "10px", background: "#eff6ff", display: "grid", gap: "8px" }}>
-                          <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Respond To Overtime Availability</div>
+                          <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Respond To Shifts In This Notification</div>
                           <div style={{ fontSize: "12px", color: "#334155" }}>
-                            Choose your status for each shift below. Only your requested shifts are shown here.
+                            Choose your status for each shift below. Only the shifts attached to this email are shown here.
                           </div>
                         </div>
 
