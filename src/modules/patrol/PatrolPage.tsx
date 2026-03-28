@@ -862,186 +862,6 @@ export function PatrolPage({
     setEditingRow(null)
   }
 
-  async function persistScheduleRow(row: EditingRow, options?: { closeEditor?: boolean; auditLabel?: string }) {
-    setSaving(true)
-
-    const basePayload = {
-      assignment_date: row.assignment_date,
-      shift_type: row.shift_type,
-      position_code: row.position_code,
-      employee_id: row.employee_id,
-      vehicle: row.vehicle,
-      shift_hours: row.shift_hours,
-      status: row.status,
-      replacement_employee_id: row.replacement_employee_id,
-      replacement_vehicle: row.replacement_vehicle,
-      replacement_hours: row.replacement_hours
-    }
-    type SaveResult = { error: { message: string } | null }
-
-    async function runSaveAttempt(): Promise<SaveResult> {
-      if (row.id) {
-        return withTimeout(
-          supabase
-            .from("patrol_schedule")
-            .update(basePayload)
-            .eq("id", row.id),
-          8000,
-          "Request timeout"
-        ) as Promise<SaveResult>
-      }
-
-      const existingResult = await withTimeout(
-        supabase
-          .from("patrol_schedule")
-          .select("id")
-          .eq("assignment_date", row.assignment_date)
-          .eq("shift_type", row.shift_type)
-          .eq("position_code", row.position_code)
-          .order("id", { ascending: true }),
-        8000,
-        "Request timeout"
-      ) as { data: Array<{ id: string }> | null; error: { message: string } | null }
-
-      if (existingResult.error) {
-        return { error: existingResult.error }
-      }
-
-      if (existingResult.data && existingResult.data.length > 0) {
-        return withTimeout(
-          supabase
-            .from("patrol_schedule")
-            .update(basePayload)
-            .eq("assignment_date", row.assignment_date)
-            .eq("shift_type", row.shift_type)
-            .eq("position_code", row.position_code),
-          8000,
-          "Request timeout"
-        ) as Promise<SaveResult>
-      }
-
-      return withTimeout(
-        supabase
-          .from("patrol_schedule")
-          .insert(basePayload),
-        8000,
-        "Request timeout"
-      ) as Promise<SaveResult>
-    }
-
-    async function verifySavedRow() {
-      const { data, error } = await withTimeout(
-        supabase
-          .from("patrol_schedule")
-          .select("replacement_employee_id,replacement_vehicle,replacement_hours,employee_id,status")
-          .eq("assignment_date", row.assignment_date)
-          .eq("shift_type", row.shift_type)
-          .eq("position_code", row.position_code)
-          .order("id", { ascending: true }),
-        4000,
-        "Verify timeout"
-      ) as {
-        data: Array<{
-          replacement_employee_id: string | null
-          replacement_vehicle: string | null
-          replacement_hours: string | null
-          employee_id: string | null
-          status: string | null
-        }> | null
-        error: { message: string } | null
-      }
-
-      if (error || !data || data.length === 0) return false
-
-      return data.some((savedRow) => (
-        savedRow.employee_id === row.employee_id &&
-        savedRow.status === row.status &&
-        savedRow.replacement_employee_id === row.replacement_employee_id &&
-        savedRow.replacement_vehicle === row.replacement_vehicle &&
-        savedRow.replacement_hours === row.replacement_hours
-      ))
-    }
-
-    let error = null
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      let result: SaveResult
-
-      try {
-        result = await runSaveAttempt()
-      } catch (requestError) {
-        error = requestError instanceof Error ? requestError : new Error("Request failed")
-        continue
-      }
-
-      if (!result.error) {
-        error = null
-        break
-      }
-
-      error = result.error
-
-      if (!error.message.toLowerCase().includes("timeout")) {
-        break
-      }
-
-      let didPersist = false
-
-      try {
-        didPersist = await verifySavedRow()
-      } catch {
-        didPersist = false
-      }
-      if (didPersist) {
-        error = null
-        break
-      }
-    }
-
-    const localRow: ScheduleRow = {
-      id: row.id,
-      ...basePayload
-    }
-
-    if (error) {
-      const message = error.message.toLowerCase()
-      const isNetworkError =
-        message.includes("timeout") ||
-        message.includes("failed to fetch") ||
-        message.includes("fetch")
-
-      if (isNetworkError) {
-        setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
-        setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
-        setSaving(false)
-        if (options?.closeEditor) {
-          setEditingRow(null)
-        }
-        return { ok: true, localOnly: true }
-      }
-
-      setSaving(false)
-      alert(`Failed to save shift: ${error.message}`)
-      return { ok: false, localOnly: false }
-    }
-
-    invalidatePatrolScheduleCache()
-    try {
-      await supabase
-        .from("patrol_overrides")
-        .upsert(toPatrolOverridePayload(localRow), { onConflict: "assignment_date,shift_type,position_code" })
-    } catch (error) {
-      console.error("Failed to mirror patrol row into patrol_overrides:", error)
-    }
-    setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
-    setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
-    setSaving(false)
-    if (options?.closeEditor) {
-      setEditingRow(null)
-    }
-    return { ok: true, localOnly: false }
-  }
-
   function buildWorkingShiftRows(editor: TeamShiftEditor) {
     const editorDate = new Date(`${editor.assignmentDate}T12:00:00`)
 
@@ -1106,7 +926,10 @@ export function PatrolPage({
       return
     }
 
+    setSaving(true)
+
     const rowsToApply: ScheduleRow[] = []
+    const nextRequests: OvertimeShiftRequest[] = []
 
     for (const isoDate of validDates) {
       const targetDate = new Date(`${isoDate}T12:00:00`)
@@ -1139,117 +962,99 @@ export function PatrolPage({
         replacement_vehicle: null,
         replacement_hours: existingRow.shift_hours || employee.defaultShiftHours
       })
-    }
 
-    if (rowsToApply.length > 0) {
-      setPatrolOverrideRows((current) => mergeScheduleRows(current, rowsToApply))
-      setScheduleRows((current) => mergeScheduleRows(current, rowsToApply))
-    }
-
-    for (const isoDate of validDates) {
-      const targetDate = new Date(`${isoDate}T12:00:00`)
-      const existingRow =
-        effectiveScheduleRows.find((candidate) =>
-          candidate.assignment_date === isoDate &&
-          candidate.shift_type === timeOffReasonSelection.shiftType &&
-          candidate.position_code === timeOffReasonSelection.positionCode &&
-          candidate.employee_id === timeOffReasonSelection.employeeId
-        ) ||
-        buildDefaultAssignmentRow(
-          employees,
-          targetDate,
-          timeOffReasonSelection.positionCode,
-          timeOffReasonSelection.shiftType
-        )
-
-      if (!existingRow) continue
-
-      const saved = await persistScheduleRow(
-        {
-          ...existingRow,
-          assignment_date: isoDate,
-          shift_type: timeOffReasonSelection.shiftType,
-          position_code: timeOffReasonSelection.positionCode,
-          employee_id: timeOffReasonSelection.employeeId,
-          vehicle: employee.defaultVehicle || existingRow.vehicle,
-          shift_hours: employee.defaultShiftHours || existingRow.shift_hours,
-          status: timeOffReasonSelection.reason,
-          replacement_employee_id: null,
-          replacement_vehicle: null,
-          replacement_hours: existingRow.shift_hours || employee.defaultShiftHours
-        },
-        { closeEditor: false }
-      )
-
-      if (!saved.ok) {
-        return
-      }
-
-      setOvertimeShiftRequests((current) => {
-        const requestId = buildPatrolOvertimeRequestId(
+      nextRequests.push({
+        id: buildPatrolOvertimeRequestId(
           isoDate,
           timeOffReasonSelection.shiftType,
           timeOffReasonSelection.positionCode
-        )
-        const requestIndex = current.findIndex((request) => request.id === requestId)
-        const nextRequest: OvertimeShiftRequest = {
-          id: requestId,
-          source: "Patrol Open Shift",
-          assignmentDate: isoDate,
-          shiftType: timeOffReasonSelection.shiftType,
-          positionCode: timeOffReasonSelection.positionCode,
-          description: `${positionLabelFromCode(timeOffReasonSelection.positionCode)} time off`,
-          offEmployeeId: employee.id,
-          offEmployeeLastName: employee.lastName,
-          offHours: employee.defaultShiftHours,
-          offReason: timeOffReasonSelection.reason,
-          selectionActive: true,
-          workflowStatus: "Open",
-          status: "Open",
-          assignedEmployeeId: null,
-          createdAt: current[requestIndex]?.createdAt || new Date().toISOString(),
-          responses: current[requestIndex]?.responses || []
-        }
-
-        if (requestIndex >= 0) {
-          const next = [...current]
-          next[requestIndex] = nextRequest
-          return next
-        }
-
-        return [...current, nextRequest]
+        ),
+        source: "Patrol Open Shift",
+        assignmentDate: isoDate,
+        shiftType: timeOffReasonSelection.shiftType,
+        positionCode: timeOffReasonSelection.positionCode,
+        description: `${positionLabelFromCode(timeOffReasonSelection.positionCode)} time off`,
+        offEmployeeId: employee.id,
+        offEmployeeLastName: employee.lastName,
+        offHours: employee.defaultShiftHours,
+        offReason: timeOffReasonSelection.reason,
+        selectionActive: true,
+        workflowStatus: "Open",
+        status: "Open",
+        assignedEmployeeId: null,
+        createdAt: new Date().toISOString(),
+        responses: []
       })
-
-      try {
-        await supabase
-          .from("overtime_shift_requests")
-          .upsert({
-            id: buildPatrolOvertimeRequestId(
-              isoDate,
-              timeOffReasonSelection.shiftType,
-              timeOffReasonSelection.positionCode
-            ),
-            source: "Patrol Open Shift",
-            batch_id: null,
-            batch_name: null,
-            assignment_date: isoDate,
-            shift_type: timeOffReasonSelection.shiftType,
-            position_code: timeOffReasonSelection.positionCode,
-            description: `${positionLabelFromCode(timeOffReasonSelection.positionCode)} time off`,
-            off_employee_id: employee.id,
-            off_employee_last_name: employee.lastName,
-            off_hours: employee.defaultShiftHours,
-            selection_active: true,
-            workflow_status: "Open",
-            status: "Open",
-            assigned_employee_id: null,
-            created_at: new Date().toISOString(),
-            responses: []
-          }, { onConflict: "id" })
-      } catch (error) {
-        console.error("Failed to persist patrol-generated overtime request:", error)
-      }
     }
+
+    if (rowsToApply.length === 0) {
+      setSaving(false)
+      return
+    }
+
+    setPatrolOverrideRows((current) => mergeScheduleRows(current, rowsToApply))
+    setScheduleRows((current) => mergeScheduleRows(current, rowsToApply))
+    setOvertimeShiftRequests((current) => {
+      const next = [...current]
+
+      for (const request of nextRequests) {
+        const requestIndex = next.findIndex((entry) => entry.id === request.id)
+        if (requestIndex >= 0) {
+          next[requestIndex] = {
+            ...next[requestIndex],
+            ...request,
+            createdAt: next[requestIndex].createdAt || request.createdAt,
+            responses: next[requestIndex].responses || []
+          }
+        } else {
+          next.push(request)
+        }
+      }
+
+      return next
+    })
+
+    try {
+      await Promise.all([
+        supabase
+          .from("patrol_overrides")
+          .upsert(
+            rowsToApply.map((row) => toPatrolOverridePayload(row)),
+            { onConflict: "assignment_date,shift_type,position_code" }
+          ),
+        supabase
+          .from("overtime_shift_requests")
+          .upsert(
+            nextRequests.map((request) => ({
+              id: request.id,
+              source: request.source,
+              batch_id: null,
+              batch_name: null,
+              assignment_date: request.assignmentDate,
+              shift_type: request.shiftType,
+              position_code: request.positionCode,
+              description: request.description,
+              off_employee_id: request.offEmployeeId || null,
+              off_employee_last_name: request.offEmployeeLastName || null,
+              off_hours: request.offHours || null,
+              selection_active: true,
+              workflow_status: "Open",
+              status: "Open",
+              assigned_employee_id: null,
+              created_at: request.createdAt,
+              responses: request.responses
+            })),
+            { onConflict: "id" }
+          )
+      ])
+    } catch (error) {
+      console.error("Failed to batch save patrol time off selection:", error)
+      setSaving(false)
+      alert("Time off saved locally, but the cloud update was slower than expected. Refresh in a moment if needed.")
+      return
+    }
+
+    invalidatePatrolScheduleCache()
 
     onAuditEvent?.(
       "Patrol Team Time Off Saved",
@@ -1263,6 +1068,7 @@ export function PatrolPage({
         setBaseDate(new Date(firstSavedDateObject.getFullYear(), firstSavedDateObject.getMonth(), 1))
       }
 
+    setSaving(false)
     setTimeOffReasonSelection(null)
     setTimeOffDateSelection(null)
     setTeamEmployeeSelection(null)
