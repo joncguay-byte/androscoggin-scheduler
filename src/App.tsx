@@ -637,6 +637,9 @@ export default function App() {
     mode: "checking",
     message: "Checking Supabase sync for local modules..."
   })
+  const [patrolOverridesSyncReady, setPatrolOverridesSyncReady] = useState(false)
+  const [overtimeNotificationsSyncReady, setOvertimeNotificationsSyncReady] = useState(false)
+  const [overtimeNotificationsSyncError, setOvertimeNotificationsSyncError] = useState("")
 
   const [activeModule, setActiveModule] =
     useState<ModuleKey>("patrol")
@@ -1106,6 +1109,7 @@ export default function App() {
       }
 
       hasHydratedPatrolOverrides.current = true
+      setPatrolOverridesSyncReady(true)
     }
 
     void hydratePatrolOverrides()
@@ -1481,10 +1485,13 @@ export default function App() {
       if (result.data) {
         applyOvertimeNotificationsSyncData(result.data)
         hasHydratedOvertimeNotifications.current = true
+        setOvertimeNotificationsSyncReady(true)
+        setOvertimeNotificationsSyncError("")
         return
       }
 
       console.error("Skipping overtime/notification autosave because no Supabase baseline was loaded.", result.error)
+      setOvertimeNotificationsSyncError(result.error || "Live overtime and notification state did not load.")
     }
 
     void hydrateOvertimeNotifications()
@@ -2050,6 +2057,49 @@ export default function App() {
             }}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Mobile", action, summary, details)}
           />
+        </div>
+      </div>
+    )
+  }
+
+  const requiresLiveSyncBarrier =
+    activeModule === "patrol" ||
+    activeModule === "overtime" ||
+    activeModule === "notifications" ||
+    activeModule === "mobile"
+
+  if (requiresLiveSyncBarrier && (!patrolOverridesSyncReady || !overtimeNotificationsSyncReady)) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          minHeight: "100vh",
+          padding: "12px",
+          boxSizing: "border-box",
+          background: activeTheme.pageBackground
+        }}
+      >
+        <div style={{ maxWidth: "760px", margin: "80px auto 0 auto" }}>
+          <Card>
+            <CardHeader>
+              <CardTitle>Syncing Live Scheduler Data</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div style={{ display: "grid", gap: "10px", color: "#334155", fontSize: "14px", lineHeight: 1.5 }}>
+                <div>
+                  The app is waiting for the current live Patrol, Overtime, and Notifications state before opening this module.
+                </div>
+                <div>
+                  This prevents stale or half-loaded startup data from overwriting your live production work.
+                </div>
+                {overtimeNotificationsSyncError && (
+                  <div style={{ color: "#991b1b", fontWeight: 700 }}>
+                    {overtimeNotificationsSyncError}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
