@@ -53,18 +53,6 @@ export async function loadSupabasePatrolOverrides(): Promise<PatrolOverridesLoad
 
 export async function saveSupabasePatrolOverrides(rows: PatrolScheduleRow[]): Promise<PatrolOverridesSaveResult> {
   try {
-    const { error: deleteError } = await supabase
-      .from(PATROL_OVERRIDES_TABLE)
-      .delete()
-      .neq("assignment_date", "")
-
-    if (deleteError) {
-      return {
-        ok: false,
-        error: toErrorMessage(deleteError)
-      }
-    }
-
     if (rows.length === 0) {
       return {
         ok: true,
@@ -87,7 +75,7 @@ export async function saveSupabasePatrolOverrides(rows: PatrolScheduleRow[]): Pr
 
     const { error: insertError } = await supabase
       .from(PATROL_OVERRIDES_TABLE)
-      .insert(payload)
+      .upsert(payload, { onConflict: "assignment_date,shift_type,position_code" })
 
     if (insertError) {
       return {

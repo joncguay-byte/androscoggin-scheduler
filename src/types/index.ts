@@ -176,6 +176,7 @@ export type OvertimeShiftRequest = {
   offEmployeeId?: string | null
   offEmployeeLastName?: string | null
   offHours?: string | null
+  offReason?: string | null
   assignedHours?: string | null
   selectionActive?: boolean
   manuallyQueued?: boolean

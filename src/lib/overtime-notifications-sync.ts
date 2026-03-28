@@ -54,6 +54,33 @@ function ensureResponses(value: unknown) {
   })
 }
 
+async function deleteMissingRowsByIds(
+  table: string,
+  idColumn: string,
+  currentIds: string[]
+) {
+  const { data, error } = await supabase.from(table).select(idColumn)
+  if (error) {
+    return { ok: false, error: toErrorMessage(error) }
+  }
+
+  const existingIds = ((data || []) as unknown as Array<Record<string, unknown>>)
+    .map((row) => row[idColumn])
+    .filter((value): value is string => typeof value === "string")
+
+  const idsToDelete = existingIds.filter((id) => !currentIds.includes(id))
+  if (idsToDelete.length === 0) {
+    return { ok: true, error: null }
+  }
+
+  const { error: deleteError } = await supabase.from(table).delete().in(idColumn, idsToDelete)
+  if (deleteError) {
+    return { ok: false, error: toErrorMessage(deleteError) }
+  }
+
+  return { ok: true, error: null }
+}
+
 export async function loadSupabaseOvertimeNotificationsState(): Promise<SyncResult<OvertimeNotificationsState>> {
   try {
     const [
@@ -285,6 +312,48 @@ export async function saveSupabaseOvertimeNotificationsState(
       sent_at: delivery.sentAt || null,
       error_message: delivery.errorMessage || null
     }))
+
+    const queueDeleteResult = await deleteMissingRowsByIds(
+      "overtime_queue",
+      "employee_id",
+      state.overtimeQueueIds
+    )
+    if (!queueDeleteResult.ok) return queueDeleteResult
+
+    const requestDeleteResult = await deleteMissingRowsByIds(
+      "overtime_shift_requests",
+      "id",
+      state.overtimeShiftRequests.map((request) => request.id)
+    )
+    if (!requestDeleteResult.ok) return requestDeleteResult
+
+    const entryDeleteResult = await deleteMissingRowsByIds(
+      "overtime_entries",
+      "id",
+      state.overtimeEntries.map((entry) => entry.id)
+    )
+    if (!entryDeleteResult.ok) return entryDeleteResult
+
+    const preferenceDeleteResult = await deleteMissingRowsByIds(
+      "notification_preferences",
+      "employee_id",
+      state.notificationPreferences.map((preference) => preference.employeeId)
+    )
+    if (!preferenceDeleteResult.ok) return preferenceDeleteResult
+
+    const campaignDeleteResult = await deleteMissingRowsByIds(
+      "notification_campaigns",
+      "id",
+      state.notificationCampaigns.map((campaign) => campaign.id)
+    )
+    if (!campaignDeleteResult.ok) return campaignDeleteResult
+
+    const deliveryDeleteResult = await deleteMissingRowsByIds(
+      "notification_deliveries",
+      "id",
+      state.notificationDeliveries.map((delivery) => delivery.id)
+    )
+    if (!deliveryDeleteResult.ok) return deliveryDeleteResult
 
     if (queuePayload.length > 0) {
       const { error } = await supabase

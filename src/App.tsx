@@ -717,18 +717,15 @@ export default function App() {
         ? data.overtimeQueueIds
         : (overtimeQueueIds.length > 0 ? overtimeQueueIds : initialQueue)
 
-    const nextShiftRequests =
-      data.overtimeShiftRequests.length > 0
-        ? data.overtimeShiftRequests
-        : overtimeShiftRequests
+    const nextShiftRequests = data.overtimeShiftRequests
 
-    const nextEntries = data.overtimeEntries.length > 0 ? data.overtimeEntries : overtimeEntries
+    const nextEntries = data.overtimeEntries
     const nextPreferences =
       data.notificationPreferences.length > 0
         ? data.notificationPreferences
-        : (notificationPreferences.length > 0 ? notificationPreferences : defaultPreferences)
-    const nextCampaigns = data.notificationCampaigns.length > 0 ? data.notificationCampaigns : notificationCampaigns
-    const nextDeliveries = data.notificationDeliveries.length > 0 ? data.notificationDeliveries : notificationDeliveries
+        : defaultPreferences
+    const nextCampaigns = data.notificationCampaigns
+    const nextDeliveries = data.notificationDeliveries
     const nextProviderConfig = data.notificationProviderConfig || notificationProviderConfig
 
     setOvertimeQueueIds(nextQueueIds)
@@ -2068,6 +2065,7 @@ export default function App() {
             defaultView={settings.defaultPatrolView}
             patrolOverrideRows={localPatrolOverrideRows}
             setPatrolOverrideRows={setLocalPatrolOverrideRows}
+            overtimeShiftRequests={overtimeShiftRequests}
             setOvertimeShiftRequests={setOvertimeShiftRequests}
             colorSettings={activeColorSettings}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Patrol", action, summary, details)}

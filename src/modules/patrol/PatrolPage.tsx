@@ -333,6 +333,7 @@ export function PatrolPage({
   defaultView = "month",
   patrolOverrideRows,
   setPatrolOverrideRows,
+  overtimeShiftRequests,
   setOvertimeShiftRequests,
   colorSettings,
   onAuditEvent
@@ -342,6 +343,7 @@ export function PatrolPage({
   defaultView?: ScheduleView
   patrolOverrideRows: ScheduleRow[]
   setPatrolOverrideRows: React.Dispatch<React.SetStateAction<ScheduleRow[]>>
+  overtimeShiftRequests: OvertimeShiftRequest[]
   setOvertimeShiftRequests: React.Dispatch<React.SetStateAction<OvertimeShiftRequest[]>>
   colorSettings?: {
     accent: string
@@ -374,6 +376,13 @@ export function PatrolPage({
   const effectiveScheduleRows = useMemo(
     () => mergeScheduleRows(scheduleRows, patrolOverrideRows),
     [patrolOverrideRows, scheduleRows]
+  )
+  const patrolTimeOffRequests = useMemo(
+    () =>
+      overtimeShiftRequests.filter(
+        (request) => request.status !== "Closed"
+      ),
+    [overtimeShiftRequests]
   )
   const months = Array.from({ length: 12 }, (_, index) =>
     new Date(today.getFullYear(), index, 1).toLocaleDateString(undefined, { month: "long" })
@@ -515,14 +524,40 @@ export function PatrolPage({
         !existingRow.replacement_employee_id &&
         (existingRow.status === "Open Shift" || !existingRow.status))
 
+    const baseRow = shouldSeedFromEmployees
+      ? buildDefaultAssignmentRow(
+          employees,
+          date,
+          positionCode,
+          shiftType,
+          existingRow
+        )
+      : existingRow
+
+    if (!baseRow) {
+      return null
+    }
+
+    const matchingEmployeeTimeOffRequest = patrolTimeOffRequests.find(
+      (request) =>
+        request.assignmentDate === iso &&
+        request.shiftType === shiftType &&
+        (
+          request.offEmployeeId === baseRow.employee_id ||
+          request.offEmployeeLastName === employees.find((candidate) => candidate.id === baseRow.employee_id)?.lastName ||
+          request.positionCode === positionCode
+        )
+    )
+
+    if (matchingEmployeeTimeOffRequest && !isProblemStatus(baseRow.status)) {
+      return {
+        ...baseRow,
+        status: matchingEmployeeTimeOffRequest.offReason || "Off"
+      }
+    }
+
     if (shouldSeedFromEmployees) {
-      return buildDefaultAssignmentRow(
-        employees,
-        date,
-        positionCode,
-        shiftType,
-        existingRow
-      )
+      return baseRow
     }
 
     return existingRow
@@ -776,8 +811,7 @@ export function PatrolPage({
         message.includes("fetch")
 
       if (isNetworkError) {
-        const nextLocalOverrides = mergeScheduleRows(patrolOverrideRows, [localRow])
-        setPatrolOverrideRows(nextLocalOverrides)
+        setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
         setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
         const employee = employees.find((employeeRow) => employeeRow.id === row.employee_id)
         const replacement = employees.find((employeeRow) => employeeRow.id === row.replacement_employee_id)
@@ -799,8 +833,7 @@ export function PatrolPage({
     }
 
     invalidatePatrolScheduleCache()
-    const persistedWithoutNetworkFailure = mergeScheduleRows(patrolOverrideRows, [localRow])
-    setPatrolOverrideRows(persistedWithoutNetworkFailure)
+    setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
     setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
     const employee = employees.find((employeeRow) => employeeRow.id === row.employee_id)
     const replacement = employees.find((employeeRow) => employeeRow.id === row.replacement_employee_id)
@@ -962,8 +995,7 @@ export function PatrolPage({
         message.includes("fetch")
 
       if (isNetworkError) {
-        const nextLocalOverrides = mergeScheduleRows(patrolOverrideRows, [localRow])
-        setPatrolOverrideRows(nextLocalOverrides)
+        setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
         setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
         setSaving(false)
         if (options?.closeEditor) {
@@ -978,8 +1010,7 @@ export function PatrolPage({
     }
 
     invalidatePatrolScheduleCache()
-    const persistedWithoutNetworkFailure = mergeScheduleRows(patrolOverrideRows, [localRow])
-    setPatrolOverrideRows(persistedWithoutNetworkFailure)
+    setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
     setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
     setSaving(false)
     if (options?.closeEditor) {
@@ -1039,14 +1070,57 @@ export function PatrolPage({
     const employee = employees.find((candidate) => candidate.id === timeOffReasonSelection.employeeId)
     if (!employee) return
 
-    const validDates = timeOffReasonSelection.dates.filter((isoDate) => {
-      const targetDate = new Date(`${isoDate}T12:00:00`)
-      return getActiveTeam(targetDate, timeOffReasonSelection.shiftType) === employee.team
-    })
+    const validDates =
+      timeOffReasonSelection.mode === "multiple"
+        ? [...timeOffReasonSelection.dates].sort((a, b) => a.localeCompare(b))
+        : timeOffReasonSelection.dates.filter((isoDate) => {
+            const targetDate = new Date(`${isoDate}T12:00:00`)
+            return getActiveTeam(targetDate, timeOffReasonSelection.shiftType) === employee.team
+          })
 
     if (validDates.length === 0) {
       alert("No scheduled dates for that employee were included in the range.")
       return
+    }
+
+    const rowsToApply: ScheduleRow[] = []
+
+    for (const isoDate of validDates) {
+      const targetDate = new Date(`${isoDate}T12:00:00`)
+      const existingRow =
+        effectiveScheduleRows.find((candidate) =>
+          candidate.assignment_date === isoDate &&
+          candidate.shift_type === timeOffReasonSelection.shiftType &&
+          candidate.position_code === timeOffReasonSelection.positionCode &&
+          candidate.employee_id === timeOffReasonSelection.employeeId
+        ) ||
+        buildDefaultAssignmentRow(
+          employees,
+          targetDate,
+          timeOffReasonSelection.positionCode,
+          timeOffReasonSelection.shiftType
+        )
+
+      if (!existingRow) continue
+
+      rowsToApply.push({
+        ...existingRow,
+        assignment_date: isoDate,
+        shift_type: timeOffReasonSelection.shiftType,
+        position_code: timeOffReasonSelection.positionCode,
+        employee_id: timeOffReasonSelection.employeeId,
+        vehicle: employee.defaultVehicle || existingRow.vehicle,
+        shift_hours: employee.defaultShiftHours || existingRow.shift_hours,
+        status: timeOffReasonSelection.reason,
+        replacement_employee_id: null,
+        replacement_vehicle: null,
+        replacement_hours: existingRow.shift_hours || employee.defaultShiftHours
+      })
+    }
+
+    if (rowsToApply.length > 0) {
+      setPatrolOverrideRows((current) => mergeScheduleRows(current, rowsToApply))
+      setScheduleRows((current) => mergeScheduleRows(current, rowsToApply))
     }
 
     for (const isoDate of validDates) {
@@ -1105,6 +1179,7 @@ export function PatrolPage({
           offEmployeeId: employee.id,
           offEmployeeLastName: employee.lastName,
           offHours: employee.defaultShiftHours,
+          offReason: timeOffReasonSelection.reason,
           selectionActive: true,
           workflowStatus: "Open",
           status: "Open",
@@ -1206,7 +1281,26 @@ export function PatrolPage({
 
     const employee = employees.find((e) => e.id === row.employee_id)
     const replacement = employees.find((e) => e.id === row.replacement_employee_id)
-    const leave = isProblemStatus(row.status)
+    const matchingPatrolTimeOffRequest = patrolTimeOffRequests.find(
+      (request) =>
+        request.assignmentDate === row.assignment_date &&
+        request.shiftType === row.shift_type &&
+        (
+          request.offEmployeeId === row.employee_id ||
+          request.offEmployeeLastName === employee?.lastName ||
+          request.positionCode === row.position_code
+        ) &&
+        request.status !== "Closed"
+    )
+    const leave = isProblemStatus(row.status) || !!matchingPatrolTimeOffRequest
+    const forcedPatrolTimeOffHighlight = !!matchingPatrolTimeOffRequest
+    const leaveLabel = matchingPatrolTimeOffRequest?.offReason
+      ? formatStatusLabel(matchingPatrolTimeOffRequest.offReason)
+      : isProblemStatus(row.status)
+        ? formatStatusLabel(row.status)
+      : matchingPatrolTimeOffRequest
+        ? "Off"
+        : row.shift_hours || ""
     const isMultiDateCandidate =
       !!multiDatePickerSelection &&
       row.employee_id === multiDatePickerSelection.employeeId &&
@@ -1292,8 +1386,12 @@ export function PatrolPage({
             style={{
               width: "100%",
               fontWeight: 600,
-              background: leave ? colorSettings?.cellHighlight || "#fde68a" : "transparent",
-              border: "1px solid #d1d5db",
+              background: forcedPatrolTimeOffHighlight
+                ? "#fde68a"
+                : leave
+                  ? colorSettings?.cellHighlight || "#fde68a"
+                  : "transparent",
+              border: forcedPatrolTimeOffHighlight ? "1px solid #f59e0b" : "1px solid #d1d5db",
               padding: compact ? "2px 4px" : "2px 6px",
               borderRadius: "4px",
               whiteSpace: "nowrap",
@@ -1308,7 +1406,11 @@ export function PatrolPage({
               gridTemplateColumns: compact ? "26px minmax(0, 1fr) 30px" : "36px minmax(0, 1fr) 56px",
               alignItems: "center",
               columnGap: compact ? "4px" : "8px",
-              outline: isMultiDateCandidate ? "1px solid #94a3b8" : "none"
+              outline: forcedPatrolTimeOffHighlight
+                ? "1px solid #f59e0b"
+                : isMultiDateCandidate
+                  ? "1px solid #94a3b8"
+                  : "none"
             }}
           >
             <span style={{ textAlign: "left", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
@@ -1328,7 +1430,7 @@ export function PatrolPage({
               {employee?.lastName || "OPEN"}
             </span>
             <span style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-              {leave ? formatStatusLabel(row.status) : row.shift_hours || ""}
+              {leaveLabel}
             </span>
           </div>
         </div>
