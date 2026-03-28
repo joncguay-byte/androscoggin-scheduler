@@ -210,6 +210,7 @@ const LEGACY_SUPABASE_APP_STATE_KEY = "scheduler_state"
 const DEFAULT_CID_ROTATION_START_DATE = "2026-03-23"
 const LOCAL_PATROL_OVERRIDES_KEY = "androscoggin-local-patrol-overrides"
 const CURRENT_OVERTIME_QUEUE_VERSION = "6"
+const MOBILE_RESPONSE_TOKEN_STORAGE_KEY = "androscoggin-mobile-response-token"
 
 function readStoredValue<T>(key: string, fallback: T) {
   if (typeof window === "undefined") return fallback
@@ -1678,12 +1679,27 @@ export default function App() {
     function syncFromHash() {
       if (typeof window === "undefined") return
       const hash = window.location.hash || ""
+      const searchParams = new URLSearchParams(window.location.search)
       const prefix = "#mobile-response="
-      if (hash.startsWith(prefix)) {
-        const token = decodeURIComponent(hash.slice(prefix.length))
-        setMobileResponseToken(token)
+      const queryToken = searchParams.get("mobile-response")
+      const pendingToken = window.sessionStorage.getItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY) || ""
+      const resolvedToken = hash.startsWith(prefix)
+        ? decodeURIComponent(hash.slice(prefix.length))
+        : (queryToken || pendingToken)
+
+      if (resolvedToken) {
+        window.sessionStorage.setItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY, resolvedToken)
+        if (!hash.startsWith(prefix)) {
+          window.history.replaceState(
+            null,
+            "",
+            `${window.location.pathname}${window.location.search}#mobile-response=${encodeURIComponent(resolvedToken)}`
+          )
+        }
+        setMobileResponseToken(resolvedToken)
         setActiveModule("mobile")
       } else {
+        window.sessionStorage.removeItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY)
         setMobileResponseToken("")
       }
     }
@@ -2029,8 +2045,11 @@ export default function App() {
             initialResponseToken={mobileResponseToken}
             onClearResponseToken={() => {
               setMobileResponseToken("")
-              if (typeof window !== "undefined" && window.location.hash.startsWith("#mobile-response=")) {
-                window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`)
+              if (typeof window !== "undefined") {
+                window.sessionStorage.removeItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY)
+                if (window.location.hash.startsWith("#mobile-response=")) {
+                  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`)
+                }
               }
             }}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Mobile", action, summary, details)}
