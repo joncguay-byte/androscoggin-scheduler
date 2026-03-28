@@ -44,6 +44,8 @@ type NotificationsPageProps = {
   onAuditEvent: (action: string, summary: string, details?: string) => void
 }
 
+const PROVIDER_CONFIG_DRAFT_STORAGE_KEY = "androscoggin-notification-provider-config-draft"
+
 function formatDate(value: string) {
   return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
     month: "numeric",
@@ -89,6 +91,16 @@ export function NotificationsPage({
 }: NotificationsPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
   const providerConfigSaveTimeoutRef = useRef<number | null>(null)
+  const [providerConfigDraft, setProviderConfigDraft] = useState<NotificationProviderConfig>(() => {
+    if (typeof window === "undefined") return notificationProviderConfig
+
+    try {
+      const raw = window.localStorage.getItem(PROVIDER_CONFIG_DRAFT_STORAGE_KEY)
+      return raw ? JSON.parse(raw) as NotificationProviderConfig : notificationProviderConfig
+    } catch {
+      return notificationProviderConfig
+    }
+  })
   const activeEmployees = useMemo(
     () => employees.filter((employee) => employee.status === "Active").sort((a, b) => a.lastName.localeCompare(b.lastName)),
     [employees]
@@ -124,6 +136,31 @@ export function NotificationsPage({
   const [recipientScope, setRecipientScope] = useState<RecipientScope>("patrol")
   const [selectedCampaignId, setSelectedCampaignId] = useState("")
   const [selectedDeliveryId, setSelectedDeliveryId] = useState("")
+
+  useEffect(() => {
+    const hasDraftValue =
+      providerConfigDraft.emailWebhookUrl.trim().length > 0 ||
+      providerConfigDraft.textWebhookUrl.trim().length > 0 ||
+      providerConfigDraft.authToken.trim().length > 0 ||
+      providerConfigDraft.senderEmail.trim().length > 0 ||
+      providerConfigDraft.senderPhone.trim().length > 0
+
+    const hasPropValue =
+      notificationProviderConfig.emailWebhookUrl.trim().length > 0 ||
+      notificationProviderConfig.textWebhookUrl.trim().length > 0 ||
+      notificationProviderConfig.authToken.trim().length > 0 ||
+      notificationProviderConfig.senderEmail.trim().length > 0 ||
+      notificationProviderConfig.senderPhone.trim().length > 0
+
+    if (hasPropValue) {
+      setProviderConfigDraft(notificationProviderConfig)
+      return
+    }
+
+    if (hasDraftValue) {
+      setNotificationProviderConfig(providerConfigDraft)
+    }
+  }, [notificationProviderConfig, providerConfigDraft, setNotificationProviderConfig])
 
   useEffect(() => {
     if (initialSelectedShiftIds.length === 0) return
@@ -230,8 +267,13 @@ export function NotificationsPage({
   }
 
   function updateProviderConfig(patch: Partial<NotificationProviderConfig>) {
-    setNotificationProviderConfig((current) => {
+    setProviderConfigDraft((current) => {
       const next = { ...current, ...patch }
+      setNotificationProviderConfig(next)
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(PROVIDER_CONFIG_DRAFT_STORAGE_KEY, JSON.stringify(next))
+      }
 
       if (providerConfigSaveTimeoutRef.current) {
         window.clearTimeout(providerConfigSaveTimeoutRef.current)
@@ -415,7 +457,7 @@ export function NotificationsPage({
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: "4px" }}>Mode</div>
-                <Select value={notificationProviderConfig.mode} onValueChange={(value) => updateProviderConfig({ mode: value as NotificationProviderConfig["mode"] })}>
+                <Select value={providerConfigDraft.mode} onValueChange={(value) => updateProviderConfig({ mode: value as NotificationProviderConfig["mode"] })}>
                   <SelectItem value="draft_only">Draft Only</SelectItem>
                   <SelectItem value="provider_ready">Live Webhook Delivery</SelectItem>
                 </Select>
@@ -428,32 +470,32 @@ export function NotificationsPage({
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" }}>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: "4px" }}>Email Webhook URL</div>
-                <Input value={notificationProviderConfig.emailWebhookUrl} onChange={(event) => updateProviderConfig({ emailWebhookUrl: event.target.value })} placeholder="https://your-provider/email" />
+                <Input value={providerConfigDraft.emailWebhookUrl} onChange={(event) => updateProviderConfig({ emailWebhookUrl: event.target.value })} placeholder="https://your-provider/email" />
               </div>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: "4px" }}>Text Webhook URL</div>
-                <Input value={notificationProviderConfig.textWebhookUrl} onChange={(event) => updateProviderConfig({ textWebhookUrl: event.target.value })} placeholder="https://your-provider/text" />
+                <Input value={providerConfigDraft.textWebhookUrl} onChange={(event) => updateProviderConfig({ textWebhookUrl: event.target.value })} placeholder="https://your-provider/text" />
               </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: "4px" }}>Sender Name</div>
-                <Input value={notificationProviderConfig.senderName} onChange={(event) => updateProviderConfig({ senderName: event.target.value })} />
+                <Input value={providerConfigDraft.senderName} onChange={(event) => updateProviderConfig({ senderName: event.target.value })} />
               </div>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: "4px" }}>Sender Email</div>
-                <Input value={notificationProviderConfig.senderEmail} onChange={(event) => updateProviderConfig({ senderEmail: event.target.value })} placeholder="scheduler@agency.org" />
+                <Input value={providerConfigDraft.senderEmail} onChange={(event) => updateProviderConfig({ senderEmail: event.target.value })} placeholder="scheduler@agency.org" />
               </div>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: "4px" }}>Sender Phone</div>
-                <Input value={notificationProviderConfig.senderPhone} onChange={(event) => updateProviderConfig({ senderPhone: event.target.value })} placeholder="207-555-1212" />
+                <Input value={providerConfigDraft.senderPhone} onChange={(event) => updateProviderConfig({ senderPhone: event.target.value })} placeholder="207-555-1212" />
               </div>
             </div>
 
             <div>
               <div style={{ fontWeight: 700, marginBottom: "4px" }}>Auth Token</div>
-              <Input value={notificationProviderConfig.authToken} onChange={(event) => updateProviderConfig({ authToken: event.target.value })} placeholder="Optional bearer token for webhook auth" />
+              <Input value={providerConfigDraft.authToken} onChange={(event) => updateProviderConfig({ authToken: event.target.value })} placeholder="Optional bearer token for webhook auth" />
             </div>
           </div>
         </CardContent>
