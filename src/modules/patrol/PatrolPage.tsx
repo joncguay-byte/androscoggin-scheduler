@@ -230,6 +230,22 @@ function getScheduleRowKey(row: Pick<ScheduleRow, "assignment_date" | "shift_typ
   return `${row.assignment_date}-${row.shift_type}-${row.position_code}`
 }
 
+function toPatrolOverridePayload(row: ScheduleRow) {
+  return {
+    assignment_date: row.assignment_date,
+    shift_type: row.shift_type,
+    position_code: row.position_code,
+    employee_id: row.employee_id,
+    vehicle: row.vehicle,
+    shift_hours: row.shift_hours,
+    status: row.status,
+    replacement_employee_id: row.replacement_employee_id,
+    replacement_vehicle: row.replacement_vehicle,
+    replacement_hours: row.replacement_hours,
+    updated_at: new Date().toISOString()
+  }
+}
+
 function mergeScheduleRows(baseRows: ScheduleRow[], overrideRows: ScheduleRow[]) {
   const merged = new Map<string, ScheduleRow>()
 
@@ -1010,6 +1026,13 @@ export function PatrolPage({
     }
 
     invalidatePatrolScheduleCache()
+    try {
+      await supabase
+        .from("patrol_overrides")
+        .upsert(toPatrolOverridePayload(localRow), { onConflict: "assignment_date,shift_type,position_code" })
+    } catch (error) {
+      console.error("Failed to mirror patrol row into patrol_overrides:", error)
+    }
     setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
     setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
     setSaving(false)
@@ -1196,6 +1219,36 @@ export function PatrolPage({
 
         return [...current, nextRequest]
       })
+
+      try {
+        await supabase
+          .from("overtime_shift_requests")
+          .upsert({
+            id: buildPatrolOvertimeRequestId(
+              isoDate,
+              timeOffReasonSelection.shiftType,
+              timeOffReasonSelection.positionCode
+            ),
+            source: "Patrol Open Shift",
+            batch_id: null,
+            batch_name: null,
+            assignment_date: isoDate,
+            shift_type: timeOffReasonSelection.shiftType,
+            position_code: timeOffReasonSelection.positionCode,
+            description: `${positionLabelFromCode(timeOffReasonSelection.positionCode)} time off`,
+            off_employee_id: employee.id,
+            off_employee_last_name: employee.lastName,
+            off_hours: employee.defaultShiftHours,
+            selection_active: true,
+            workflow_status: "Open",
+            status: "Open",
+            assigned_employee_id: null,
+            created_at: new Date().toISOString(),
+            responses: []
+          }, { onConflict: "id" })
+      } catch (error) {
+        console.error("Failed to persist patrol-generated overtime request:", error)
+      }
     }
 
     onAuditEvent?.(

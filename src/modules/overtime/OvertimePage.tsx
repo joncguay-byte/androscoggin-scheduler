@@ -947,6 +947,22 @@ export function OvertimePage({
               replacement_hours: matchingRow.shift_hours
             })
         }
+
+        await supabase
+          .from("patrol_overrides")
+          .upsert({
+            assignment_date: matchingRow.assignment_date,
+            shift_type: matchingRow.shift_type,
+            position_code: matchingRow.position_code,
+            employee_id: matchingRow.employee_id,
+            vehicle: matchingRow.vehicle,
+            shift_hours: matchingRow.shift_hours,
+            status: "Scheduled",
+            replacement_employee_id: null,
+            replacement_vehicle: null,
+            replacement_hours: matchingRow.shift_hours,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "assignment_date,shift_type,position_code" })
       } catch (error) {
         console.error("Failed to delete patrol time off from patrol schedule:", error)
       }
@@ -955,6 +971,14 @@ export function OvertimePage({
     }
 
     setOvertimeShiftRequests((current) => current.filter((entry) => entry.id !== request.id))
+    try {
+      await supabase
+        .from("overtime_shift_requests")
+        .delete()
+        .eq("id", request.id)
+    } catch (error) {
+      console.error("Failed to delete patrol time off overtime request:", error)
+    }
     onAuditEvent(
       "Patrol Time Off Deleted",
       `Deleted patrol time off for ${request.assignmentDate} ${request.shiftType} ${request.positionCode}.`,
