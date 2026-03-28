@@ -1570,33 +1570,32 @@ export function OvertimePage({
                   </div>
                   <div
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "6px 8px",
+                      display: "grid",
+                      gap: "4px",
+                      padding: "8px 10px",
                       borderRadius: "8px",
                       background: interestedResponders.length > 0 ? "#eff6ff" : "#f8fafc",
-                      border: `1px solid ${interestedResponders.length > 0 ? "#bfdbfe" : "#e2e8f0"}`
+                      border: `1px solid ${interestedResponders.length > 0 ? "#93c5fd" : "#e2e8f0"}`
                     }}
                   >
-                    <span style={{ fontSize: "11px", fontWeight: 800, color: "#334155" }}>
-                      Interested Employees
-                    </span>
-                    <span
-                      style={{
-                        minWidth: "24px",
-                        textAlign: "center",
-                        padding: "2px 8px",
-                        borderRadius: "999px",
-                        background: interestedResponders.length > 0 ? "#2563eb" : "#cbd5e1",
-                        color: "#ffffff",
-                        fontSize: "11px",
-                        fontWeight: 800
-                      }}
-                    >
-                      {interestedResponders.length}
-                    </span>
+                    <div style={{ fontSize: "10px", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#475569" }}>
+                      Total Interested Responses
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "8px" }}>
+                      <span
+                        style={{
+                          fontSize: "24px",
+                          lineHeight: 1,
+                          fontWeight: 900,
+                          color: interestedResponders.length > 0 ? "#1d4ed8" : "#475569"
+                        }}
+                      >
+                        {interestedResponders.length}
+                      </span>
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textAlign: "right" }}>
+                        Click this card to view interested employees
+                      </span>
+                    </div>
                   </div>
                   {request.assignedEmployeeId && request.autoAssignReason && (
                     <div
