@@ -1627,13 +1627,17 @@ export default function App() {
     )
   }
 
-  const visibleModulesForRole = useMemo(
-    () =>
-      settings.visibleModules.filter((moduleKey) =>
-        moduleKey === "command" || moduleKey === "audit" ? canAccessCommandTools : true
-      ),
-    [canAccessCommandTools, settings.visibleModules]
-  )
+  const visibleModulesForRole = useMemo(() => {
+    const baseVisibleModules = settings.visibleModules.filter((moduleKey) =>
+      moduleKey === "command" || moduleKey === "audit" ? canAccessCommandTools : true
+    )
+
+    if (mobileResponseToken && !baseVisibleModules.includes("mobile")) {
+      return [...baseVisibleModules, "mobile"]
+    }
+
+    return baseVisibleModules
+  }, [canAccessCommandTools, mobileResponseToken, settings.visibleModules])
   const staffingAlerts = useMemo(() => {
     const grouped = new Map<string, PatrolScheduleSummaryRow[]>()
 
