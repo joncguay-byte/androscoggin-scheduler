@@ -1845,6 +1845,20 @@ export default function App() {
             setOvertimeShiftRequests={setOvertimeShiftRequests}
             notificationDeliveries={notificationDeliveries}
             initialResponseToken={mobileResponseToken}
+            onOpenFullApp={() => {
+              setMobileResponseToken("")
+              if (typeof window !== "undefined") {
+                window.sessionStorage.removeItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY)
+                const params = new URLSearchParams(window.location.search)
+                params.delete("mobile-response")
+                const nextSearch = params.toString()
+                window.history.replaceState(
+                  null,
+                  "",
+                  `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`
+                )
+              }
+            }}
             onClearResponseToken={() => {
               setMobileResponseToken("")
               if (typeof window !== "undefined") {

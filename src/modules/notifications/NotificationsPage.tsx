@@ -135,6 +135,28 @@ export function NotificationsPage({
     onConsumeDraftSelections?.()
   }, [initialSelectedRecipientIds, onConsumeDraftSelections])
 
+  useEffect(() => {
+    if (selectedDeliveryId && notificationDeliveries.some((delivery) => delivery.id === selectedDeliveryId)) return
+    if (notificationDeliveries[0]) {
+      setSelectedDeliveryId(notificationDeliveries[0].id)
+      return
+    }
+    if (selectedDeliveryId) {
+      setSelectedDeliveryId("")
+    }
+  }, [notificationDeliveries, selectedDeliveryId])
+
+  useEffect(() => {
+    if (selectedCampaignId && notificationCampaigns.some((campaign) => campaign.id === selectedCampaignId)) return
+    if (notificationCampaigns[0]) {
+      setSelectedCampaignId(notificationCampaigns[0].id)
+      return
+    }
+    if (selectedCampaignId) {
+      setSelectedCampaignId("")
+    }
+  }, [notificationCampaigns, selectedCampaignId])
+
   const openShiftRequests = useMemo(
     () => overtimeShiftRequests.filter((request) => request.status === "Open").sort((a, b) => a.assignmentDate.localeCompare(b.assignmentDate) || a.shiftType.localeCompare(b.shiftType)),
     [overtimeShiftRequests]
@@ -239,7 +261,7 @@ export function NotificationsPage({
     setNotificationCampaigns((current) => [campaign, ...current])
     setNotificationDeliveries((current) => [...deliveries, ...current])
     setSelectedCampaignId(campaign.id)
-    if (deliveries[0]) setSelectedDeliveryId(deliveries[0].id)
+    setSelectedDeliveryId(deliveries[0]?.id || "")
     return { campaign, deliveries, skipped }
   }
 
@@ -255,6 +277,7 @@ export function NotificationsPage({
     )
     setSelectedShiftIds([])
     setSelectedRecipientIds([])
+    setRecipientScope("patrol")
     onAuditEvent("Notifications Queued", `${campaign.title} queued for ${deliveries.length} deliveries.`, `Recipients: ${campaign.recipientIds.length} | Shifts: ${campaign.shiftRequestIds.length}${skipped.length ? ` | Skipped: ${skipped.join(", ")}` : ""}`)
   }
 

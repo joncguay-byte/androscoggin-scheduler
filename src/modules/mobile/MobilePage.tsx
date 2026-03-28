@@ -14,6 +14,7 @@ type MobilePageProps = {
   notificationDeliveries: NotificationDelivery[]
   initialResponseToken?: string
   onClearResponseToken?: () => void
+  onOpenFullApp?: () => void
   onAuditEvent?: (action: string, summary: string, details?: string) => void
 }
 
@@ -47,6 +48,7 @@ export function MobilePage({
   notificationDeliveries,
   initialResponseToken = "",
   onClearResponseToken,
+  onOpenFullApp,
   onAuditEvent
 }: MobilePageProps) {
   const previewEmployees = useMemo(
@@ -322,7 +324,7 @@ export function MobilePage({
           <CardTitle>{hasResponseToken ? "Overtime Response" : "Mobile Preview"}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div style={{ display: "grid", gridTemplateColumns: inResponsePortal ? "minmax(0, 1fr)" : "260px minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: hasResponseToken ? "minmax(0, 1fr)" : "260px minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
             {!hasResponseToken && (
               <div style={{ display: "grid", gap: "12px" }}>
                 <div>
@@ -372,9 +374,9 @@ export function MobilePage({
               </div>
             )}
 
-            <div
-              style={{
-                width: "360px",
+              <div
+                style={{
+                  width: "360px",
                 maxWidth: "100%",
                 margin: "0 auto",
                 border: "10px solid #0f172a",
@@ -382,33 +384,50 @@ export function MobilePage({
                 background: "#f8fafc",
                 overflow: "hidden",
                 boxShadow: "0 20px 36px rgba(15, 23, 42, 0.18)"
-              }}
-            >
-              <div style={{ padding: "10px 14px", background: "#0f172a", color: "#f8fafc", fontWeight: 700, display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
-                <span>
+                }}
+              >
+                <div style={{ padding: "10px 14px", background: "#0f172a", color: "#f8fafc", fontWeight: 700, display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+                  <span>
                   {hasResponseToken
                     ? "Overtime Response"
                     : (effectiveSelectedEmployee ? `${effectiveSelectedEmployee.firstName} ${effectiveSelectedEmployee.lastName}` : "Mobile Preview")}
                 </span>
-                {hasResponseToken && (
-                  <button
-                    onClick={() => {
-                      setResponseToken("")
-                      onClearResponseToken?.()
-                    }}
-                    style={{
-                      border: "1px solid rgba(255,255,255,0.35)",
-                      background: "transparent",
-                      color: "#f8fafc",
-                      borderRadius: "999px",
-                      padding: "4px 10px",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      cursor: "pointer"
-                    }}
-                  >
-                    Exit
-                  </button>
+                  {hasResponseToken && (
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <button
+                        onClick={() => onOpenFullApp?.()}
+                        style={{
+                          border: "1px solid rgba(255,255,255,0.35)",
+                          background: "rgba(255,255,255,0.08)",
+                          color: "#f8fafc",
+                          borderRadius: "999px",
+                          padding: "4px 10px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          cursor: "pointer"
+                        }}
+                      >
+                        Open Full App
+                      </button>
+                      <button
+                        onClick={() => {
+                          setResponseToken("")
+                          onClearResponseToken?.()
+                        }}
+                        style={{
+                          border: "1px solid rgba(255,255,255,0.35)",
+                          background: "transparent",
+                          color: "#f8fafc",
+                          borderRadius: "999px",
+                          padding: "4px 10px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          cursor: "pointer"
+                        }}
+                      >
+                        Exit
+                      </button>
+                    </div>
                 )}
               </div>
 
@@ -487,6 +506,12 @@ export function MobilePage({
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {hasResponseToken && inResponsePortal && (
+                  <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.5 }}>
+                    Choose your interest below. This view is only for the shifts in this notification.
                   </div>
                 )}
 
