@@ -247,6 +247,95 @@ function getPatrolSummaryRowKey(row: {
   return `${row.assignment_date}-${row.shift_type}-${row.position_code}`
 }
 
+function isActivePatrolTimeOffStatus(status: string | null | undefined) {
+  return Boolean(status) && status !== "Scheduled" && status !== "Open Shift"
+}
+
+function buildPatrolGeneratedRequestId(
+  assignmentDate: string,
+  shiftType: ShiftType,
+  positionCode: PatrolPositionCode
+) {
+  return `patrol-open-${assignmentDate}-${shiftType}-${positionCode}`
+}
+
+function reconcilePatrolGeneratedOvertimeRequests(
+  currentRequests: OvertimeShiftRequest[],
+  overrideRows: Array<{
+    assignment_date: string
+    shift_type: ShiftType
+    position_code: PatrolPositionCode
+    employee_id: string | null
+    shift_hours: string | null
+    status: string | null
+    replacement_employee_id: string | null
+  }>,
+  employees: Employee[]
+) {
+  const employeeById = new Map(employees.map((employee) => [employee.id, employee]))
+  const activeOverrideMap = new Map(
+    overrideRows
+      .filter((row) => isActivePatrolTimeOffStatus(row.status))
+      .map((row) => [getPatrolSummaryRowKey(row), row])
+  )
+
+  const preservedNonPatrol = currentRequests.filter((request) => request.source !== "Patrol Open Shift")
+  const existingPatrolRequests = new Map(
+    currentRequests
+      .filter((request) => request.source === "Patrol Open Shift")
+      .map((request) => [`${request.assignmentDate}-${request.shiftType}-${request.positionCode}`, request])
+  )
+
+  const reconciledPatrolRequests: OvertimeShiftRequest[] = Array.from(activeOverrideMap.entries()).map(([key, row]) => {
+    const existing = existingPatrolRequests.get(key)
+    const offEmployee = row.employee_id ? employeeById.get(row.employee_id) || null : null
+    const assignedEmployeeId = row.replacement_employee_id || existing?.assignedEmployeeId || null
+    const assignedStatus = assignedEmployeeId ? "Assigned" : "Open"
+    const workflowStatus: OvertimeShiftRequest["workflowStatus"] =
+      existing?.workflowStatus === "Force" || existing?.workflowStatus === "Close"
+        ? existing.workflowStatus
+        : assignedEmployeeId
+          ? "Fill"
+          : "Open"
+    const requestStatus: OvertimeShiftRequest["status"] =
+      existing?.workflowStatus === "Close"
+        ? "Closed"
+        : assignedStatus
+
+    return {
+      id: existing?.id || buildPatrolGeneratedRequestId(row.assignment_date, row.shift_type, row.position_code),
+      source: "Patrol Open Shift" as const,
+      batchId: existing?.batchId || null,
+      batchName: existing?.batchName || null,
+      assignmentDate: row.assignment_date,
+      shiftType: row.shift_type,
+      positionCode: row.position_code,
+      description: existing?.description || `${row.position_code} time off`,
+      offEmployeeId: row.employee_id || existing?.offEmployeeId || null,
+      offEmployeeLastName: offEmployee?.lastName || existing?.offEmployeeLastName || null,
+      offHours: row.shift_hours || existing?.offHours || null,
+      offReason: row.status || existing?.offReason || null,
+      assignedHours: existing?.assignedHours || null,
+      selectionActive: existing?.selectionActive ?? true,
+      manuallyQueued: existing?.manuallyQueued ?? false,
+      autoAssignReason: existing?.autoAssignReason ?? null,
+      workflowStatus,
+      status: requestStatus,
+      assignedEmployeeId,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      responses: existing?.responses || []
+    }
+  })
+
+  return [...preservedNonPatrol, ...reconciledPatrolRequests].sort(
+    (a, b) =>
+      a.assignmentDate.localeCompare(b.assignmentDate) ||
+      a.shiftType.localeCompare(b.shiftType) ||
+      a.positionCode.localeCompare(b.positionCode) ||
+      a.id.localeCompare(b.id)
+  )
+}
+
 function mergePatrolSummaryRows<T extends {
   assignment_date: string
   shift_type: "Days" | "Nights"
@@ -1561,62 +1650,11 @@ export default function App() {
   }
 
   function repairOvertimeFromPatrol() {
-    const overrideRows = localPatrolOverrideRows
-    const overrideMap = new Map(
-      overrideRows.map((row) => [getPatrolSummaryRowKey(row), row])
-    )
-
     setOvertimeShiftRequests((current) =>
-      current
-        .filter((request) => {
-          if (request.source !== "Patrol Open Shift") return true
-
-          const matchingOverride = overrideMap.get(
-            `${request.assignmentDate}-${request.shiftType}-${request.positionCode}`
-          )
-
-          if (!matchingOverride) return false
-          if (!request.selectionActive) return false
-          if (!matchingOverride.status || matchingOverride.status === "Scheduled") return false
-          if (request.offEmployeeId && matchingOverride.employee_id !== request.offEmployeeId) return false
-
-          return true
-        })
-        .map((request) => {
-          if (request.source !== "Patrol Open Shift") return request
-
-          const matchingOverride =
-            overrideMap.get(`${request.assignmentDate}-${request.shiftType}-${request.positionCode}`) || null
-
-          if (!matchingOverride) return request
-
-          const offEmployee = matchingOverride.employee_id
-            ? employees.find((employee) => employee.id === matchingOverride.employee_id) || null
-            : null
-
-          return {
-            ...request,
-            offEmployeeId: matchingOverride.employee_id ?? request.offEmployeeId ?? null,
-            offEmployeeLastName: offEmployee?.lastName || request.offEmployeeLastName || null,
-            offHours: matchingOverride.shift_hours || request.offHours || null,
-            assignedEmployeeId: matchingOverride.replacement_employee_id || null,
-            workflowStatus:
-              request.workflowStatus === "Force" || request.workflowStatus === "Close"
-                ? request.workflowStatus
-                : matchingOverride.replacement_employee_id
-                  ? "Fill"
-                  : "Open",
-            status:
-              request.workflowStatus === "Close"
-                ? "Closed"
-                : matchingOverride.replacement_employee_id
-                  ? "Assigned"
-                  : "Open"
-          }
-        })
+      reconcilePatrolGeneratedOvertimeRequests(current, localPatrolOverrideRows, employees)
     )
 
-    setLocalPatrolOverrideRows(overrideRows)
+    setLocalPatrolOverrideRows(localPatrolOverrideRows)
     invalidatePatrolScheduleCache()
     appendAuditEvent(
       "Settings",
@@ -1624,6 +1662,15 @@ export default function App() {
       "Reconciled Patrol-generated overtime shifts against the current Patrol override rows."
     )
   }
+
+  useEffect(() => {
+    if (!hasHydratedPatrolOverrides.current) return
+
+    setOvertimeShiftRequests((current) => {
+      const reconciled = reconcilePatrolGeneratedOvertimeRequests(current, localPatrolOverrideRows, employees)
+      return JSON.stringify(reconciled) === JSON.stringify(current) ? current : reconciled
+    })
+  }, [employees, localPatrolOverrideRows])
 
   const visibleModulesForRole = useMemo(() => {
     const baseVisibleModules = settings.visibleModules.filter((moduleKey) =>
