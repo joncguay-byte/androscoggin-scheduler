@@ -238,6 +238,19 @@ function writeOvertimeNotificationsSafetySnapshot(value: unknown) {
   }
 }
 
+function readOvertimeNotificationsSafetySnapshot() {
+  if (typeof window === "undefined") return null
+
+  try {
+    const raw = window.localStorage.getItem(OVERTIME_NOTIFICATIONS_SAFETY_SNAPSHOT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { savedAt?: string; data?: unknown }
+    return parsed?.data ?? null
+  } catch {
+    return null
+  }
+}
+
 function hasMeaningfulNotificationProviderConfig(config: NotificationProviderConfig | null | undefined) {
   if (!config) return false
 
@@ -788,6 +801,62 @@ export default function App() {
       "Settings",
       "Pushed Local Overtime To Supabase",
       "Copied local overtime queue and shift data into Supabase."
+    )
+  }
+
+  function restoreOvertimeSafetySnapshot() {
+    const snapshot = readOvertimeNotificationsSafetySnapshot() as PersistedSchedulerState | null
+    if (!snapshot) {
+      window.alert("No overtime safety snapshot is available on this device yet.")
+      return
+    }
+
+    setOvertimeQueueIds(Array.isArray(snapshot.overtimeQueueIds) ? snapshot.overtimeQueueIds : [])
+    setOvertimeShiftRequests(Array.isArray(snapshot.overtimeShiftRequests) ? snapshot.overtimeShiftRequests : [])
+    setOvertimeEntries(Array.isArray(snapshot.overtimeEntries) ? snapshot.overtimeEntries : [])
+    setNotificationPreferences(Array.isArray(snapshot.notificationPreferences) ? snapshot.notificationPreferences : [])
+    setNotificationCampaigns(Array.isArray(snapshot.notificationCampaigns) ? snapshot.notificationCampaigns : [])
+    setNotificationDeliveries(Array.isArray(snapshot.notificationDeliveries) ? snapshot.notificationDeliveries : [])
+    if (snapshot.notificationProviderConfig) {
+      setNotificationProviderConfig(snapshot.notificationProviderConfig)
+    }
+
+    window.alert("Restored overtime and notification data from the local safety snapshot.")
+    appendAuditEvent(
+      "Settings",
+      "Restored Overtime Safety Snapshot",
+      "Recovered overtime, notifications, and provider config from the local safety snapshot."
+    )
+  }
+
+  function downloadOvertimeBackup() {
+    if (typeof window === "undefined") return
+
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      overtimeQueueIds,
+      overtimeShiftRequests,
+      overtimeEntries,
+      notificationPreferences,
+      notificationCampaigns,
+      notificationDeliveries,
+      notificationProviderConfig
+    }
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
+    const url = window.URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = `androscoggin-overtime-backup-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.URL.revokeObjectURL(url)
+
+    appendAuditEvent(
+      "Settings",
+      "Downloaded Overtime Backup",
+      "Downloaded a manual backup of overtime, notifications, and provider config."
     )
   }
 
@@ -2284,6 +2353,8 @@ export default function App() {
             onRebuildQueuesBySeniority={rebuildQueuesBySeniority}
             onClearPatrolOverrideCache={clearPatrolOverrideCache}
             onPushLocalOvertimeToSupabase={() => void pushLocalOvertimeToSupabase()}
+            onRestoreOvertimeSafetySnapshot={restoreOvertimeSafetySnapshot}
+            onDownloadOvertimeBackup={downloadOvertimeBackup}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Settings", action, summary, details)}
             moduleOptions={moduleOrder.map((module) => ({
               key: module.key,

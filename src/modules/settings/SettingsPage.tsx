@@ -57,6 +57,8 @@ type SettingsPageProps = {
   onRebuildQueuesBySeniority?: () => void
   onClearPatrolOverrideCache?: () => void
   onPushLocalOvertimeToSupabase?: () => void
+  onRestoreOvertimeSafetySnapshot?: () => void
+  onDownloadOvertimeBackup?: () => void
   onAuditEvent?: (action: string, summary: string, details?: string) => void
 }
 
@@ -114,6 +116,8 @@ export function SettingsPage({
   onRebuildQueuesBySeniority,
   onClearPatrolOverrideCache,
   onPushLocalOvertimeToSupabase,
+  onRestoreOvertimeSafetySnapshot,
+  onDownloadOvertimeBackup,
   onAuditEvent
 }: SettingsPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
@@ -592,7 +596,7 @@ export function SettingsPage({
           )}
 
           {canEdit && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: "12px" }}>
               <button
                 onClick={() => onRepairOvertimeFromPatrol?.()}
                 style={{
@@ -666,6 +670,44 @@ export function SettingsPage({
                 </div>
                 <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.35 }}>
                   Copies the current local overtime queue, queue shifts, and notification data into Supabase so the live site matches localhost.
+                </div>
+              </button>
+
+              <button
+                onClick={() => onRestoreOvertimeSafetySnapshot?.()}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "12px",
+                  background: "#ffffff",
+                  padding: "14px",
+                  textAlign: "left",
+                  cursor: "pointer"
+                }}
+              >
+                <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
+                  Restore Safety Snapshot
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.35 }}>
+                  Restores the most recent local overtime and notifications safety snapshot if a refresh or deploy wiped live data.
+                </div>
+              </button>
+
+              <button
+                onClick={() => onDownloadOvertimeBackup?.()}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "12px",
+                  background: "#ffffff",
+                  padding: "14px",
+                  textAlign: "left",
+                  cursor: "pointer"
+                }}
+              >
+                <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
+                  Download Live Overtime Backup
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.35 }}>
+                  Downloads the current overtime, notifications, and provider config into a backup file before major updates.
                 </div>
               </button>
             </div>
