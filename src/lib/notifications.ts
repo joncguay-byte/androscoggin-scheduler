@@ -116,6 +116,17 @@ function getChannels(channel: NotificationChannel) {
   return [channel]
 }
 
+function buildResponseLink(responseToken: string) {
+  if (typeof window !== "undefined") {
+    const url = new URL(window.location.href)
+    url.searchParams.set("mobile-response", responseToken)
+    url.hash = ""
+    return url.toString()
+  }
+
+  return `?mobile-response=${encodeURIComponent(responseToken)}`
+}
+
 function getDestination(
   preference: NotificationPreference,
   channel: NotificationDeliveryMethod
@@ -174,11 +185,7 @@ export function buildNotificationDeliveries({
 
       const destination = getDestination(preference, channel)
       const responseToken = campaign.type === "overtime_availability" ? crypto.randomUUID() : null
-      const responseLink = responseToken
-        ? (typeof window !== "undefined"
-          ? `${window.location.origin}${window.location.pathname}#mobile-response=${encodeURIComponent(responseToken)}`
-          : `#mobile-response=${encodeURIComponent(responseToken)}`)
-        : ""
+      const responseLink = responseToken ? buildResponseLink(responseToken) : ""
       const body =
         campaign.type === "overtime_assignment"
           ? buildAssignmentBody(campaign, employee, shifts)
@@ -207,10 +214,7 @@ export function buildNotificationDeliveries({
 
 export function buildDeliveryLink(delivery: NotificationDelivery) {
   if (delivery.responseToken) {
-    if (typeof window !== "undefined") {
-      return `${window.location.origin}${window.location.pathname}#mobile-response=${encodeURIComponent(delivery.responseToken)}`
-    }
-    return `#mobile-response=${encodeURIComponent(delivery.responseToken)}`
+    return buildResponseLink(delivery.responseToken)
   }
 
   if (delivery.channel === "email") {
@@ -298,9 +302,7 @@ export async function sendNotificationDelivery(
 
   try {
     const responseLink = delivery.responseToken
-      ? (typeof window !== "undefined"
-        ? `${window.location.origin}${window.location.pathname}#mobile-response=${encodeURIComponent(delivery.responseToken)}`
-        : `#mobile-response=${encodeURIComponent(delivery.responseToken)}`)
+      ? buildResponseLink(delivery.responseToken)
       : ""
 
     const response = await fetch(endpoint, {
