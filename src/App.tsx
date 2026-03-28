@@ -636,12 +636,15 @@ export default function App() {
   const hasHydratedSupabaseState = useRef(false)
   const hasHydratedPatrolOverrides = useRef(false)
   const hasHydratedOvertimeNotifications = useRef(false)
+  const hasHydratedNotificationProviderConfig = useRef(false)
   const lastSupabaseSnapshotRef = useRef("")
   const lastSupabasePatrolOverridesRef = useRef("")
   const lastSupabaseOvertimeNotificationsRef = useRef("")
+  const lastSupabaseNotificationProviderConfigRef = useRef("")
   const lastSupabaseSyncActorRef = useRef("")
   const lastSupabasePatrolSyncActorRef = useRef("")
   const lastSupabaseOvertimeNotificationsActorRef = useRef("")
+  const lastSupabaseNotificationProviderConfigActorRef = useRef("")
   const patrolSummaryRefreshTimeoutRef = useRef<number | null>(null)
   const forceHistoryRefreshTimeoutRef = useRef<number | null>(null)
   const overtimeNotificationsRefreshTimeoutRef = useRef<number | null>(null)
@@ -824,6 +827,7 @@ export default function App() {
     setNotificationCampaigns(nextCampaigns)
     setNotificationDeliveries(nextDeliveries)
     setNotificationProviderConfig(nextProviderConfig)
+    hasHydratedNotificationProviderConfig.current = true
 
     lastSupabaseOvertimeNotificationsRef.current = JSON.stringify({
       overtimeQueueIds: nextQueueIds,
@@ -834,6 +838,7 @@ export default function App() {
       notificationDeliveries: nextDeliveries,
       notificationProviderConfig: nextProviderConfig
     })
+    lastSupabaseNotificationProviderConfigRef.current = JSON.stringify(nextProviderConfig)
   }
   const coverageEvaluatedPatrolSummaryRows = useMemo(() => {
     const positions: PatrolPositionCode[] = ["SUP1", "SUP2", "DEP1", "DEP2", "POL"]
@@ -1484,6 +1489,37 @@ export default function App() {
 
     return () => window.clearTimeout(timeoutId)
   }, [currentSyncActorKey, overtimeNotificationSnapshot])
+
+  useEffect(() => {
+    if (!hasHydratedNotificationProviderConfig.current) return
+
+    const snapshotJson = JSON.stringify(notificationProviderConfig)
+    const actorChanged = currentSyncActorKey !== lastSupabaseNotificationProviderConfigActorRef.current
+    if (snapshotJson === lastSupabaseNotificationProviderConfigRef.current && !actorChanged) return
+
+    const timeoutId = window.setTimeout(async () => {
+      const { error } = await supabase
+        .from("notification_provider_config")
+        .upsert({
+          config_key: "default",
+          mode: notificationProviderConfig.mode,
+          email_webhook_url: notificationProviderConfig.emailWebhookUrl,
+          text_webhook_url: notificationProviderConfig.textWebhookUrl,
+          auth_token: notificationProviderConfig.authToken,
+          sender_name: notificationProviderConfig.senderName,
+          sender_email: notificationProviderConfig.senderEmail,
+          sender_phone: notificationProviderConfig.senderPhone,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "config_key" })
+
+      if (!error) {
+        lastSupabaseNotificationProviderConfigRef.current = snapshotJson
+        lastSupabaseNotificationProviderConfigActorRef.current = currentSyncActorKey
+      }
+    }, 250)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [currentSyncActorKey, notificationProviderConfig])
 
   useEffect(() => {
     setDetailQueueIds((currentQueue) => {
