@@ -860,6 +860,52 @@ export default function App() {
     )
   }
 
+  function importOvertimeBackup(file: File) {
+    const reader = new FileReader()
+
+    reader.onload = () => {
+      try {
+        const raw = typeof reader.result === "string" ? reader.result : ""
+        const parsed = JSON.parse(raw) as Partial<PersistedSchedulerState>
+
+        setOvertimeQueueIds(Array.isArray(parsed.overtimeQueueIds) ? parsed.overtimeQueueIds : [])
+        setOvertimeShiftRequests(Array.isArray(parsed.overtimeShiftRequests) ? parsed.overtimeShiftRequests : [])
+        setOvertimeEntries(Array.isArray(parsed.overtimeEntries) ? parsed.overtimeEntries : [])
+        setNotificationPreferences(Array.isArray(parsed.notificationPreferences) ? parsed.notificationPreferences : [])
+        setNotificationCampaigns(Array.isArray(parsed.notificationCampaigns) ? parsed.notificationCampaigns : [])
+        setNotificationDeliveries(Array.isArray(parsed.notificationDeliveries) ? parsed.notificationDeliveries : [])
+        if (parsed.notificationProviderConfig) {
+          setNotificationProviderConfig(parsed.notificationProviderConfig)
+        }
+
+        writeOvertimeNotificationsSafetySnapshot({
+          overtimeQueueIds: Array.isArray(parsed.overtimeQueueIds) ? parsed.overtimeQueueIds : [],
+          overtimeShiftRequests: Array.isArray(parsed.overtimeShiftRequests) ? parsed.overtimeShiftRequests : [],
+          overtimeEntries: Array.isArray(parsed.overtimeEntries) ? parsed.overtimeEntries : [],
+          notificationPreferences: Array.isArray(parsed.notificationPreferences) ? parsed.notificationPreferences : [],
+          notificationCampaigns: Array.isArray(parsed.notificationCampaigns) ? parsed.notificationCampaigns : [],
+          notificationDeliveries: Array.isArray(parsed.notificationDeliveries) ? parsed.notificationDeliveries : [],
+          notificationProviderConfig: parsed.notificationProviderConfig || buildDefaultNotificationProviderConfig()
+        })
+
+        window.alert("Imported overtime backup file successfully.")
+        appendAuditEvent(
+          "Settings",
+          "Imported Overtime Backup",
+          `Imported overtime backup from ${file.name}.`
+        )
+      } catch {
+        window.alert("That backup file could not be read.")
+      }
+    }
+
+    reader.onerror = () => {
+      window.alert("That backup file could not be read.")
+    }
+
+    reader.readAsText(file)
+  }
+
   function applyOvertimeNotificationsSyncData(data: Awaited<ReturnType<typeof loadSupabaseOvertimeNotificationsState>>["data"]) {
     if (!data) return
 
@@ -2355,6 +2401,7 @@ export default function App() {
             onPushLocalOvertimeToSupabase={() => void pushLocalOvertimeToSupabase()}
             onRestoreOvertimeSafetySnapshot={restoreOvertimeSafetySnapshot}
             onDownloadOvertimeBackup={downloadOvertimeBackup}
+            onImportOvertimeBackup={importOvertimeBackup}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Settings", action, summary, details)}
             moduleOptions={moduleOrder.map((module) => ({
               key: module.key,

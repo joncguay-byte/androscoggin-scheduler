@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import type { Dispatch, SetStateAction } from "react"
+import { useRef } from "react"
 import {
   Button,
   Card,
@@ -59,6 +60,7 @@ type SettingsPageProps = {
   onPushLocalOvertimeToSupabase?: () => void
   onRestoreOvertimeSafetySnapshot?: () => void
   onDownloadOvertimeBackup?: () => void
+  onImportOvertimeBackup?: (file: File) => void
   onAuditEvent?: (action: string, summary: string, details?: string) => void
 }
 
@@ -118,9 +120,11 @@ export function SettingsPage({
   onPushLocalOvertimeToSupabase,
   onRestoreOvertimeSafetySnapshot,
   onDownloadOvertimeBackup,
+  onImportOvertimeBackup,
   onAuditEvent
 }: SettingsPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
+  const overtimeBackupInputRef = useRef<HTMLInputElement | null>(null)
   const [drafts, setDrafts] = useState<Record<keyof ReferenceSettings, string>>({
     vehicles: "",
     shiftTemplates: "",
@@ -596,7 +600,7 @@ export function SettingsPage({
           )}
 
           {canEdit && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "12px" }}>
               <button
                 onClick={() => onRepairOvertimeFromPatrol?.()}
                 style={{
@@ -710,6 +714,39 @@ export function SettingsPage({
                   Downloads the current overtime, notifications, and provider config into a backup file before major updates.
                 </div>
               </button>
+
+              <button
+                onClick={() => overtimeBackupInputRef.current?.click()}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "12px",
+                  background: "#ffffff",
+                  padding: "14px",
+                  textAlign: "left",
+                  cursor: "pointer"
+                }}
+              >
+                <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
+                  Import Backup File
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.35 }}>
+                  Restores overtime, notifications, and provider config from a previously downloaded backup file.
+                </div>
+              </button>
+
+              <input
+                ref={overtimeBackupInputRef}
+                type="file"
+                accept=".json,application/json"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) {
+                    onImportOvertimeBackup?.(file)
+                  }
+                  event.currentTarget.value = ""
+                }}
+              />
             </div>
           )}
         </CardContent>
