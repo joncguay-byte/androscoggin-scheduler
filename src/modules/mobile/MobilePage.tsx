@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { Button, Card, CardContent, CardHeader, CardTitle, Select, SelectItem } from "../../components/ui/simple-ui"
+import { supabase } from "../../lib/supabase"
 import type { DetailRecord, Employee, ForceHistoryRow, NotificationDelivery, OvertimeAvailabilityStatus, OvertimeShiftRequest, PatrolScheduleRow } from "../../types"
 
 type MobilePageProps = {
@@ -45,6 +46,9 @@ export function MobilePage({
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(previewEmployees[0]?.id || "")
   const [mobileView, setMobileView] = useState<MobileView>("patrol")
   const [responseToken, setResponseToken] = useState(initialResponseToken)
+  const [fetchedResponseDelivery, setFetchedResponseDelivery] = useState<NotificationDelivery | null>(null)
+  const [fetchedResponseShifts, setFetchedResponseShifts] = useState<OvertimeShiftRequest[]>([])
+  const [responseLookupState, setResponseLookupState] = useState<"idle" | "loading" | "loaded" | "missing">("idle")
 
   useEffect(() => {
     if (initialResponseToken) {
@@ -54,8 +58,8 @@ export function MobilePage({
   }, [initialResponseToken])
 
   const activeResponseDelivery = useMemo(
-    () => notificationDeliveries.find((delivery) => delivery.responseToken === responseToken) || null,
-    [notificationDeliveries, responseToken]
+    () => notificationDeliveries.find((delivery) => delivery.responseToken === responseToken) || fetchedResponseDelivery || null,
+    [fetchedResponseDelivery, notificationDeliveries, responseToken]
   )
 
   const responseEmployee = activeResponseDelivery
@@ -127,10 +131,124 @@ export function MobilePage({
 
   const responseShifts = useMemo(() => {
     if (!activeResponseDelivery) return []
-    return activeResponseDelivery.shiftRequestIds
+    const shiftsFromState = activeResponseDelivery.shiftRequestIds
       .map((shiftId) => overtimeShiftRequests.find((request) => request.id === shiftId) || null)
       .filter((request): request is OvertimeShiftRequest => !!request)
-  }, [activeResponseDelivery, overtimeShiftRequests])
+
+    return shiftsFromState.length > 0 ? shiftsFromState : fetchedResponseShifts
+  }, [activeResponseDelivery, fetchedResponseShifts, overtimeShiftRequests])
+
+  useEffect(() => {
+    if (!responseToken.trim()) {
+      setFetchedResponseDelivery(null)
+      setFetchedResponseShifts([])
+      setResponseLookupState("idle")
+      return
+    }
+
+    if (notificationDeliveries.some((delivery) => delivery.responseToken === responseToken)) {
+      setFetchedResponseDelivery(null)
+      setFetchedResponseShifts([])
+      setResponseLookupState("loaded")
+      return
+    }
+
+    let active = true
+
+    async function loadResponseDelivery() {
+      setResponseLookupState("loading")
+
+      const deliveryResult = await supabase
+        .from("notification_deliveries")
+        .select("*")
+        .eq("response_token", responseToken)
+        .maybeSingle()
+
+      if (!active) return
+
+      const row = deliveryResult.data
+      if (!row) {
+        setFetchedResponseDelivery(null)
+        setFetchedResponseShifts([])
+        setResponseLookupState("missing")
+        return
+      }
+
+      const delivery: NotificationDelivery = {
+        id: String(row.id),
+        campaignId: String(row.campaign_id),
+        employeeId: String(row.employee_id),
+        channel: row.channel as NotificationDelivery["channel"],
+        destination: String(row.destination || ""),
+        shiftRequestIds: Array.isArray(row.shift_request_ids) ? row.shift_request_ids.map((value: unknown) => String(value)) : [],
+        responseToken: (row.response_token as string | null) || null,
+        subject: String(row.subject || ""),
+        body: String(row.body || ""),
+        status: row.status as NotificationDelivery["status"],
+        providerMode: row.provider_mode as NotificationDelivery["providerMode"],
+        createdAt: String(row.created_at),
+        updatedAt: String(row.updated_at),
+        sentAt: (row.sent_at as string | null) || null,
+        errorMessage: (row.error_message as string | null) || null
+      }
+
+      setFetchedResponseDelivery(delivery)
+
+      if (delivery.shiftRequestIds.length === 0) {
+        setFetchedResponseShifts([])
+        setResponseLookupState("loaded")
+        return
+      }
+
+      const shiftsResult = await supabase
+        .from("overtime_shift_requests")
+        .select("*")
+        .in("id", delivery.shiftRequestIds)
+
+      if (!active) return
+
+      const shifts = ((shiftsResult.data || []) as Array<Record<string, unknown>>).map((requestRow) => ({
+        id: String(requestRow.id),
+        source: (requestRow.source as OvertimeShiftRequest["source"]) || "Manual",
+        batchId: (requestRow.batch_id as string | null) || null,
+        batchName: (requestRow.batch_name as string | null) || null,
+        assignmentDate: String(requestRow.assignment_date),
+        shiftType: requestRow.shift_type as OvertimeShiftRequest["shiftType"],
+        positionCode: requestRow.position_code as OvertimeShiftRequest["positionCode"],
+        description: String(requestRow.description || ""),
+        offEmployeeId: (requestRow.off_employee_id as string | null) || null,
+        offEmployeeLastName: (requestRow.off_employee_last_name as string | null) || null,
+        offHours: (requestRow.off_hours as string | null) || null,
+        selectionActive: Boolean(requestRow.selection_active),
+        workflowStatus: (requestRow.workflow_status as OvertimeShiftRequest["workflowStatus"]) || undefined,
+        status: requestRow.status as OvertimeShiftRequest["status"],
+        assignedEmployeeId: (requestRow.assigned_employee_id as string | null) || null,
+        manuallyQueued: false,
+        assignedHours: (requestRow.assigned_hours as string | null) || null,
+        autoAssignReason: null,
+        createdAt: String(requestRow.created_at),
+        responses: Array.isArray(requestRow.responses)
+          ? requestRow.responses.map((entry) => {
+              const record = entry as Record<string, unknown>
+              return {
+                employeeId: String(record.employeeId || record.employee_id || ""),
+                status: String(record.status || "Pending") as OvertimeAvailabilityStatus,
+                updatedAt: String(record.updatedAt || record.updated_at || new Date().toISOString())
+              }
+            }).filter((entry) => entry.employeeId)
+          : []
+      }))
+
+      setFetchedResponseShifts(shifts)
+      setResponseLookupState("loaded")
+    }
+
+    void loadResponseDelivery()
+
+    return () => {
+      active = false
+    }
+  }, [notificationDeliveries, responseToken])
 
   const responseSummary = useMemo(() => {
     if (!responseEmployee) return null
@@ -314,9 +432,13 @@ export function MobilePage({
               <div style={{ padding: "12px", display: "grid", gap: "10px", maxHeight: "620px", overflowY: "auto" }}>
                 {hasResponseToken && !inResponsePortal && (
                   <div style={{ border: "1px solid #dbe3ee", borderRadius: "14px", padding: "12px", background: "#ffffff", display: "grid", gap: "8px" }}>
-                    <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Loading Overtime Response</div>
+                    <div style={{ fontWeight: 800, color: "#1d4ed8" }}>
+                      {responseLookupState === "missing" ? "Response Link Not Found" : "Loading Overtime Response"}
+                    </div>
                     <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.5 }}>
-                      We found a response link and are loading the matching overtime delivery for this employee.
+                      {responseLookupState === "missing"
+                        ? "This response link could not be matched to a live overtime delivery."
+                        : "We found a response link and are loading the matching overtime delivery for this employee."}
                     </div>
                     <div style={{ fontSize: "12px", color: "#64748b", wordBreak: "break-all" }}>
                       Token: {responseToken}
