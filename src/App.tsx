@@ -194,12 +194,6 @@ const DETAIL_QUEUE_EVENTS_STORAGE_KEY = "androscoggin-detail-queue-events"
 const DETAIL_QUEUE_IDS_STORAGE_KEY = "androscoggin-detail-queue-ids"
 const OVERTIME_QUEUE_IDS_STORAGE_KEY = "androscoggin-overtime-queue-ids"
 const OVERTIME_QUEUE_VERSION_STORAGE_KEY = "androscoggin-overtime-queue-version"
-const OVERTIME_SHIFT_REQUESTS_STORAGE_KEY = "androscoggin-overtime-shift-requests"
-const OVERTIME_ENTRIES_STORAGE_KEY = "androscoggin-overtime-entries"
-const NOTIFICATION_PREFERENCES_STORAGE_KEY = "androscoggin-notification-preferences"
-const NOTIFICATION_CAMPAIGNS_STORAGE_KEY = "androscoggin-notification-campaigns"
-const NOTIFICATION_DELIVERIES_STORAGE_KEY = "androscoggin-notification-deliveries"
-const NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY = "androscoggin-notification-provider-config"
 const AUDIT_EVENTS_STORAGE_KEY = "androscoggin-audit-events"
 const SUPABASE_APP_STATE_KEYS = {
   staff: "scheduler_staff_state",
@@ -208,7 +202,6 @@ const SUPABASE_APP_STATE_KEYS = {
 } as const
 const LEGACY_SUPABASE_APP_STATE_KEY = "scheduler_state"
 const DEFAULT_CID_ROTATION_START_DATE = "2026-03-23"
-const LOCAL_PATROL_OVERRIDES_KEY = "androscoggin-local-patrol-overrides"
 const CURRENT_OVERTIME_QUEUE_VERSION = "6"
 const MOBILE_RESPONSE_TOKEN_STORAGE_KEY = "androscoggin-mobile-response-token"
 
@@ -217,17 +210,6 @@ function readStoredValue<T>(key: string, fallback: T) {
 
   try {
     const raw = window.localStorage.getItem(key)
-    return raw ? JSON.parse(raw) as T : fallback
-  } catch {
-    return fallback
-  }
-}
-
-function readLocalPatrolOverrides<T>(fallback: T) {
-  if (typeof window === "undefined") return fallback
-
-  try {
-    const raw = window.localStorage.getItem(LOCAL_PATROL_OVERRIDES_KEY)
     return raw ? JSON.parse(raw) as T : fallback
   } catch {
     return fallback
@@ -587,37 +569,19 @@ export default function App() {
       ? buildInitialOvertimeQueue(initialEmployees)
       : readStoredValue<string[]>(OVERTIME_QUEUE_IDS_STORAGE_KEY, buildInitialOvertimeQueue(initialEmployees))
   )
-  const [overtimeShiftRequests, setOvertimeShiftRequests] = useState<OvertimeShiftRequest[]>(() =>
-    readStoredValue<OvertimeShiftRequest[]>(OVERTIME_SHIFT_REQUESTS_STORAGE_KEY, [])
-  )
-  const [overtimeEntries, setOvertimeEntries] = useState<OvertimeEntry[]>(() =>
-    readStoredValue<OvertimeEntry[]>(OVERTIME_ENTRIES_STORAGE_KEY, [])
-  )
-  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference[]>(() =>
-    readStoredValue<NotificationPreference[]>(
-      NOTIFICATION_PREFERENCES_STORAGE_KEY,
-      buildInitialNotificationPreferences(initialEmployees)
-    )
-  )
-  const [notificationCampaigns, setNotificationCampaigns] = useState<NotificationCampaign[]>(() =>
-    readStoredValue<NotificationCampaign[]>(NOTIFICATION_CAMPAIGNS_STORAGE_KEY, [])
-  )
-  const [notificationDeliveries, setNotificationDeliveries] = useState<NotificationDelivery[]>(() =>
-    readStoredValue<NotificationDelivery[]>(NOTIFICATION_DELIVERIES_STORAGE_KEY, [])
-  )
+  const [overtimeShiftRequests, setOvertimeShiftRequests] = useState<OvertimeShiftRequest[]>([])
+  const [overtimeEntries, setOvertimeEntries] = useState<OvertimeEntry[]>([])
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference[]>([])
+  const [notificationCampaigns, setNotificationCampaigns] = useState<NotificationCampaign[]>([])
+  const [notificationDeliveries, setNotificationDeliveries] = useState<NotificationDelivery[]>([])
   const [notificationProviderConfig, setNotificationProviderConfig] = useState<NotificationProviderConfig>(() =>
-    readStoredValue<NotificationProviderConfig>(
-      NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY,
-      buildDefaultNotificationProviderConfig()
-    )
+    buildDefaultNotificationProviderConfig()
   )
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(() =>
     readStoredValue<AuditEvent[]>(AUDIT_EVENTS_STORAGE_KEY, [])
   )
   const [patrolSummaryRows, setPatrolSummaryRows] = useState<PatrolScheduleSummaryRow[]>([])
-  const [localPatrolOverrideRows, setLocalPatrolOverrideRows] = useState<PatrolScheduleSummaryRow[]>(() =>
-    readLocalPatrolOverrides<PatrolScheduleSummaryRow[]>([])
-  )
+  const [localPatrolOverrideRows, setLocalPatrolOverrideRows] = useState<PatrolScheduleSummaryRow[]>([])
   const [forceHistoryRows, setForceHistoryRows] = useState<ForceHistoryRow[]>([])
   const [activeSummaryCard, setActiveSummaryCard] = useState<"open_shifts" | "staffing_alerts" | null>(null)
   const [appStateSyncStatus, setAppStateSyncStatus] = useState<{
@@ -1192,51 +1156,9 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(OVERTIME_SHIFT_REQUESTS_STORAGE_KEY, JSON.stringify(overtimeShiftRequests))
-    }
-  }, [overtimeShiftRequests])
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(OVERTIME_ENTRIES_STORAGE_KEY, JSON.stringify(overtimeEntries))
-    }
-  }, [overtimeEntries])
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(NOTIFICATION_PREFERENCES_STORAGE_KEY, JSON.stringify(notificationPreferences))
-    }
-  }, [notificationPreferences])
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(NOTIFICATION_CAMPAIGNS_STORAGE_KEY, JSON.stringify(notificationCampaigns))
-    }
-  }, [notificationCampaigns])
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(NOTIFICATION_DELIVERIES_STORAGE_KEY, JSON.stringify(notificationDeliveries))
-    }
-  }, [notificationDeliveries])
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY, JSON.stringify(notificationProviderConfig))
-    }
-  }, [notificationProviderConfig])
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
       window.localStorage.setItem(AUDIT_EVENTS_STORAGE_KEY, JSON.stringify(auditEvents))
     }
   }, [auditEvents])
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(LOCAL_PATROL_OVERRIDES_KEY, JSON.stringify(localPatrolOverrideRows))
-    }
-  }, [localPatrolOverrideRows])
 
   const schedulerSnapshot = useMemo<PersistedSchedulerState>(
     () => ({
