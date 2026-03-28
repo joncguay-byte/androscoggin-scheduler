@@ -1568,8 +1568,35 @@ export function OvertimePage({
                   <div style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a" }}>
                     {request.offHours || "Hours pending"}
                   </div>
-                  <div style={{ fontSize: "11px", fontWeight: 700, color: interestedResponders.length > 0 ? "#1d4ed8" : "#64748b" }}>
-                    Interested Responses: {interestedResponders.length}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 8px",
+                      borderRadius: "8px",
+                      background: interestedResponders.length > 0 ? "#eff6ff" : "#f8fafc",
+                      border: `1px solid ${interestedResponders.length > 0 ? "#bfdbfe" : "#e2e8f0"}`
+                    }}
+                  >
+                    <span style={{ fontSize: "11px", fontWeight: 800, color: "#334155" }}>
+                      Interested Employees
+                    </span>
+                    <span
+                      style={{
+                        minWidth: "24px",
+                        textAlign: "center",
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        background: interestedResponders.length > 0 ? "#2563eb" : "#cbd5e1",
+                        color: "#ffffff",
+                        fontSize: "11px",
+                        fontWeight: 800
+                      }}
+                    >
+                      {interestedResponders.length}
+                    </span>
                   </div>
                   {request.assignedEmployeeId && request.autoAssignReason && (
                     <div
