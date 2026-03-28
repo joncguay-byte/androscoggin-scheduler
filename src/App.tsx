@@ -195,6 +195,7 @@ const DETAIL_QUEUE_IDS_STORAGE_KEY = "androscoggin-detail-queue-ids"
 const OVERTIME_QUEUE_IDS_STORAGE_KEY = "androscoggin-overtime-queue-ids"
 const OVERTIME_QUEUE_VERSION_STORAGE_KEY = "androscoggin-overtime-queue-version"
 const OVERTIME_NOTIFICATIONS_SAFETY_SNAPSHOT_KEY = "androscoggin-overtime-notifications-safety-snapshot"
+const NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY = "androscoggin-notification-provider-config"
 const AUDIT_EVENTS_STORAGE_KEY = "androscoggin-audit-events"
 const SUPABASE_APP_STATE_KEYS = {
   staff: "scheduler_staff_state",
@@ -617,7 +618,10 @@ export default function App() {
   const [notificationCampaigns, setNotificationCampaigns] = useState<NotificationCampaign[]>([])
   const [notificationDeliveries, setNotificationDeliveries] = useState<NotificationDelivery[]>([])
   const [notificationProviderConfig, setNotificationProviderConfig] = useState<NotificationProviderConfig>(() =>
-    buildDefaultNotificationProviderConfig()
+    readStoredValue<NotificationProviderConfig>(
+      NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY,
+      buildDefaultNotificationProviderConfig()
+    )
   )
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(() =>
     readStoredValue<AuditEvent[]>(AUDIT_EVENTS_STORAGE_KEY, [])
@@ -1310,6 +1314,15 @@ export default function App() {
       window.localStorage.setItem(OVERTIME_QUEUE_VERSION_STORAGE_KEY, CURRENT_OVERTIME_QUEUE_VERSION)
     }
   }, [overtimeQueueIds])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY,
+        JSON.stringify(notificationProviderConfig)
+      )
+    }
+  }, [notificationProviderConfig])
 
   useEffect(() => {
     if (typeof window !== "undefined") {
