@@ -1142,32 +1142,32 @@ export function OvertimePage({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Overtime List</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div
-            id="overtime-list-print-section"
-            style={{
-              display: "grid",
-              gap: "8px",
-              padding: "10px",
-              borderRadius: "12px",
-              border: "1px solid #dbe3ee",
-              background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-              boxShadow: "0 8px 18px rgba(15, 23, 42, 0.05)"
-            }}
-          >
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ width: "100%", maxWidth: "360px" }}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Overtime List</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div
+              id="overtime-list-print-section"
               style={{
                 display: "grid",
                 gap: "8px",
-                gridTemplateColumns: "1fr",
-                maxWidth: "340px",
-                margin: "0 auto"
+                padding: "10px",
+                borderRadius: "12px",
+                border: "1px solid #dbe3ee",
+                background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                boxShadow: "0 8px 18px rgba(15, 23, 42, 0.05)"
               }}
             >
+              <div
+                style={{
+                  display: "grid",
+                  gap: "8px",
+                  gridTemplateColumns: "1fr"
+                }}
+              >
               <div
                 style={{
                   padding: "8px 10px",
@@ -1276,9 +1276,11 @@ export function OvertimePage({
                 </div>
               ))}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+        </div>
+      </div>
 
       <div
         style={{
