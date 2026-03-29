@@ -39,13 +39,29 @@ create table if not exists public.overtime_shift_requests (
   off_employee_id text,
   off_employee_last_name text,
   off_hours text,
+  off_reason text,
+  assigned_hours text,
   selection_active boolean not null default false,
+  manually_queued boolean not null default false,
+  auto_assign_reason text,
   workflow_status text,
   status text not null,
   assigned_employee_id text,
   created_at timestamptz not null default timezone('utc', now()),
   responses jsonb not null default '[]'::jsonb
 );
+
+alter table public.overtime_shift_requests
+  add column if not exists off_reason text;
+
+alter table public.overtime_shift_requests
+  add column if not exists assigned_hours text;
+
+alter table public.overtime_shift_requests
+  add column if not exists manually_queued boolean not null default false;
+
+alter table public.overtime_shift_requests
+  add column if not exists auto_assign_reason text;
 
 create table if not exists public.overtime_entries (
   id text primary key,
@@ -112,6 +128,28 @@ create table if not exists public.notification_provider_config (
   sender_phone text not null default '',
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+insert into public.notification_provider_config (
+  config_key,
+  mode,
+  email_webhook_url,
+  text_webhook_url,
+  auth_token,
+  sender_name,
+  sender_email,
+  sender_phone
+)
+values (
+  'default',
+  'draft_only',
+  '',
+  '',
+  '',
+  'Androscoggin Scheduler',
+  '',
+  ''
+)
+on conflict (config_key) do nothing;
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -247,6 +285,7 @@ drop policy if exists "notification_deliveries_read_authenticated" on public.not
 drop policy if exists "notification_deliveries_write_admin_sergeant" on public.notification_deliveries;
 drop policy if exists "notification_provider_config_read_authenticated" on public.notification_provider_config;
 drop policy if exists "notification_provider_config_write_admin_sergeant" on public.notification_provider_config;
+drop policy if exists "notification_provider_config_write_authenticated" on public.notification_provider_config;
 create policy "app_state_update_authenticated"
 on public.app_state
 for update
@@ -351,12 +390,12 @@ for select
 to authenticated
 using (true);
 
-create policy "notification_provider_config_write_admin_sergeant"
+create policy "notification_provider_config_write_authenticated"
 on public.notification_provider_config
 for all
 to authenticated
-using (public.is_admin_or_sergeant())
-with check (public.is_admin_or_sergeant());
+using (true)
+with check (true);
 
 alter table public.patrol_schedule enable row level security;
 
