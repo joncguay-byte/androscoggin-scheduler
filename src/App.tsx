@@ -1995,8 +1995,6 @@ export default function App() {
             setOvertimeShiftRequests={setOvertimeShiftRequests}
             notificationDeliveries={notificationDeliveries}
             initialResponseToken={mobileResponseToken}
-            currentUserDisplayName={currentUserDisplayName}
-            currentUserEmail={typeof authUser?.email === "string" ? authUser.email : ""}
             onOpenFullApp={() => {
               setMobileResponseToken("")
               if (typeof window !== "undefined") {
@@ -2300,8 +2298,6 @@ export default function App() {
             setOvertimeShiftRequests={setOvertimeShiftRequests}
             notificationDeliveries={notificationDeliveries}
             initialResponseToken={mobileResponseToken}
-            currentUserDisplayName={currentUserDisplayName}
-            currentUserEmail={typeof authUser?.email === "string" ? authUser.email : ""}
             onClearResponseToken={() => {
               setMobileResponseToken("")
               if (typeof window !== "undefined") {
