@@ -73,6 +73,7 @@ export function OvertimePage({
   const [selectedNotificationRecipientIds, setSelectedNotificationRecipientIds] = useState<string[]>([])
   const [forceAssignRequestId, setForceAssignRequestId] = useState<string | null>(null)
   const [forceAssignEmployeeId, setForceAssignEmployeeId] = useState<string>("")
+  const [layoutPreview, setLayoutPreview] = useState<"preview1" | "preview2">("preview1")
   const [undoStack, setUndoStack] = useState<
     Array<{
       patrolOverrideRows: PatrolScheduleRow[]
@@ -1136,13 +1137,75 @@ export function OvertimePage({
           <CardTitle>Overtime</CardTitle>
         </CardHeader>
         <CardContent>
-          <div style={{ fontSize: "13px", color: "#64748b" }}>
-            Review Patrol time off, move qualified shifts into the queue, collect interest, and assign overtime coverage.
+          <div style={{ display: "grid", gap: "12px" }}>
+            <div style={{ fontSize: "13px", color: "#64748b" }}>
+              Review Patrol time off, move qualified shifts into the queue, collect interest, and assign overtime coverage.
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button
+                onClick={() => setLayoutPreview("preview1")}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: layoutPreview === "preview1" ? "#2563eb" : "#e2e8f0",
+                  color: layoutPreview === "preview1" ? "#ffffff" : "#0f172a",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontSize: "12px"
+                }}
+              >
+                Preview 1
+              </button>
+
+              <button
+                onClick={() => setLayoutPreview("preview2")}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: layoutPreview === "preview2" ? "#0f766e" : "#e2e8f0",
+                  color: layoutPreview === "preview2" ? "#ffffff" : "#0f172a",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontSize: "12px"
+                }}
+              >
+                Preview 2
+              </button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div
+        style={
+          layoutPreview === "preview2"
+            ? {
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1.7fr) minmax(280px, 360px)",
+                gap: "18px",
+                alignItems: "start"
+              }
+            : {
+                display: "grid",
+                gap: "18px"
+              }
+        }
+      >
+      <div
+        style={
+          layoutPreview === "preview2"
+            ? {
+                gridColumn: "2",
+                gridRow: "1",
+                display: "flex",
+                justifyContent: "stretch"
+              }
+            : { display: "flex", justifyContent: "flex-end" }
+        }
+      >
         <div style={{ width: "100%", maxWidth: "360px" }}>
         <Card>
           <CardHeader>
@@ -1285,9 +1348,17 @@ export function OvertimePage({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(250px, 320px) minmax(250px, 320px) minmax(0, 1fr)",
+          gridTemplateColumns: layoutPreview === "preview2"
+            ? "minmax(240px, 290px) minmax(280px, 1fr) minmax(240px, 290px)"
+            : "minmax(250px, 320px) minmax(250px, 320px) minmax(0, 1fr)",
           gap: "18px",
-          alignItems: "start"
+          alignItems: "start",
+          ...(layoutPreview === "preview2"
+            ? {
+                gridColumn: "1",
+                gridRow: "1"
+              }
+            : {})
         }}
       >
         <Card>
@@ -1903,6 +1974,16 @@ export function OvertimePage({
         </Card>
       </div>
 
+      <div
+        style={
+          layoutPreview === "preview2"
+            ? {
+                gridColumn: "1 / span 2",
+                gridRow: "2"
+              }
+            : undefined
+        }
+      >
       <Card>
         <CardHeader>
           <CardTitle>Assigned Queue Shifts</CardTitle>
@@ -1981,6 +2062,8 @@ export function OvertimePage({
           </div>
         </CardContent>
       </Card>
+      </div>
+      </div>
 
       {queueRecipientPickerOpen && (
         <div
