@@ -138,6 +138,7 @@ export function OvertimePage({
   const [preview2SelectedEmployeeId, setPreview2SelectedEmployeeId] = useState<string | null>(null)
   const [preview2TimeOffMode, setPreview2TimeOffMode] = useState<Preview2TimeOffMode | null>(null)
   const [preview2SelectedShiftKeys, setPreview2SelectedShiftKeys] = useState<string[]>([])
+  const [preview2SingleDate, setPreview2SingleDate] = useState("")
   const [preview2Reason, setPreview2Reason] = useState<string>("Vacation")
   const [preview2Step, setPreview2Step] = useState<"mode" | "shifts" | "reason" | null>(null)
   const [undoStack, setUndoStack] = useState<
@@ -1226,6 +1227,7 @@ export function OvertimePage({
     setPreview2SelectedEmployeeId(null)
     setPreview2TimeOffMode(null)
     setPreview2SelectedShiftKeys([])
+    setPreview2SingleDate("")
     setPreview2Reason("Vacation")
     setPreview2Step(null)
   }
@@ -1420,31 +1422,62 @@ export function OvertimePage({
             <CardHeader>
               <CardTitle>Select Shift</CardTitle>
             </CardHeader>
-            <CardContent>
+              <CardContent>
               <div style={{ display: "grid", gap: "12px" }}>
                 <div style={{ fontSize: "13px", color: "#334155" }}>
                   {preview2SelectedEmployee.firstName} {preview2SelectedEmployee.lastName}
                 </div>
                 <div style={{ display: "grid", gap: "8px" }}>
-                  <button
-                    onClick={() => {
-                      setPreview2TimeOffMode("single")
-                      setPreview2SelectedShiftKeys([])
-                      setPreview2Step("shifts")
-                    }}
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: "8px",
-                      border: "none",
-                      background: "#e2e8f0",
-                      color: "#0f172a",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontSize: "12px"
-                    }}
-                  >
-                    Single Date
-                  </button>
+                  <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px", alignItems: "center" }}>
+                    <button
+                      onClick={() => {
+                        if (!preview2SingleDate) {
+                          window.alert("Choose a date first.")
+                          return
+                        }
+
+                        const matchingRows = preview2EmployeeScheduledRows.filter(
+                          (row) => row.assignment_date === preview2SingleDate
+                        )
+
+                        if (matchingRows.length === 0) {
+                          window.alert("That employee is not scheduled on the selected date.")
+                          return
+                        }
+
+                        setPreview2TimeOffMode("single")
+                        setPreview2SelectedShiftKeys(matchingRows.map((row) => getPatrolRowKey(row)))
+                        setPreview2Reason("Vacation")
+                        setPreview2Step("reason")
+                      }}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: "#e2e8f0",
+                        color: "#0f172a",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        whiteSpace: "nowrap"
+                      }}
+                    >
+                      Single Date
+                    </button>
+                    <input
+                      type="date"
+                      value={preview2SingleDate}
+                      onChange={(event) => setPreview2SingleDate(event.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        fontSize: "12px"
+                      }}
+                    />
+                  </div>
                   <button
                     onClick={() => {
                       setPreview2TimeOffMode("multiple")
@@ -1568,6 +1601,9 @@ export function OvertimePage({
                       No scheduled patrol shifts were found for this employee.
                     </div>
                   )}
+                  <div style={{ fontSize: "12px", color: "#475569", fontWeight: 700 }}>
+                    Current Patrol Schedule
+                  </div>
                   {preview2EmployeeScheduledRows.map((row) => {
                     const rowKey = getPatrolRowKey(row)
                     const selected = preview2SelectedShiftKeys.includes(rowKey)
@@ -2610,6 +2646,7 @@ export function OvertimePage({
                       setPreview2SelectedEmployeeId(employee.id)
                       setPreview2TimeOffMode(null)
                       setPreview2SelectedShiftKeys([])
+                      setPreview2SingleDate("")
                       setPreview2Reason("Vacation")
                       setPreview2Step("mode")
                     }}
