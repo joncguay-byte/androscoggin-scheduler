@@ -1151,34 +1151,38 @@ export function OvertimePage({
             id="overtime-list-print-section"
             style={{
               display: "grid",
-              gap: "14px"
+              gap: "16px",
+              padding: "18px",
+              borderRadius: "18px",
+              border: "1px solid #dbe3ee",
+              background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+              boxShadow: "0 14px 34px rgba(15, 23, 42, 0.08)"
             }}
           >
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "14px",
-                alignItems: "center"
+                gap: "14px"
               }}
             >
               <div
                 style={{
-                  display: "flex",
-                  justifyContent: "center",
                   padding: "16px",
                   borderRadius: "14px",
                   border: "1px solid #dbe3ee",
-                  background: "#f8fafc",
+                  background: "#ffffff",
                   boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)"
                 }}
               >
+                <div style={{ display: "grid", gap: "10px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Overtime Order
+                  </div>
                 <select
                   value={nextUpEmployee?.id || ""}
                   onChange={() => undefined}
                   style={{
                     width: "100%",
-                    maxWidth: "340px",
                     padding: "10px 12px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
@@ -1194,6 +1198,7 @@ export function OvertimePage({
                     </option>
                   ))}
                 </select>
+                </div>
               </div>
 
               <div
@@ -1201,41 +1206,40 @@ export function OvertimePage({
                   fontSize: "13px",
                   color: "#0f172a",
                   fontWeight: 700,
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  textAlign: "center",
                   padding: "16px",
                   borderRadius: "14px",
                   border: "1px solid #dbe3ee",
-                  background: "#f8fafc",
+                  background: "#ffffff",
                   boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)"
                 }}
               >
-                <div style={{ width: "100%", maxWidth: "320px", textAlign: "center" }}>
-                  Next Up For Overtime:{" "}
-                  <span style={{ color: "#166534" }}>
+                <div style={{ display: "grid", gap: "8px", textAlign: "center" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Next Up For Overtime
+                  </div>
+                  <div style={{ fontSize: "18px", color: "#166534", fontWeight: 800 }}>
                     {nextUpEmployee ? `${nextUpEmployee.firstName} ${nextUpEmployee.lastName}` : "No one in queue"}
-                  </span>
+                  </div>
                 </div>
               </div>
 
               <div
                 style={{
-                  display: "flex",
-                  justifyContent: "center",
                   padding: "16px",
                   borderRadius: "14px",
                   border: "1px solid #dbe3ee",
-                  background: "#f8fafc",
+                  background: "#ffffff",
                   boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)"
                 }}
               >
+                <div style={{ display: "grid", gap: "10px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Print
+                  </div>
                 <button
                   onClick={() => printElementById("overtime-list-print-section", "Overtime List")}
                   style={{
                     width: "100%",
-                    maxWidth: "340px",
                     padding: "10px 12px",
                     borderRadius: "8px",
                     border: "none",
@@ -1247,6 +1251,7 @@ export function OvertimePage({
                 >
                   Print List
                 </button>
+                </div>
               </div>
             </div>
 
