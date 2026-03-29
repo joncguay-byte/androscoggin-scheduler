@@ -34,6 +34,7 @@ import {
 } from "./lib/overtime-notifications-sync"
 import { buildNotificationDeliveries } from "./lib/notifications"
 import { notificationProviderConfigSchema, overtimeBackupSchema } from "./lib/schemas"
+import { useUiStore } from "./stores/ui-store"
 import { getCurrentProfileRole, getLocalAccessUser, resolveAppRole, resolveDisplayName, signOut } from "./lib/auth"
 import { isForceRequired, isShiftCovered } from "./lib/staffing-engine"
 import { supabase } from "./lib/supabase"
@@ -678,7 +679,6 @@ export default function App() {
   const [patrolSummaryRows, setPatrolSummaryRows] = useState<PatrolScheduleSummaryRow[]>([])
   const [localPatrolOverrideRows, setLocalPatrolOverrideRows] = useState<PatrolScheduleSummaryRow[]>([])
   const [forceHistoryRows, setForceHistoryRows] = useState<ForceHistoryRow[]>([])
-  const [activeSummaryCard, setActiveSummaryCard] = useState<"open_shifts" | "staffing_alerts" | null>(null)
   const [responseTokenFromQuery, setResponseTokenFromQuery] = useState("")
   const [isMobileLayout, setIsMobileLayout] = useState(false)
   const [appStateSyncStatus, setAppStateSyncStatus] = useState<{
@@ -692,10 +692,14 @@ export default function App() {
   const [overtimeNotificationsSyncReady, setOvertimeNotificationsSyncReady] = useState(false)
   const [overtimeNotificationsSyncError, setOvertimeNotificationsSyncError] = useState("")
 
-  const [activeModule, setActiveModule] =
-    useState<ModuleKey>("patrol")
-  const [notificationDraftShiftIds, setNotificationDraftShiftIds] = useState<string[]>([])
-  const [notificationDraftRecipientIds, setNotificationDraftRecipientIds] = useState<string[]>([])
+  const activeModule = useUiStore((state) => state.activeModule) as ModuleKey
+  const setActiveModule = useUiStore((state) => state.setActiveModule)
+  const activeSummaryCard = useUiStore((state) => state.activeSummaryCard)
+  const setActiveSummaryCard = useUiStore((state) => state.setActiveSummaryCard)
+  const notificationDraftShiftIds = useUiStore((state) => state.notificationDraftShiftIds)
+  const notificationDraftRecipientIds = useUiStore((state) => state.notificationDraftRecipientIds)
+  const openNotificationsForShiftIds = useUiStore((state) => state.openNotificationsForShiftIds)
+  const clearNotificationDraftSelections = useUiStore((state) => state.clearNotificationDraftSelections)
   const hasHydratedSupabaseState = useRef(false)
   const hasHydratedPatrolOverrides = useRef(false)
   const hasHydratedOvertimeNotifications = useRef(false)
@@ -732,12 +736,6 @@ export default function App() {
     () => new Map(overtimeShiftRequests.map((request) => [request.id, request])),
     [overtimeShiftRequests]
   )
-
-  function openNotificationsForShiftIds(shiftIds: string[], recipientIds: string[] = []) {
-    setNotificationDraftShiftIds(shiftIds)
-    setNotificationDraftRecipientIds(recipientIds)
-    setActiveModule("notifications")
-  }
 
   function queueAssignmentNoticeForShift(requestId: string, employeeId: string) {
     const request = overtimeRequestMap.get(requestId)
@@ -2275,10 +2273,7 @@ export default function App() {
             initialSelectedRecipientIds={notificationDraftRecipientIds}
             responseToken={responseTokenFromQuery}
             compactMode={isMobileLayout}
-            onConsumeDraftSelections={() => {
-              setNotificationDraftShiftIds([])
-              setNotificationDraftRecipientIds([])
-            }}
+            onConsumeDraftSelections={clearNotificationDraftSelections}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Notifications", action, summary, details)}
           />
         )}
