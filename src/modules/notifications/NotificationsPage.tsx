@@ -690,34 +690,16 @@ export function NotificationsPage({
                       {selectedDelivery.channel === "email" && (
                         <div style={{ display: "grid", gap: "8px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                            <div style={{ fontWeight: 700, fontSize: "13px" }}>Mobile Email Preview</div>
+                            <div style={{ fontWeight: 700, fontSize: "13px" }}>Email Preview</div>
                             <div style={{ fontSize: "12px", color: "#64748b" }}>
-                              Phone-sized rendering of the outbound email card.
+                              Outbound email card preview.
                             </div>
                           </div>
-                          <div style={{ display: "flex", justifyContent: "center" }}>
-                            <div
-                              style={{
-                                width: "320px",
-                                maxWidth: "100%",
-                                border: "10px solid #0f172a",
-                                borderRadius: "30px",
-                                overflow: "hidden",
-                                background: "#0f172a",
-                                boxShadow: "0 20px 36px rgba(15, 23, 42, 0.18)"
-                              }}
-                            >
-                              <div style={{ padding: "10px 14px", background: "#0f172a", color: "#f8fafc", fontWeight: 700, fontSize: "12px", display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                                <span>Email</span>
-                                <span>{selectedDelivery.destination}</span>
-                              </div>
-                              <iframe
-                                title={`Email preview ${selectedDelivery.id}`}
-                                srcDoc={selectedDeliveryEmailHtml}
-                                style={{ width: "100%", height: "540px", border: "none", background: "#e2e8f0" }}
-                              />
-                            </div>
-                          </div>
+                          <iframe
+                            title={`Email preview ${selectedDelivery.id}`}
+                            srcDoc={selectedDeliveryEmailHtml}
+                            style={{ width: "100%", minHeight: "540px", border: "1px solid #cbd5e1", borderRadius: "14px", background: "#ffffff" }}
+                          />
                         </div>
                       )}
 
@@ -730,7 +712,7 @@ export function NotificationsPage({
                             style={{ width: "100%", padding: 8, border: "1px solid #cbd5e1", borderRadius: "10px", fontSize: "12px", color: "#334155" }}
                           />
                           <div style={{ fontSize: "12px", color: "#64748b" }}>
-                            Opening this link takes the employee into the mobile overtime response screen for their assigned availability request.
+                            Opening this link takes the employee directly into the overtime response screen for their assigned availability request.
                           </div>
                         </div>
                       )}

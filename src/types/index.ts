@@ -296,7 +296,6 @@ export type AuditModule =
   | "Patrol"
   | "Overtime"
   | "Notifications"
-  | "Mobile"
   | "CID"
   | "Force"
   | "Detail"

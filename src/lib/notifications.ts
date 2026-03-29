@@ -257,8 +257,8 @@ export function buildEmailHtmlPreview(
         </div>
         ${responseLink ? `
         <div style="padding:16px;border:1px solid #bfdbfe;border-radius:16px;background:#eff6ff;">
-          <div style="font-size:12px;color:#1d4ed8;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;">Mobile Response</div>
-          <div style="margin-top:8px;color:#334155;font-size:13px;line-height:1.6;">Tap below to open the employee overtime response screen on mobile.</div>
+          <div style="font-size:12px;color:#1d4ed8;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;">Overtime Response</div>
+          <div style="margin-top:8px;color:#334155;font-size:13px;line-height:1.6;">Tap below to open the employee overtime response screen.</div>
           <a href="${escapeHtml(responseLink)}" style="display:inline-block;margin-top:12px;padding:10px 16px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:999px;font-size:13px;font-weight:700;">${escapeHtml(actionLabel)}</a>
         </div>
         ` : ""}
