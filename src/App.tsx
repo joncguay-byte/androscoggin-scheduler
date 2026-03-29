@@ -160,6 +160,7 @@ type PersistedAuditState = Pick<PersistedSchedulerState, "auditEvents">
 
 const appStateQueryKey = ["supabase", "app-state"] as const
 const overtimeNotificationsQueryKey = ["supabase", "overtime-notifications"] as const
+const patrolOverridesQueryKey = ["supabase", "patrol-overrides"] as const
 
 const layoutVariants: { value: AppLayoutVariant, label: string }[] = [
   { value: "command-brass", label: "Command Brass" },
@@ -467,6 +468,17 @@ function getDefaultEmployeeForSummaryPosition(
 
 export default function App() {
   const queryClient = useQueryClient()
+  const patrolSummaryRange = useMemo(() => {
+    const today = new Date()
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const end = new Date(start)
+    end.setDate(end.getDate() + 45)
+
+    return {
+      start: toIsoDate(start),
+      end: toIsoDate(end)
+    }
+  }, [])
   type PatrolScheduleSummaryRow = {
     id?: string
     assignment_date: string
@@ -1134,39 +1146,7 @@ export default function App() {
   }, [authUser])
 
   useEffect(() => {
-    let active = true
-
-    async function hydratePatrolOverrides() {
-      const result = await loadSupabasePatrolOverrides()
-
-      if (!active) return
-
-      if (result.data) {
-        setLocalPatrolOverrideRows(result.data)
-        lastSupabasePatrolOverridesRef.current = JSON.stringify(result.data)
-      }
-
-      hasHydratedPatrolOverrides.current = true
-      setPatrolOverridesSyncReady(true)
-    }
-
-    void hydratePatrolOverrides()
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  useEffect(() => {
-    let active = true
     let refreshTimeout: number | null = null
-
-    async function refreshPatrolOverrides() {
-      const result = await loadSupabasePatrolOverrides()
-      if (!active || !result.data) return
-      setLocalPatrolOverrideRows(result.data)
-      lastSupabasePatrolOverridesRef.current = JSON.stringify(result.data)
-    }
 
     const channel = supabase
       .channel("app_patrol_overrides")
@@ -1183,20 +1163,19 @@ export default function App() {
           }
 
           refreshTimeout = window.setTimeout(() => {
-            void refreshPatrolOverrides()
+            void queryClient.invalidateQueries({ queryKey: patrolOverridesQueryKey })
           }, 300)
         }
       )
       .subscribe()
 
     return () => {
-      active = false
       if (refreshTimeout) {
         window.clearTimeout(refreshTimeout)
       }
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [queryClient])
 
   useEffect(() => {
     if (!hasHydratedPatrolOverrides.current) return
@@ -1471,6 +1450,29 @@ export default function App() {
     queryFn: loadSupabaseOvertimeNotificationsState
   })
 
+  const patrolOverridesQuery = useQuery({
+    queryKey: patrolOverridesQueryKey,
+    queryFn: loadSupabasePatrolOverrides
+  })
+
+  const patrolSummaryQuery = useQuery({
+    queryKey: ["supabase", "patrol-summary", patrolSummaryRange.start, patrolSummaryRange.end],
+    queryFn: () => fetchPatrolScheduleRange(patrolSummaryRange.start, patrolSummaryRange.end)
+  })
+
+  useEffect(() => {
+    if (!patrolOverridesQuery.data) return
+
+    const result = patrolOverridesQuery.data
+    if (result.data) {
+      setLocalPatrolOverrideRows(result.data)
+      lastSupabasePatrolOverridesRef.current = JSON.stringify(result.data)
+    }
+
+    hasHydratedPatrolOverrides.current = true
+    setPatrolOverridesSyncReady(true)
+  }, [patrolOverridesQuery.data])
+
   useEffect(() => {
     if (!appStateQuery.data) return
 
@@ -1660,37 +1662,18 @@ export default function App() {
   }, [employees])
 
   useEffect(() => {
-    let active = true
-
-    async function loadPatrolSummary() {
-      const today = new Date()
-      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-      const end = new Date(start)
-      end.setDate(end.getDate() + 45)
-
-      const { data, error } = await fetchPatrolScheduleRange(toIsoDate(start), toIsoDate(end))
-
-      if (error) {
-        console.error("Failed loading patrol summary:", error)
-        return
-      }
-
-      if (active) {
-        setPatrolSummaryRows((data || []) as PatrolScheduleSummaryRow[])
-      }
-    }
-
     function schedulePatrolSummaryRefresh() {
       if (patrolSummaryRefreshTimeoutRef.current) {
         window.clearTimeout(patrolSummaryRefreshTimeoutRef.current)
       }
 
       patrolSummaryRefreshTimeoutRef.current = window.setTimeout(() => {
-        void loadPatrolSummary()
+        invalidatePatrolScheduleCache()
+        void queryClient.invalidateQueries({
+          queryKey: ["supabase", "patrol-summary", patrolSummaryRange.start, patrolSummaryRange.end]
+        })
       }, 350)
     }
-
-    void loadPatrolSummary()
 
     const channel = supabase
       .channel("app_patrol_summary")
@@ -1709,13 +1692,25 @@ export default function App() {
       .subscribe()
 
     return () => {
-      active = false
       if (patrolSummaryRefreshTimeoutRef.current) {
         window.clearTimeout(patrolSummaryRefreshTimeoutRef.current)
       }
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [patrolSummaryRange.end, patrolSummaryRange.start, queryClient])
+
+  useEffect(() => {
+    if (!patrolSummaryQuery.data) return
+
+    const { data, error } = patrolSummaryQuery.data
+
+    if (error) {
+      console.error("Failed loading patrol summary:", error)
+      return
+    }
+
+    setPatrolSummaryRows((data || []) as PatrolScheduleSummaryRow[])
+  }, [patrolSummaryQuery.data])
 
   const activeTheme = useMemo(() => layoutThemes[layoutVariant], [layoutVariant])
   const cidOnCallEmployee = useMemo(
