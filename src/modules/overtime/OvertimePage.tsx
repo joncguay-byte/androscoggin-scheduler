@@ -2108,9 +2108,6 @@ export function OvertimePage({
                     <div style={{ fontSize: "12px", color: "#475569" }}>
                       {employee.rank} | {employee.defaultVehicle}
                     </div>
-                    <div style={{ fontSize: "11px", color: "#64748b" }}>
-                      Hire Date: {employee.hireDate}
-                    </div>
                   </div>
                 ))}
               </div>
