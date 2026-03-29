@@ -1812,22 +1812,20 @@ export default function App() {
   }, [coverageEvaluatedPatrolSummaryRows, localPatrolOverrideRows])
 
   useEffect(() => {
-    function syncFromHash() {
+    function syncFromQuery() {
       if (typeof window === "undefined") return
       const searchParams = new URLSearchParams(window.location.search)
-      const queryToken = searchParams.get("mobile-response")
-      const resolvedToken = queryToken || ""
+      const responseToken = searchParams.get("response") || ""
 
-      if (resolvedToken) {
+      if (responseToken) {
         setActiveModule("notifications")
-      } else {
       }
     }
 
-    syncFromHash()
+    syncFromQuery()
     if (typeof window !== "undefined") {
-      window.addEventListener("hashchange", syncFromHash)
-      return () => window.removeEventListener("hashchange", syncFromHash)
+      window.addEventListener("popstate", syncFromQuery)
+      return () => window.removeEventListener("popstate", syncFromQuery)
     }
   }, [])
 

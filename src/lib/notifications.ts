@@ -119,12 +119,12 @@ function getChannels(channel: NotificationChannel) {
 function buildResponseLink(responseToken: string) {
   if (typeof window !== "undefined") {
     const url = new URL(window.location.href)
-    url.searchParams.set("mobile-response", responseToken)
+    url.searchParams.set("response", responseToken)
     url.hash = ""
     return url.toString()
   }
 
-  return `?mobile-response=${encodeURIComponent(responseToken)}`
+  return `?response=${encodeURIComponent(responseToken)}`
 }
 
 function getDestination(
