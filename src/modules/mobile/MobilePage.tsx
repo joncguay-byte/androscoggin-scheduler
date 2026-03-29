@@ -13,6 +13,8 @@ type MobilePageProps = {
   setOvertimeShiftRequests: React.Dispatch<React.SetStateAction<OvertimeShiftRequest[]>>
   notificationDeliveries: NotificationDelivery[]
   initialResponseToken?: string
+  currentUserDisplayName?: string
+  currentUserEmail?: string
   onClearResponseToken?: () => void
   onOpenFullApp?: () => void
   onAuditEvent?: (action: string, summary: string, details?: string) => void
@@ -47,6 +49,8 @@ export function MobilePage({
   setOvertimeShiftRequests,
   notificationDeliveries,
   initialResponseToken = "",
+  currentUserDisplayName = "",
+  currentUserEmail = "",
   onClearResponseToken,
   onOpenFullApp,
   onAuditEvent
@@ -58,6 +62,9 @@ export function MobilePage({
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(previewEmployees[0]?.id || "")
   const [mobileView, setMobileView] = useState<MobileView>("home")
   const [responseToken, setResponseToken] = useState(initialResponseToken)
+  const [isCompactPhoneLayout, setIsCompactPhoneLayout] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 900 : true
+  )
   const [fetchedResponseDelivery, setFetchedResponseDelivery] = useState<NotificationDelivery | null>(null)
   const [fetchedResponseShifts, setFetchedResponseShifts] = useState<OvertimeShiftRequest[]>([])
   const [responseLookupState, setResponseLookupState] = useState<"idle" | "loading" | "loaded" | "missing">("idle")
@@ -68,6 +75,15 @@ export function MobilePage({
       setMobileView("overtime")
     }
   }, [initialResponseToken])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const updateLayoutMode = () => setIsCompactPhoneLayout(window.innerWidth < 900)
+    updateLayoutMode()
+    window.addEventListener("resize", updateLayoutMode)
+    return () => window.removeEventListener("resize", updateLayoutMode)
+  }, [])
 
   const activeResponseDelivery = useMemo(
     () => notificationDeliveries.find((delivery) => delivery.responseToken === responseToken) || fetchedResponseDelivery || null,
@@ -85,6 +101,28 @@ export function MobilePage({
       setSelectedEmployeeId(responseEmployee.id)
     }
   }, [responseEmployee])
+
+  useEffect(() => {
+    if (previewEmployees.length === 0 || responseEmployee) return
+
+    const normalizedDisplayName = currentUserDisplayName.trim().toLowerCase()
+    const normalizedEmail = currentUserEmail.trim().toLowerCase()
+    const emailLocalPart = normalizedEmail.includes("@") ? normalizedEmail.split("@")[0] : normalizedEmail
+
+    const matchedEmployee = previewEmployees.find((employee) => {
+      const fullName = `${employee.firstName} ${employee.lastName}`.trim().toLowerCase()
+      const reverseName = `${employee.lastName} ${employee.firstName}`.trim().toLowerCase()
+      const lastNameOnly = employee.lastName.trim().toLowerCase()
+      return (
+        (normalizedDisplayName && (fullName === normalizedDisplayName || reverseName === normalizedDisplayName || lastNameOnly === normalizedDisplayName)) ||
+        (emailLocalPart && (fullName.replace(/\s+/g, ".") === emailLocalPart || fullName.replace(/\s+/g, "") === emailLocalPart))
+      )
+    })
+
+    if (matchedEmployee) {
+      setSelectedEmployeeId(matchedEmployee.id)
+    }
+  }, [currentUserDisplayName, currentUserEmail, previewEmployees, responseEmployee])
 
   const selectedEmployee = previewEmployees.find((employee) => employee.id === selectedEmployeeId) || null
   const effectiveSelectedEmployee = responseEmployee || selectedEmployee
@@ -341,7 +379,7 @@ export function MobilePage({
           <CardTitle>{hasResponseToken ? "Overtime Response" : "Mobile Preview"}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div style={{ display: "grid", gridTemplateColumns: hasResponseToken ? "minmax(0, 1fr)" : "260px minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: hasResponseToken || isCompactPhoneLayout ? "minmax(0, 1fr)" : "260px minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
             {!hasResponseToken && (
               <div style={{ display: "grid", gap: "12px" }}>
                 <div>
