@@ -50,6 +50,9 @@ export default function Header({
   const username = user?.username || "Admin"
   const secondary = user?.secondary || ""
   const style = headerStyles[variant]
+  const buildLabel = typeof __APP_BUILD_ID__ === "string"
+    ? __APP_BUILD_ID__.replace("T", " ").replace("Z", " UTC").slice(0, 20)
+    : ""
 
   return (
 
@@ -138,6 +141,11 @@ export default function Header({
           <div style={{ fontSize: "14px", color: style.userColor, fontWeight: 600 }}>
             {username}
           </div>
+          {buildLabel && (
+            <div style={{ fontSize: "10px", color: style.userColor, opacity: 0.72 }}>
+              Build {buildLabel}
+            </div>
+          )}
           {secondary && (
             <div style={{ fontSize: "11px", color: style.userColor, opacity: 0.85 }}>
               {secondary}
