@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import Header from "./components/Header"
 import SummaryCards from "./components/SummaryCards"
@@ -156,6 +157,9 @@ type PersistedCidDetailState = Pick<
   "cidRotationStartDate" | "cidDailyOverrides" | "detailRecords" | "detailQueueEvents" | "detailQueueIds"
 >
 type PersistedAuditState = Pick<PersistedSchedulerState, "auditEvents">
+
+const appStateQueryKey = ["supabase", "app-state"] as const
+const overtimeNotificationsQueryKey = ["supabase", "overtime-notifications"] as const
 
 const layoutVariants: { value: AppLayoutVariant, label: string }[] = [
   { value: "command-brass", label: "Command Brass" },
@@ -462,6 +466,7 @@ function getDefaultEmployeeForSummaryPosition(
 
 
 export default function App() {
+  const queryClient = useQueryClient()
   type PatrolScheduleSummaryRow = {
     id?: string
     assignment_date: string
@@ -1452,106 +1457,87 @@ export default function App() {
     [auditEvents]
   )
 
-  useEffect(() => {
-    let active = true
-
-    async function hydrateAppState() {
-      const fallbackSnapshot = schedulerSnapshot
-      const result = await loadSupabaseAppStates<Partial<PersistedSchedulerState>>([
+  const appStateQuery = useQuery({
+    queryKey: appStateQueryKey,
+    queryFn: () =>
+      loadSupabaseAppStates<Partial<PersistedSchedulerState>>([
         ...Object.values(SUPABASE_APP_STATE_KEYS),
         LEGACY_SUPABASE_APP_STATE_KEY
       ])
+  })
 
-      if (!active) return
-
-      const mergedPayload = {
-        ...(result.data[LEGACY_SUPABASE_APP_STATE_KEY] || {}),
-        ...(result.data[SUPABASE_APP_STATE_KEYS.staff] || {}),
-        ...(result.data[SUPABASE_APP_STATE_KEYS.cidDetail] || {}),
-        ...(result.data[SUPABASE_APP_STATE_KEYS.audit] || {})
-      }
-
-      if (Object.keys(mergedPayload).length > 0) {
-        const normalized = normalizePersistedState(mergedPayload, fallbackSnapshot)
-        setEmployees(normalized.employees)
-        setSettings(normalized.settings)
-        setReferenceSettings(normalized.referenceSettings)
-        setCidRotationStartDate(normalized.cidRotationStartDate)
-        setCidDailyOverrides(normalized.cidDailyOverrides)
-        setDetailRecords(normalized.detailRecords)
-        setDetailQueueEvents(normalized.detailQueueEvents)
-        setDetailQueueIds(normalized.detailQueueIds)
-        setAuditEvents(normalized.auditEvents)
-        lastSupabaseSnapshotRef.current = JSON.stringify(normalized)
-        setAppStateSyncStatus({
-          mode: "connected",
-          message: "Supabase sync is active for Employees, CID, Detail, Settings, audit, overtime, notifications, and patrol overrides."
-        })
-      } else if (result.error) {
-        setAppStateSyncStatus({
-          mode: "local",
-          message: "Using local browser storage for Employees, CID, Detail, Settings, and audit until Supabase app_state is available."
-        })
-      } else {
-        setAppStateSyncStatus({
-          mode: "local",
-          message: "No Supabase app state found yet. Local browser storage is active until app_state is set up."
-        })
-      }
-
-      hasHydratedSupabaseState.current = true
-    }
-
-    hydrateAppState()
-
-    return () => {
-      active = false
-    }
-  }, [])
+  const overtimeNotificationsQuery = useQuery({
+    queryKey: overtimeNotificationsQueryKey,
+    queryFn: loadSupabaseOvertimeNotificationsState
+  })
 
   useEffect(() => {
-    let active = true
+    if (!appStateQuery.data) return
 
-    async function hydrateOvertimeNotifications() {
-      const result = await loadSupabaseOvertimeNotificationsState()
-
-      if (!active) return
-
-      if (result.data) {
-        applyOvertimeNotificationsSyncData(result.data)
-        hasHydratedOvertimeNotifications.current = true
-        setOvertimeNotificationsSyncReady(true)
-        setOvertimeNotificationsSyncError("")
-        return
-      }
-
-      console.error("Skipping overtime/notification autosave because no Supabase baseline was loaded.", result.error)
-      setOvertimeNotificationsSyncError(result.error || "Live overtime and notification state did not load.")
+    const fallbackSnapshot = schedulerSnapshot
+    const result = appStateQuery.data
+    const mergedPayload = {
+      ...(result.data[LEGACY_SUPABASE_APP_STATE_KEY] || {}),
+      ...(result.data[SUPABASE_APP_STATE_KEYS.staff] || {}),
+      ...(result.data[SUPABASE_APP_STATE_KEYS.cidDetail] || {}),
+      ...(result.data[SUPABASE_APP_STATE_KEYS.audit] || {})
     }
 
-    void hydrateOvertimeNotifications()
-
-    return () => {
-      active = false
+    if (Object.keys(mergedPayload).length > 0) {
+      const normalized = normalizePersistedState(mergedPayload, fallbackSnapshot)
+      setEmployees(normalized.employees)
+      setSettings(normalized.settings)
+      setReferenceSettings(normalized.referenceSettings)
+      setCidRotationStartDate(normalized.cidRotationStartDate)
+      setCidDailyOverrides(normalized.cidDailyOverrides)
+      setDetailRecords(normalized.detailRecords)
+      setDetailQueueEvents(normalized.detailQueueEvents)
+      setDetailQueueIds(normalized.detailQueueIds)
+      setAuditEvents(normalized.auditEvents)
+      lastSupabaseSnapshotRef.current = JSON.stringify(normalized)
+      setAppStateSyncStatus({
+        mode: "connected",
+        message: "Supabase sync is active for Employees, CID, Detail, Settings, audit, overtime, notifications, and patrol overrides."
+      })
+    } else if (result.error) {
+      setAppStateSyncStatus({
+        mode: "local",
+        message: "Using local browser storage for Employees, CID, Detail, Settings, and audit until Supabase app_state is available."
+      })
+    } else {
+      setAppStateSyncStatus({
+        mode: "local",
+        message: "No Supabase app state found yet. Local browser storage is active until app_state is set up."
+      })
     }
-  }, [])
+
+    hasHydratedSupabaseState.current = true
+  }, [appStateQuery.data, schedulerSnapshot])
 
   useEffect(() => {
-    let active = true
+    if (!overtimeNotificationsQuery.data) return
 
-    async function refreshOvertimeNotifications() {
-      const result = await loadSupabaseOvertimeNotificationsState()
-      if (!active || !result.data) return
+    const result = overtimeNotificationsQuery.data
+    if (result.data) {
       applyOvertimeNotificationsSyncData(result.data)
+      hasHydratedOvertimeNotifications.current = true
+      setOvertimeNotificationsSyncReady(true)
+      setOvertimeNotificationsSyncError("")
+      return
     }
 
+    console.error("Skipping overtime/notification autosave because no Supabase baseline was loaded.", result.error)
+    setOvertimeNotificationsSyncError(result.error || "Live overtime and notification state did not load.")
+  }, [overtimeNotificationsQuery.data])
+
+  useEffect(() => {
     const scheduleRefresh = () => {
       if (overtimeNotificationsRefreshTimeoutRef.current) {
         window.clearTimeout(overtimeNotificationsRefreshTimeoutRef.current)
       }
 
       overtimeNotificationsRefreshTimeoutRef.current = window.setTimeout(() => {
-        void refreshOvertimeNotifications()
+        void queryClient.invalidateQueries({ queryKey: overtimeNotificationsQueryKey })
       }, 1200)
     }
 
@@ -1567,13 +1553,12 @@ export default function App() {
       .subscribe()
 
     return () => {
-      active = false
       if (overtimeNotificationsRefreshTimeoutRef.current) {
         window.clearTimeout(overtimeNotificationsRefreshTimeoutRef.current)
       }
       supabase.removeChannel(channel)
     }
-  }, [employees, notificationCampaigns, notificationDeliveries, notificationPreferences, notificationProviderConfig, overtimeEntries])
+  }, [queryClient])
 
   useEffect(() => {
     if (!hasHydratedSupabaseState.current) return
