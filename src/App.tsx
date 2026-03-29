@@ -9,7 +9,6 @@ import { PatrolPage } from "./modules/patrol/PatrolPage"
 import { CommandPage } from "./modules/command/CommandPage"
 import { AuditPage } from "./modules/audit/AuditPage"
 import { OvertimePage } from "./modules/overtime/OvertimePage"
-import { MobilePage } from "./modules/mobile/MobilePage"
 import { NotificationsPage } from "./modules/notifications/NotificationsPage"
 import { CIDPage } from "./modules/cid/CIDPage"
 import { DetailPage } from "./modules/detail/DetailPage"
@@ -48,7 +47,6 @@ import {
   Settings,
   Briefcase,
   Clock3,
-  Smartphone,
   Bell
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -79,7 +77,6 @@ type ModuleKey =
   | "cid"
   | "force"
   | "detail"
-  | "mobile"
   | "notifications"
   | "reports"
   | "employees"
@@ -99,8 +96,6 @@ const moduleOrder: ModuleDefinition[] = [
   { key: "force", label: "Force", icon: AlertTriangle },
 
   { key: "detail", label: "Detail", icon: Briefcase },
-
-  { key: "mobile", label: "Mobile", icon: Smartphone },
 
   { key: "notifications", label: "Notifications", icon: Bell },
 
@@ -205,8 +200,6 @@ const SUPABASE_APP_STATE_KEYS = {
 const LEGACY_SUPABASE_APP_STATE_KEY = "scheduler_state"
 const DEFAULT_CID_ROTATION_START_DATE = "2026-03-23"
 const CURRENT_OVERTIME_QUEUE_VERSION = "6"
-const MOBILE_RESPONSE_TOKEN_STORAGE_KEY = "androscoggin-mobile-response-token"
-
 function readStoredValue<T>(key: string, fallback: T) {
   if (typeof window === "undefined") return fallback
 
@@ -643,7 +636,6 @@ export default function App() {
 
   const [activeModule, setActiveModule] =
     useState<ModuleKey>("patrol")
-  const [mobileResponseToken, setMobileResponseToken] = useState("")
   const [notificationDraftShiftIds, setNotificationDraftShiftIds] = useState<string[]>([])
   const [notificationDraftRecipientIds, setNotificationDraftRecipientIds] = useState<string[]>([])
   const hasHydratedSupabaseState = useRef(false)
@@ -1270,7 +1262,7 @@ export default function App() {
   }, [settings])
 
   useEffect(() => {
-    const requiredModules: ModuleKey[] = ["overtime", "mobile", "notifications"]
+    const requiredModules: ModuleKey[] = ["overtime", "notifications"]
     const missingModules = requiredModules.filter((moduleKey) => !settings.visibleModules.includes(moduleKey))
 
     if (missingModules.length === 0) return
@@ -1779,16 +1771,10 @@ export default function App() {
   }, [employees, localPatrolOverrideRows])
 
   const visibleModulesForRole = useMemo(() => {
-    const baseVisibleModules = settings.visibleModules.filter((moduleKey) =>
+    return settings.visibleModules.filter((moduleKey) =>
       moduleKey === "command" || moduleKey === "audit" ? canAccessCommandTools : true
     )
-
-    if (mobileResponseToken && !baseVisibleModules.includes("mobile")) {
-      return [...baseVisibleModules, "mobile"]
-    }
-
-    return baseVisibleModules
-  }, [canAccessCommandTools, mobileResponseToken, settings.visibleModules])
+  }, [canAccessCommandTools, settings.visibleModules])
   const staffingAlerts = useMemo(() => {
     const grouped = new Map<string, PatrolScheduleSummaryRow[]>()
 
@@ -1828,29 +1814,13 @@ export default function App() {
   useEffect(() => {
     function syncFromHash() {
       if (typeof window === "undefined") return
-      const hash = window.location.hash || ""
       const searchParams = new URLSearchParams(window.location.search)
-      const prefix = "#mobile-response="
       const queryToken = searchParams.get("mobile-response")
-      const pendingToken = window.sessionStorage.getItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY) || ""
-      const resolvedToken = hash.startsWith(prefix)
-        ? decodeURIComponent(hash.slice(prefix.length))
-        : (queryToken || pendingToken)
+      const resolvedToken = queryToken || ""
 
       if (resolvedToken) {
-        window.sessionStorage.setItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY, resolvedToken)
-        if (!hash.startsWith(prefix)) {
-          window.history.replaceState(
-            null,
-            "",
-            `${window.location.pathname}${window.location.search}#mobile-response=${encodeURIComponent(resolvedToken)}`
-          )
-        }
-        setMobileResponseToken(resolvedToken)
-        setActiveModule("mobile")
+        setActiveModule("notifications")
       } else {
-        window.sessionStorage.removeItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY)
-        setMobileResponseToken("")
       }
     }
 
@@ -1969,72 +1939,10 @@ export default function App() {
     )
   }
 
-  if (mobileResponseToken) {
-    return (
-      <div
-        style={{
-          width: "100%",
-          minHeight: "100vh",
-          padding: "12px",
-          boxSizing: "border-box",
-          background: activeTheme.pageBackground
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "520px",
-            margin: "0 auto"
-          }}
-        >
-          <MobilePage
-            employees={employees}
-            patrolRows={effectivePatrolSummaryRows}
-            detailRecords={detailRecords}
-            forceHistory={forceHistoryRows}
-            overtimeShiftRequests={overtimeShiftRequests}
-            setOvertimeShiftRequests={setOvertimeShiftRequests}
-            notificationDeliveries={notificationDeliveries}
-            initialResponseToken={mobileResponseToken}
-            onOpenFullApp={() => {
-              setMobileResponseToken("")
-              if (typeof window !== "undefined") {
-                window.sessionStorage.removeItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY)
-                const params = new URLSearchParams(window.location.search)
-                params.delete("mobile-response")
-                const nextSearch = params.toString()
-                window.history.replaceState(
-                  null,
-                  "",
-                  `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`
-                )
-              }
-            }}
-            onClearResponseToken={() => {
-              setMobileResponseToken("")
-              if (typeof window !== "undefined") {
-                window.sessionStorage.removeItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY)
-                const params = new URLSearchParams(window.location.search)
-                params.delete("mobile-response")
-                const nextSearch = params.toString()
-                window.history.replaceState(
-                  null,
-                  "",
-                  `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`
-                )
-              }
-            }}
-            onAuditEvent={(action, summary, details) => appendAuditEvent("Mobile", action, summary, details)}
-          />
-        </div>
-      </div>
-    )
-  }
-
   const requiresLiveSyncBarrier =
     activeModule === "patrol" ||
     activeModule === "overtime" ||
-    activeModule === "notifications" ||
-    activeModule === "mobile"
+    activeModule === "notifications"
 
   if (requiresLiveSyncBarrier && (!patrolOverridesSyncReady || !overtimeNotificationsSyncReady)) {
     return (
@@ -2285,29 +2193,6 @@ export default function App() {
             onOpenNotificationsForShiftIds={openNotificationsForShiftIds}
             onQueueAssignmentNotice={queueAssignmentNoticeForShift}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Overtime", action, summary, details)}
-          />
-        )}
-
-        {activeModule === "mobile" && (
-          <MobilePage
-            employees={employees}
-            patrolRows={effectivePatrolSummaryRows}
-            detailRecords={detailRecords}
-            forceHistory={forceHistoryRows}
-            overtimeShiftRequests={overtimeShiftRequests}
-            setOvertimeShiftRequests={setOvertimeShiftRequests}
-            notificationDeliveries={notificationDeliveries}
-            initialResponseToken={mobileResponseToken}
-            onClearResponseToken={() => {
-              setMobileResponseToken("")
-              if (typeof window !== "undefined") {
-                window.sessionStorage.removeItem(MOBILE_RESPONSE_TOKEN_STORAGE_KEY)
-                if (window.location.hash.startsWith("#mobile-response=")) {
-                  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`)
-                }
-              }
-            }}
-            onAuditEvent={(action, summary, details) => appendAuditEvent("Mobile", action, summary, details)}
           />
         )}
 

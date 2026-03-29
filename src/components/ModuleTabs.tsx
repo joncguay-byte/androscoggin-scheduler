@@ -8,7 +8,6 @@ type ModuleKey =
   | "cid"
   | "force"
   | "detail"
-  | "mobile"
   | "notifications"
   | "reports"
   | "employees"
