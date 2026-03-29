@@ -1162,7 +1162,10 @@ export function OvertimePage({
             <div
               style={{
                 display: "grid",
-                gap: "14px"
+                gap: "14px",
+                gridTemplateColumns: "1fr",
+                maxWidth: "760px",
+                margin: "0 auto"
               }}
             >
               <div
