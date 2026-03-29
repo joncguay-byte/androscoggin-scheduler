@@ -70,6 +70,14 @@ type MultiDatePickerSelection = {
   selectedDates: string[]
 }
 
+type PendingMultiDatePickerHandoff = {
+  employeeId: string
+  positionCode: PatrolPositionCode
+  shiftType: ShiftType
+  team: Team
+  assignmentDate: string
+}
+
 const STATUS_OPTIONS = [
   "Scheduled",
   "Sick",
@@ -351,6 +359,8 @@ export function PatrolPage({
   setPatrolOverrideRows,
   overtimeShiftRequests,
   setOvertimeShiftRequests,
+  pendingMultiDatePickerHandoff,
+  onConsumePendingMultiDatePickerHandoff,
   colorSettings,
   onAuditEvent
 }: {
@@ -361,6 +371,8 @@ export function PatrolPage({
   setPatrolOverrideRows: React.Dispatch<React.SetStateAction<ScheduleRow[]>>
   overtimeShiftRequests: OvertimeShiftRequest[]
   setOvertimeShiftRequests: React.Dispatch<React.SetStateAction<OvertimeShiftRequest[]>>
+  pendingMultiDatePickerHandoff?: PendingMultiDatePickerHandoff | null
+  onConsumePendingMultiDatePickerHandoff?: () => void
   colorSettings?: {
     accent: string
     border: string
@@ -408,6 +420,34 @@ export function PatrolPage({
   useEffect(() => {
     setView(defaultView)
   }, [defaultView])
+
+  useEffect(() => {
+    if (!pendingMultiDatePickerHandoff) return
+
+    const handoffDate = new Date(`${pendingMultiDatePickerHandoff.assignmentDate}T12:00:00`)
+
+    setBaseDate(new Date(handoffDate.getFullYear(), handoffDate.getMonth(), 1))
+    setView("month")
+    setEditingRow(null)
+    setTeamEditor(null)
+    setTimeOffDateSelection(null)
+    setTimeOffReasonSelection(null)
+    setTeamEmployeeSelection({
+      employeeId: pendingMultiDatePickerHandoff.employeeId,
+      positionCode: pendingMultiDatePickerHandoff.positionCode,
+      shiftType: pendingMultiDatePickerHandoff.shiftType,
+      assignmentDate: pendingMultiDatePickerHandoff.assignmentDate,
+      team: pendingMultiDatePickerHandoff.team
+    })
+    setMultiDatePickerSelection({
+      employeeId: pendingMultiDatePickerHandoff.employeeId,
+      positionCode: pendingMultiDatePickerHandoff.positionCode,
+      shiftType: pendingMultiDatePickerHandoff.shiftType,
+      team: pendingMultiDatePickerHandoff.team,
+      selectedDates: []
+    })
+    onConsumePendingMultiDatePickerHandoff?.()
+  }, [onConsumePendingMultiDatePickerHandoff, pendingMultiDatePickerHandoff])
 
   useEffect(() => {
     let active = true

@@ -701,7 +701,10 @@ export default function App() {
   const setActiveSummaryCard = useUiStore((state: UiStore) => state.setActiveSummaryCard)
   const notificationDraftShiftIds = useUiStore((state: UiStore) => state.notificationDraftShiftIds)
   const notificationDraftRecipientIds = useUiStore((state: UiStore) => state.notificationDraftRecipientIds)
+  const patrolMultiDatePickerHandoff = useUiStore((state: UiStore) => state.patrolMultiDatePickerHandoff)
   const openNotificationsForShiftIds = useUiStore((state: UiStore) => state.openNotificationsForShiftIds)
+  const openPatrolMultiDatePicker = useUiStore((state: UiStore) => state.openPatrolMultiDatePicker)
+  const clearPatrolMultiDatePickerHandoff = useUiStore((state: UiStore) => state.clearPatrolMultiDatePickerHandoff)
   const clearNotificationDraftSelections = useUiStore((state: UiStore) => state.clearNotificationDraftSelections)
   const hasHydratedSupabaseState = useRef(false)
   const hasHydratedPatrolOverrides = useRef(false)
@@ -2337,6 +2340,8 @@ export default function App() {
             setPatrolOverrideRows={setLocalPatrolOverrideRows}
             overtimeShiftRequests={overtimeShiftRequests}
             setOvertimeShiftRequests={setOvertimeShiftRequests}
+            pendingMultiDatePickerHandoff={patrolMultiDatePickerHandoff}
+            onConsumePendingMultiDatePickerHandoff={clearPatrolMultiDatePickerHandoff}
             colorSettings={activeColorSettings}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Patrol", action, summary, details)}
           />
@@ -2357,6 +2362,7 @@ export default function App() {
             overtimeShiftRequests={overtimeShiftRequests}
             setOvertimeShiftRequests={setOvertimeShiftRequests}
             onOpenNotificationsForShiftIds={openNotificationsForShiftIds}
+            onOpenPatrolMultiDatePicker={openPatrolMultiDatePicker}
             onQueueAssignmentNotice={queueAssignmentNoticeForShift}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Overtime", action, summary, details)}
           />

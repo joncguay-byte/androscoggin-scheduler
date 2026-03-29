@@ -30,6 +30,13 @@ type OvertimePageProps = {
   overtimeShiftRequests: OvertimeShiftRequest[]
   setOvertimeShiftRequests: React.Dispatch<React.SetStateAction<OvertimeShiftRequest[]>>
   onOpenNotificationsForShiftIds: (shiftIds: string[], recipientIds?: string[]) => void
+  onOpenPatrolMultiDatePicker: (payload: {
+    employeeId: string
+    positionCode: PatrolPositionCode
+    shiftType: ShiftType
+    team: Employee["team"]
+    assignmentDate: string
+  }) => void
   onQueueAssignmentNotice: (requestId: string, employeeId: string) => void
   onAuditEvent: (action: string, summary: string, details?: string) => void
 }
@@ -119,6 +126,7 @@ export function OvertimePage({
   overtimeShiftRequests,
   setOvertimeShiftRequests,
   onOpenNotificationsForShiftIds,
+  onOpenPatrolMultiDatePicker,
   onQueueAssignmentNotice,
   onAuditEvent
 }: OvertimePageProps) {
@@ -1232,6 +1240,32 @@ export function OvertimePage({
     setPreview2Step(null)
   }
 
+  function continuePreview2SelectedShifts() {
+    if (preview2SelectedShiftKeys.length === 0) return
+
+    setPreview2Reason("Vacation")
+    setPreview2Step("reason")
+  }
+
+  function openPreview2MultipleDatesInPatrol() {
+    if (!preview2SelectedEmployee || preview2EmployeeScheduledRows.length === 0) {
+      window.alert("No scheduled patrol shifts were found for this employee.")
+      return
+    }
+
+    const firstScheduledRow = preview2EmployeeScheduledRows[0]
+    if (!firstScheduledRow) return
+
+    onOpenPatrolMultiDatePicker({
+      employeeId: preview2SelectedEmployee.id,
+      positionCode: firstScheduledRow.position_code,
+      shiftType: firstScheduledRow.shift_type,
+      team: preview2SelectedEmployee.team,
+      assignmentDate: firstScheduledRow.assignment_date
+    })
+    resetPreview2EmployeeFlow()
+  }
+
   function togglePreview2ShiftSelection(row: PatrolScheduleRow) {
     const rowKey = getPatrolRowKey(row)
 
@@ -1482,7 +1516,7 @@ export function OvertimePage({
                     onClick={() => {
                       setPreview2TimeOffMode("multiple")
                       setPreview2SelectedShiftKeys([])
-                      setPreview2Step("shifts")
+                      openPreview2MultipleDatesInPatrol()
                     }}
                     style={{
                       padding: "8px 12px",
@@ -1557,11 +1591,7 @@ export function OvertimePage({
                       Undo
                     </button>
                     <button
-                      onClick={() => {
-                        if (preview2SelectedShiftKeys.length === 0) return
-                        setPreview2Reason("Vacation")
-                        setPreview2Step("reason")
-                      }}
+                      onClick={continuePreview2SelectedShifts}
                       style={{
                         padding: "6px 10px",
                         borderRadius: "8px",
@@ -1638,6 +1668,42 @@ export function OvertimePage({
                       </button>
                     )
                   })}
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", marginTop: "4px" }}>
+                    <button
+                      onClick={() => {
+                        setPreview2TimeOffMode(null)
+                        setPreview2SelectedShiftKeys([])
+                        setPreview2Step("mode")
+                      }}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: "#e2e8f0",
+                        color: "#0f172a",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontSize: "12px"
+                      }}
+                    >
+                      Undo
+                    </button>
+                    <button
+                      onClick={continuePreview2SelectedShifts}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: preview2SelectedShiftKeys.length === 0 ? "#cbd5e1" : "#2563eb",
+                        color: "#ffffff",
+                        fontWeight: 700,
+                        cursor: preview2SelectedShiftKeys.length === 0 ? "not-allowed" : "pointer",
+                        fontSize: "12px"
+                      }}
+                    >
+                      Save
+                    </button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
