@@ -191,6 +191,7 @@ const OVERTIME_QUEUE_IDS_STORAGE_KEY = "androscoggin-overtime-queue-ids"
 const OVERTIME_QUEUE_VERSION_STORAGE_KEY = "androscoggin-overtime-queue-version"
 const OVERTIME_NOTIFICATIONS_SAFETY_SNAPSHOT_KEY = "androscoggin-overtime-notifications-safety-snapshot"
 const NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY = "androscoggin-notification-provider-config"
+const PROVIDER_CONFIG_DRAFT_STORAGE_KEY = "androscoggin-notification-provider-config-draft"
 const AUDIT_EVENTS_STORAGE_KEY = "androscoggin-audit-events"
 const SUPABASE_APP_STATE_KEYS = {
   staff: "scheduler_staff_state",
@@ -209,6 +210,38 @@ function readStoredValue<T>(key: string, fallback: T) {
   } catch {
     return fallback
   }
+}
+
+function readStoredNotificationProviderConfig() {
+  const fallback: NotificationProviderConfig = {
+    mode: "draft_only",
+    emailWebhookUrl: "",
+    textWebhookUrl: "",
+    authToken: "",
+    senderName: "Androscoggin Scheduler",
+    senderEmail: "",
+    senderPhone: ""
+  }
+
+  if (typeof window === "undefined") return fallback
+
+  try {
+    const primaryRaw = window.localStorage.getItem(NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY)
+    if (primaryRaw) {
+      const parsed = JSON.parse(primaryRaw) as NotificationProviderConfig
+      if (hasMeaningfulNotificationProviderConfig(parsed)) return parsed
+    }
+
+    const draftRaw = window.localStorage.getItem(PROVIDER_CONFIG_DRAFT_STORAGE_KEY)
+    if (draftRaw) {
+      const parsed = JSON.parse(draftRaw) as NotificationProviderConfig
+      if (hasMeaningfulNotificationProviderConfig(parsed)) return parsed
+    }
+  } catch {
+    return fallback
+  }
+
+  return fallback
 }
 
 function shouldResetStoredOvertimeQueue() {
@@ -611,10 +644,7 @@ export default function App() {
   const [notificationCampaigns, setNotificationCampaigns] = useState<NotificationCampaign[]>([])
   const [notificationDeliveries, setNotificationDeliveries] = useState<NotificationDelivery[]>([])
   const [notificationProviderConfig, setNotificationProviderConfig] = useState<NotificationProviderConfig>(() =>
-    readStoredValue<NotificationProviderConfig>(
-      NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY,
-      buildDefaultNotificationProviderConfig()
-    )
+    readStoredNotificationProviderConfig()
   )
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(() =>
     readStoredValue<AuditEvent[]>(AUDIT_EVENTS_STORAGE_KEY, [])
@@ -924,11 +954,14 @@ export default function App() {
         : defaultPreferences
     const nextCampaigns = data.notificationCampaigns
     const nextDeliveries = data.notificationDeliveries
+    const storedProviderConfig = readStoredNotificationProviderConfig()
     const nextProviderConfig = hasMeaningfulNotificationProviderConfig(data.notificationProviderConfig)
       ? data.notificationProviderConfig!
-      : hasMeaningfulNotificationProviderConfig(notificationProviderConfig)
-        ? notificationProviderConfig
-        : buildDefaultNotificationProviderConfig()
+      : hasMeaningfulNotificationProviderConfig(storedProviderConfig)
+        ? storedProviderConfig
+        : hasMeaningfulNotificationProviderConfig(notificationProviderConfig)
+          ? notificationProviderConfig
+          : buildDefaultNotificationProviderConfig()
 
     setOvertimeQueueIds(nextQueueIds)
     setOvertimeShiftRequests(nextShiftRequests)
@@ -945,8 +978,7 @@ export default function App() {
       overtimeEntries: nextEntries,
       notificationPreferences: nextPreferences,
       notificationCampaigns: nextCampaigns,
-      notificationDeliveries: nextDeliveries,
-      notificationProviderConfig: nextProviderConfig
+      notificationDeliveries: nextDeliveries
     })
     lastSupabaseNotificationProviderConfigRef.current = JSON.stringify(nextProviderConfig)
     writeOvertimeNotificationsSafetySnapshot({
@@ -1316,6 +1348,10 @@ export default function App() {
         NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY,
         JSON.stringify(notificationProviderConfig)
       )
+      window.localStorage.setItem(
+        PROVIDER_CONFIG_DRAFT_STORAGE_KEY,
+        JSON.stringify(notificationProviderConfig)
+      )
     }
   }, [notificationProviderConfig])
 
@@ -1388,14 +1424,12 @@ export default function App() {
       overtimeEntries,
       notificationPreferences,
       notificationCampaigns,
-      notificationDeliveries,
-      notificationProviderConfig
+      notificationDeliveries
     }),
     [
       notificationCampaigns,
       notificationDeliveries,
       notificationPreferences,
-      notificationProviderConfig,
       overtimeEntries,
       overtimeQueueIds,
       overtimeShiftRequests

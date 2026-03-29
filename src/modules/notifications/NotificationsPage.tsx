@@ -138,13 +138,6 @@ export function NotificationsPage({
   const [selectedDeliveryId, setSelectedDeliveryId] = useState("")
 
   useEffect(() => {
-    const hasDraftValue =
-      providerConfigDraft.emailWebhookUrl.trim().length > 0 ||
-      providerConfigDraft.textWebhookUrl.trim().length > 0 ||
-      providerConfigDraft.authToken.trim().length > 0 ||
-      providerConfigDraft.senderEmail.trim().length > 0 ||
-      providerConfigDraft.senderPhone.trim().length > 0
-
     const hasPropValue =
       notificationProviderConfig.emailWebhookUrl.trim().length > 0 ||
       notificationProviderConfig.textWebhookUrl.trim().length > 0 ||
@@ -154,13 +147,8 @@ export function NotificationsPage({
 
     if (hasPropValue) {
       setProviderConfigDraft(notificationProviderConfig)
-      return
     }
-
-    if (hasDraftValue) {
-      setNotificationProviderConfig(providerConfigDraft)
-    }
-  }, [notificationProviderConfig, providerConfigDraft, setNotificationProviderConfig])
+  }, [notificationProviderConfig])
 
   useEffect(() => {
     if (initialSelectedShiftIds.length === 0) return
@@ -273,6 +261,7 @@ export function NotificationsPage({
 
       if (typeof window !== "undefined") {
         window.localStorage.setItem(PROVIDER_CONFIG_DRAFT_STORAGE_KEY, JSON.stringify(next))
+        window.localStorage.setItem("androscoggin-notification-provider-config", JSON.stringify(next))
       }
 
       if (providerConfigSaveTimeoutRef.current) {

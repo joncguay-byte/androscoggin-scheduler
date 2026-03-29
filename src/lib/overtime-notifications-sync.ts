@@ -15,7 +15,7 @@ type OvertimeNotificationsState = {
   notificationPreferences: NotificationPreference[]
   notificationCampaigns: NotificationCampaign[]
   notificationDeliveries: NotificationDelivery[]
-  notificationProviderConfig: NotificationProviderConfig | null
+  notificationProviderConfig?: NotificationProviderConfig | null
 }
 
 type SyncResult<T> = {
