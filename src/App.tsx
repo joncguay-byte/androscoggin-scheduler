@@ -109,6 +109,14 @@ const moduleOrder: ModuleDefinition[] = [
 
 ]
 
+const mobileModuleOrder: ModuleDefinition[] = [
+  { key: "patrol", label: "Patrol", icon: Shield },
+  { key: "cid", label: "CID", icon: Clock3 },
+  { key: "force", label: "Force", icon: AlertTriangle },
+  { key: "detail", label: "Detail", icon: Briefcase },
+  { key: "notifications", label: "OT Response", icon: Bell }
+]
+
 type ModuleDefinition = {
   key: ModuleKey
   label: string
@@ -653,6 +661,8 @@ export default function App() {
   const [localPatrolOverrideRows, setLocalPatrolOverrideRows] = useState<PatrolScheduleSummaryRow[]>([])
   const [forceHistoryRows, setForceHistoryRows] = useState<ForceHistoryRow[]>([])
   const [activeSummaryCard, setActiveSummaryCard] = useState<"open_shifts" | "staffing_alerts" | null>(null)
+  const [responseTokenFromQuery, setResponseTokenFromQuery] = useState("")
+  const [isMobileLayout, setIsMobileLayout] = useState(false)
   const [appStateSyncStatus, setAppStateSyncStatus] = useState<{
     mode: "checking" | "connected" | "local"
     message: string
@@ -1805,10 +1815,14 @@ export default function App() {
   }, [employees, localPatrolOverrideRows])
 
   const visibleModulesForRole = useMemo(() => {
+    if (isMobileLayout) {
+      return mobileModuleOrder.map((module) => module.key)
+    }
+
     return settings.visibleModules.filter((moduleKey) =>
       moduleKey === "command" || moduleKey === "audit" ? canAccessCommandTools : true
     )
-  }, [canAccessCommandTools, settings.visibleModules])
+  }, [canAccessCommandTools, isMobileLayout, settings.visibleModules])
   const staffingAlerts = useMemo(() => {
     const grouped = new Map<string, PatrolScheduleSummaryRow[]>()
 
@@ -1846,10 +1860,22 @@ export default function App() {
   }, [coverageEvaluatedPatrolSummaryRows, localPatrolOverrideRows])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const media = window.matchMedia("(max-width: 900px)")
+    const syncLayout = () => setIsMobileLayout(media.matches)
+
+    syncLayout()
+    media.addEventListener("change", syncLayout)
+    return () => media.removeEventListener("change", syncLayout)
+  }, [])
+
+  useEffect(() => {
     function syncFromQuery() {
       if (typeof window === "undefined") return
       const searchParams = new URLSearchParams(window.location.search)
       const responseToken = searchParams.get("response") || ""
+      setResponseTokenFromQuery(responseToken)
 
       if (responseToken) {
         setActiveModule("notifications")
@@ -2019,20 +2045,20 @@ export default function App() {
       style={{
         width: "100%",
         minHeight: "100vh",
-        padding: "12px",
+        padding: isMobileLayout ? "8px" : "12px",
         boxSizing: "border-box",
         background: activeTheme.pageBackground
       }}
     >
       <div
         style={{
-          maxWidth: "1760px",
+          maxWidth: isMobileLayout ? "100%" : "1760px",
           margin: "0 auto",
           background: activeTheme.shellBackground,
           border: activeColorSettings ? `1px solid ${activeColorSettings.border}` : activeTheme.shellBorder,
           boxShadow: activeTheme.shellShadow,
-          borderRadius: "24px",
-          padding: "18px"
+          borderRadius: isMobileLayout ? "18px" : "24px",
+          padding: isMobileLayout ? "12px" : "18px"
         }}
       >
         <Header
@@ -2047,6 +2073,7 @@ export default function App() {
             void signOut()
             appendAuditEvent("App", "User Signed Out", `${currentUserDisplayName} signed out.`)
           }}
+          compact={isMobileLayout}
           colorSettings={
             activeColorSettings
               ? {
@@ -2058,7 +2085,7 @@ export default function App() {
           }
         />
 
-        <div style={{ marginTop: "14px", marginBottom: "14px" }}>
+        {!isMobileLayout && <div style={{ marginTop: "14px", marginBottom: "14px" }}>
           <SummaryCards
             variant={layoutVariant}
             cidOnCallName={cidOnCallName}
@@ -2088,9 +2115,9 @@ export default function App() {
                 : undefined
             }
           />
-        </div>
+        </div>}
 
-        <div
+        {!isMobileLayout && <div
           style={{
             marginBottom: "14px",
             borderRadius: "12px",
@@ -2103,9 +2130,9 @@ export default function App() {
           }}
         >
           {appStateSyncStatus.message}
-        </div>
+        </div>}
 
-        {activeSummaryCard === "staffing_alerts" && (
+        {!isMobileLayout && activeSummaryCard === "staffing_alerts" && (
           <div style={{ marginBottom: "14px" }}>
             <Card>
               <CardHeader>
@@ -2157,9 +2184,10 @@ export default function App() {
         <ModuleTabs
           active={activeModule}
           onChange={setActiveModule}
-          moduleOrder={moduleOrder}
+          moduleOrder={isMobileLayout ? mobileModuleOrder : moduleOrder}
           visibleModules={visibleModulesForRole as ModuleKey[]}
           variant={layoutVariant}
+          compact={isMobileLayout}
           colorSettings={
             activeColorSettings
               ? {
@@ -2197,7 +2225,7 @@ export default function App() {
         {activeModule === "patrol" && (
           <PatrolPage
             employees={employees}
-            canEdit={true}
+            canEdit={!isMobileLayout}
             defaultView={settings.defaultPatrolView}
             patrolOverrideRows={localPatrolOverrideRows}
             setPatrolOverrideRows={setLocalPatrolOverrideRows}
@@ -2244,6 +2272,8 @@ export default function App() {
             setNotificationProviderConfig={setNotificationProviderConfig}
             initialSelectedShiftIds={notificationDraftShiftIds}
             initialSelectedRecipientIds={notificationDraftRecipientIds}
+            responseToken={responseTokenFromQuery}
+            compactMode={isMobileLayout}
             onConsumeDraftSelections={() => {
               setNotificationDraftShiftIds([])
               setNotificationDraftRecipientIds([])
@@ -2259,6 +2289,7 @@ export default function App() {
             detailRecords={detailRecords}
             forceHistory={forceHistoryRows}
             setForceHistory={setForceHistoryRows}
+            readOnly={isMobileLayout}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Force", action, summary, details)}
           />
         )}
@@ -2297,7 +2328,7 @@ export default function App() {
         {activeModule === "cid" && (
           <CIDPage
             employees={employees}
-            currentUserRole={currentUserRole}
+            currentUserRole={isMobileLayout ? "deputy" : currentUserRole}
             rotationStartDate={cidRotationStartDate}
             setRotationStartDate={setCidRotationStartDate}
             dailyOverrides={cidDailyOverrides}
@@ -2309,7 +2340,7 @@ export default function App() {
         {activeModule === "detail" && (
           <DetailPage
             employees={employees}
-            currentUserRole={currentUserRole}
+            currentUserRole={isMobileLayout ? "deputy" : currentUserRole}
             detailRecords={detailRecords}
             setDetailRecords={setDetailRecords}
             detailQueueEvents={detailQueueEvents}

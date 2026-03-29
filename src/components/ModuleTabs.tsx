@@ -30,6 +30,7 @@ type ModuleTabsProps = {
     border: string
     cardBackground: string
   }
+  compact?: boolean
 }
 
 const tabStyles = {
@@ -62,7 +63,8 @@ export default function ModuleTabs({
   moduleOrder,
   visibleModules,
   variant = "command-brass",
-  colorSettings
+  colorSettings,
+  compact = false
 }: ModuleTabsProps) {
   const style = tabStyles[variant]
   const allowedModules = visibleModules || moduleOrder.map((module) => module.key)
@@ -72,9 +74,11 @@ export default function ModuleTabs({
     <div
       style={{
         display: "flex",
-        gap: "10px",
+        gap: compact ? "8px" : "10px",
         marginBottom: "20px",
-        flexWrap: "wrap"
+        flexWrap: compact ? "nowrap" : "wrap",
+        overflowX: compact ? "auto" : "visible",
+        paddingBottom: compact ? "4px" : undefined
       }}
     >
 
@@ -93,17 +97,20 @@ export default function ModuleTabs({
               display: "flex",
               alignItems: "center",
               gap: "6px",
-              padding: "10px 16px",
+              padding: compact ? "9px 12px" : "10px 16px",
               borderRadius: "999px",
               border: `1px solid ${colorSettings?.border || style.border.replace("1px solid ", "")}`,
               background: isActive ? colorSettings?.accent || style.activeBackground : colorSettings?.cardBackground || style.inactiveBackground,
               color: isActive ? style.activeColor : style.inactiveColor,
               cursor: "pointer",
-              fontWeight: "700"
+              fontWeight: "700",
+              fontSize: compact ? "12px" : undefined,
+              whiteSpace: "nowrap",
+              flexShrink: 0
             }}
           >
 
-            <Icon size={16} />
+            <Icon size={compact ? 14 : 16} />
 
             {m.label}
 

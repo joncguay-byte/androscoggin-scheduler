@@ -12,6 +12,7 @@ type HeaderProps = {
   }
   badgeSrc?: string
   onSignOut?: () => void
+  compact?: boolean
 }
 
 const headerStyles = {
@@ -44,7 +45,8 @@ export default function Header({
   title = "Androscoggin Patrol Schedule",
   colorSettings,
   badgeSrc,
-  onSignOut
+  onSignOut,
+  compact = false
 }: HeaderProps) {
 
   const username = user?.username || "Admin"
@@ -61,22 +63,23 @@ export default function Header({
         width: "100%",
         display: "flex",
         justifyContent: "space-between",
-        alignItems: "center",
+        alignItems: compact ? "stretch" : "center",
+        flexDirection: compact ? "column" : "row",
         marginBottom: "10px",
         border: style.border,
         borderRadius: "18px",
-        padding: "12px 18px",
+        padding: compact ? "12px 14px" : "12px 18px",
         boxSizing: "border-box",
         background: style.background,
         borderColor: colorSettings?.border || undefined
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: compact ? "10px" : "14px", width: compact ? "100%" : undefined }}>
         {badgeSrc ? (
           <div
             style={{
-              width: "82px",
-              height: "82px",
+              width: compact ? "56px" : "82px",
+              height: compact ? "56px" : "82px",
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
@@ -89,8 +92,8 @@ export default function Header({
               src={badgeSrc}
               alt="Androscoggin County Sheriff's Office badge"
               style={{
-                width: "82px",
-                height: "82px",
+                width: compact ? "56px" : "82px",
+                height: compact ? "56px" : "82px",
                 objectFit: "contain",
                 flexShrink: 0,
                 filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.18))"
@@ -100,8 +103,8 @@ export default function Header({
         ) : (
           <div
             style={{
-              width: "64px",
-              height: "64px",
+              width: compact ? "48px" : "64px",
+              height: compact ? "48px" : "64px",
               flexShrink: 0,
               clipPath: "polygon(50% 0%, 61% 18%, 82% 12%, 76% 33%, 100% 50%, 76% 67%, 82% 88%, 61% 82%, 50% 100%, 39% 82%, 18% 88%, 24% 67%, 0% 50%, 24% 33%, 18% 12%, 39% 18%)",
               background: "linear-gradient(180deg, #f6df9a 0%, #cda33a 100%)",
@@ -114,15 +117,15 @@ export default function Header({
           >
             <div
               style={{
-                width: "28px",
-                height: "28px",
+                width: compact ? "22px" : "28px",
+                height: compact ? "22px" : "28px",
                 borderRadius: "999px",
                 background: "#112b5c",
                 color: "#f7e6af",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: "11px",
+                fontSize: compact ? "9px" : "11px",
                 fontWeight: 800
               }}
             >
@@ -131,12 +134,12 @@ export default function Header({
           </div>
         )}
 
-        <h2 style={{ margin: 0, color: colorSettings?.accent || style.titleColor, fontSize: "30px" }}>
+        <h2 style={{ margin: 0, color: colorSettings?.accent || style.titleColor, fontSize: compact ? "20px" : "30px", lineHeight: 1.15 }}>
           {title}
         </h2>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      <div style={{ display: "flex", alignItems: compact ? "center" : "center", justifyContent: compact ? "space-between" : "flex-end", gap: "10px", width: compact ? "100%" : undefined, marginTop: compact ? "10px" : undefined }}>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: "14px", color: style.userColor, fontWeight: 600 }}>
             {username}

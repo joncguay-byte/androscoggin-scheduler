@@ -40,6 +40,8 @@ type NotificationsPageProps = {
   setNotificationProviderConfig: React.Dispatch<React.SetStateAction<NotificationProviderConfig>>
   initialSelectedShiftIds?: string[]
   initialSelectedRecipientIds?: string[]
+  responseToken?: string
+  compactMode?: boolean
   onConsumeDraftSelections?: () => void
   onAuditEvent: (action: string, summary: string, details?: string) => void
 }
@@ -86,6 +88,8 @@ export function NotificationsPage({
   setNotificationProviderConfig,
   initialSelectedShiftIds = [],
   initialSelectedRecipientIds = [],
+  responseToken = "",
+  compactMode = false,
   onConsumeDraftSelections,
   onAuditEvent
 }: NotificationsPageProps) {
@@ -242,6 +246,17 @@ export function NotificationsPage({
   const responseTargetShift = selectedCampaign?.shiftRequestIds[0]
     ? overtimeShiftRequests.find((request) => request.id === selectedCampaign.shiftRequestIds[0]) || null
     : openShiftRequests[0] || null
+  const activeResponseDelivery = responseToken
+    ? notificationDeliveries.find((delivery) => delivery.responseToken === responseToken) || null
+    : null
+  const responseEmployee = activeResponseDelivery
+    ? employeeMap.get(activeResponseDelivery.employeeId) || null
+    : null
+  const responseShifts = activeResponseDelivery
+    ? activeResponseDelivery.shiftRequestIds
+      .map((shiftId) => requestMap.get(shiftId) || null)
+      .filter((request): request is OvertimeShiftRequest => !!request)
+    : []
 
   const deliverySummary = useMemo(() => ({
     queued: notificationDeliveries.filter((delivery) => delivery.status === "queued").length,
@@ -408,6 +423,100 @@ export function NotificationsPage({
     )
     const employee = employeeMap.get(employeeId)
     onAuditEvent("Overtime Response Captured", `${employee ? `${employee.firstName} ${employee.lastName}` : "Employee"} marked ${status}.`, requestId)
+  }
+
+  if (responseToken) {
+    return (
+      <div style={{ display: "grid", gap: "14px", maxWidth: "720px", margin: "0 auto" }}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Overtime Response</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!activeResponseDelivery && (
+              <div style={{ color: "#64748b", fontSize: "14px" }}>
+                Loading overtime request...
+              </div>
+            )}
+            {activeResponseDelivery && !responseEmployee && (
+              <div style={{ color: "#991b1b", fontSize: "14px" }}>
+                This overtime response link is not available for a matching employee.
+              </div>
+            )}
+            {responseEmployee && (
+              <div style={{ display: "grid", gap: "8px", color: "#334155", fontSize: "14px", lineHeight: 1.5 }}>
+                <div>
+                  Responding as <strong>{responseEmployee.firstName} {responseEmployee.lastName}</strong>
+                </div>
+                <div>
+                  Choose `Interested` if you want to work the shift. Command staff will make the final assignment.
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {responseEmployee && responseShifts.map((request) => {
+          const response = request.responses.find((entry) => entry.employeeId === responseEmployee.id)
+          return (
+            <Card key={request.id}>
+              <CardContent>
+                <div style={{ display: "grid", gap: "10px" }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: "16px" }}>
+                      {formatDate(request.assignmentDate)} | {request.shiftType}
+                    </div>
+                    <div style={{ marginTop: "4px", color: "#475569", fontSize: "13px" }}>
+                      {request.description}
+                    </div>
+                    <div style={{ marginTop: "4px", color: "#64748b", fontSize: "12px" }}>
+                      Current response: {response?.status || "Pending"}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {(["Interested", "Declined"] as OvertimeAvailabilityStatus[]).map((status) => (
+                      <button
+                        key={`${request.id}-${status}`}
+                        onClick={() => setResponse(request.id, responseEmployee.id, status)}
+                        style={{
+                          border: response?.status === status ? "1px solid #1d4ed8" : "1px solid #cbd5e1",
+                          background: response?.status === status ? "#eff6ff" : "#ffffff",
+                          color: response?.status === status ? "#1d4ed8" : "#334155",
+                          borderRadius: "10px",
+                          padding: "10px 14px",
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          cursor: "pointer"
+                        }}
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+    )
+  }
+
+  if (compactMode) {
+    return (
+      <div style={{ display: "grid", gap: "14px" }}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Overtime Responses</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div style={{ color: "#334155", fontSize: "14px", lineHeight: 1.55 }}>
+              This phone view stays simple. Patrol, CID, Force, and Detail are view-only here, and overtime responses open directly from the email or text link.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

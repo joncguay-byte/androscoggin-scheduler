@@ -19,7 +19,8 @@ export function ForcePage({
   detailRecords,
   forceHistory,
   setForceHistory,
-  onAuditEvent
+  onAuditEvent,
+  readOnly = false
 }: {
   employees: Employee[]
   overtimeEntries: OvertimeEntry[]
@@ -27,6 +28,7 @@ export function ForcePage({
   forceHistory: ForceHistoryRow[]
   setForceHistory: React.Dispatch<React.SetStateAction<ForceHistoryRow[]>>
   onAuditEvent?: (action: string, summary: string, details?: string) => void
+  readOnly?: boolean
 }) {
   const [draftDatesByEmployee, setDraftDatesByEmployee] = useState<Record<string, { last1: string; last2: string }>>({})
   const [undoStack, setUndoStack] = useState<Array<{ rows: ForceHistoryRow[]; employeeIds: string[] }>>([])
@@ -201,19 +203,23 @@ export function ForcePage({
         }}
       >
         <h2>Force Rotation</h2>
-        <button
-          data-no-print="true"
-          onClick={() => printElementById("force-print-section", "Force Rotation")}
-        >
-          Print Force
-        </button>
-        <button
-          data-no-print="true"
-          onClick={() => void undoForceAction()}
-          disabled={undoStack.length === 0}
-        >
-          Undo
-        </button>
+        {!readOnly && (
+          <>
+            <button
+              data-no-print="true"
+              onClick={() => printElementById("force-print-section", "Force Rotation")}
+            >
+              Print Force
+            </button>
+            <button
+              data-no-print="true"
+              onClick={() => void undoForceAction()}
+              disabled={undoStack.length === 0}
+            >
+              Undo
+            </button>
+          </>
+        )}
       </div>
 
       {forceList.map((employee, index) => (
@@ -243,6 +249,7 @@ export function ForcePage({
             <input
               type="date"
               value={draftDatesByEmployee[employee.id]?.last1 || ""}
+              disabled={readOnly}
               onChange={(event) =>
                 setDraftDatesByEmployee((current) => ({
                   ...current,
@@ -260,6 +267,7 @@ export function ForcePage({
             <input
               type="date"
               value={draftDatesByEmployee[employee.id]?.last2 || ""}
+              disabled={readOnly}
               onChange={(event) =>
                 setDraftDatesByEmployee((current) => ({
                   ...current,
@@ -281,13 +289,17 @@ export function ForcePage({
             Total Overtime: {employee.totalOvertimeHours.toFixed(1)}
           </div>
 
-          <button onClick={() => void forceEmployee(employee.id)}>
-            Force
-          </button>
+          {!readOnly && (
+            <button onClick={() => void forceEmployee(employee.id)}>
+              Force
+            </button>
+          )}
 
-          <button onClick={() => void saveForceDates(employee.id)}>
-            Save
-          </button>
+          {!readOnly && (
+            <button onClick={() => void saveForceDates(employee.id)}>
+              Save
+            </button>
+          )}
         </div>
       ))}
     </div>
