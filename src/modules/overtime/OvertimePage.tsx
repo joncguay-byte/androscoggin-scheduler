@@ -1151,21 +1151,26 @@ export function OvertimePage({
             id="overtime-list-print-section"
             style={{
               display: "grid",
-              gap: "12px"
+              gap: "14px"
             }}
           >
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gap: "12px",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "14px",
                 alignItems: "center"
               }}
             >
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "center"
+                  justifyContent: "center",
+                  padding: "16px",
+                  borderRadius: "14px",
+                  border: "1px solid #dbe3ee",
+                  background: "#f8fafc",
+                  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)"
                 }}
               >
                 <select
@@ -1173,12 +1178,13 @@ export function OvertimePage({
                   onChange={() => undefined}
                   style={{
                     width: "100%",
-                    maxWidth: "320px",
+                    maxWidth: "340px",
                     padding: "10px 12px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
                     background: "#ffffff",
-                    fontSize: "13px"
+                    fontSize: "13px",
+                    fontWeight: 600
                   }}
                 >
                   {overtimeQueueList.map((employee, index) => (
@@ -1198,7 +1204,12 @@ export function OvertimePage({
                   display: "flex",
                   justifyContent: "center",
                   alignItems: "center",
-                  textAlign: "center"
+                  textAlign: "center",
+                  padding: "16px",
+                  borderRadius: "14px",
+                  border: "1px solid #dbe3ee",
+                  background: "#f8fafc",
+                  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)"
                 }}
               >
                 <div style={{ width: "100%", maxWidth: "320px", textAlign: "center" }}>
@@ -1212,15 +1223,20 @@ export function OvertimePage({
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "center"
+                  justifyContent: "center",
+                  padding: "16px",
+                  borderRadius: "14px",
+                  border: "1px solid #dbe3ee",
+                  background: "#f8fafc",
+                  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)"
                 }}
               >
                 <button
                   onClick={() => printElementById("overtime-list-print-section", "Overtime List")}
                   style={{
                     width: "100%",
-                    maxWidth: "320px",
-                    padding: "8px 12px",
+                    maxWidth: "340px",
+                    padding: "10px 12px",
                     borderRadius: "8px",
                     border: "none",
                     background: "#2563eb",
