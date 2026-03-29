@@ -33,6 +33,7 @@ import {
   saveSupabaseOvertimeNotificationsState
 } from "./lib/overtime-notifications-sync"
 import { buildNotificationDeliveries } from "./lib/notifications"
+import { notificationProviderConfigSchema, overtimeBackupSchema } from "./lib/schemas"
 import { getCurrentProfileRole, getLocalAccessUser, resolveAppRole, resolveDisplayName, signOut } from "./lib/auth"
 import { isForceRequired, isShiftCovered } from "./lib/staffing-engine"
 import { supabase } from "./lib/supabase"
@@ -236,19 +237,19 @@ function readStoredNotificationProviderConfig() {
     senderPhone: ""
   }
 
-  if (typeof window === "undefined") return fallback
+    if (typeof window === "undefined") return fallback
 
   try {
     const primaryRaw = window.localStorage.getItem(NOTIFICATION_PROVIDER_CONFIG_STORAGE_KEY)
     if (primaryRaw) {
-      const parsed = JSON.parse(primaryRaw) as NotificationProviderConfig
-      if (hasMeaningfulNotificationProviderConfig(parsed)) return parsed
+      const parsed = notificationProviderConfigSchema.safeParse(JSON.parse(primaryRaw))
+      if (parsed.success && hasMeaningfulNotificationProviderConfig(parsed.data)) return parsed.data
     }
 
     const draftRaw = window.localStorage.getItem(PROVIDER_CONFIG_DRAFT_STORAGE_KEY)
     if (draftRaw) {
-      const parsed = JSON.parse(draftRaw) as NotificationProviderConfig
-      if (hasMeaningfulNotificationProviderConfig(parsed)) return parsed
+      const parsed = notificationProviderConfigSchema.safeParse(JSON.parse(draftRaw))
+      if (parsed.success && hasMeaningfulNotificationProviderConfig(parsed.data)) return parsed.data
     }
   } catch {
     return fallback
@@ -921,7 +922,12 @@ export default function App() {
     reader.onload = () => {
       try {
         const raw = typeof reader.result === "string" ? reader.result : ""
-        const parsed = JSON.parse(raw) as Partial<PersistedSchedulerState>
+        const parsedResult = overtimeBackupSchema.safeParse(JSON.parse(raw))
+        if (!parsedResult.success) {
+          window.alert("That backup file is missing required scheduler data or has the wrong format.")
+          return
+        }
+        const parsed = parsedResult.data
 
         setOvertimeQueueIds(Array.isArray(parsed.overtimeQueueIds) ? parsed.overtimeQueueIds : [])
         setOvertimeShiftRequests(Array.isArray(parsed.overtimeShiftRequests) ? parsed.overtimeShiftRequests : [])
