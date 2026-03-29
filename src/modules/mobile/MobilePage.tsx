@@ -18,7 +18,7 @@ type MobilePageProps = {
   onAuditEvent?: (action: string, summary: string, details?: string) => void
 }
 
-type MobileView = "patrol" | "force" | "detail" | "overtime"
+type MobileView = "home" | "patrol" | "force" | "detail" | "overtime"
 
 function formatDate(value: string) {
   return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
@@ -56,7 +56,7 @@ export function MobilePage({
     [employees]
   )
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(previewEmployees[0]?.id || "")
-  const [mobileView, setMobileView] = useState<MobileView>("patrol")
+  const [mobileView, setMobileView] = useState<MobileView>("home")
   const [responseToken, setResponseToken] = useState(initialResponseToken)
   const [fetchedResponseDelivery, setFetchedResponseDelivery] = useState<NotificationDelivery | null>(null)
   const [fetchedResponseShifts, setFetchedResponseShifts] = useState<OvertimeShiftRequest[]>([])
@@ -107,6 +107,8 @@ export function MobilePage({
       }))
   }, [effectiveSelectedEmployee, patrolRows])
 
+  const upcomingPatrolPreview = patrolPreview.slice(0, 3)
+
   const forcePreview = useMemo(() => {
     if (!effectiveSelectedEmployee) return []
 
@@ -116,6 +118,8 @@ export function MobilePage({
       .slice(0, 8)
   }, [effectiveSelectedEmployee, forceHistory])
 
+  const latestForceEntry = forcePreview[0] || null
+
   const detailPreview = useMemo(() => {
     if (!effectiveSelectedEmployee) return []
 
@@ -124,6 +128,8 @@ export function MobilePage({
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 8)
   }, [detailRecords, effectiveSelectedEmployee])
+
+  const latestDetailPreview = detailPreview[0] || null
 
   const overtimePreview = useMemo(() => {
     if (!effectiveSelectedEmployee) return []
@@ -140,6 +146,9 @@ export function MobilePage({
         }
       })
   }, [effectiveSelectedEmployee, overtimeShiftRequests])
+
+  const pendingOvertimePreview = overtimePreview.filter((request) => request.responseStatus === "Pending")
+  const interestedOvertimePreview = overtimePreview.filter((request) => request.responseStatus === "Interested")
 
   const responseShifts = useMemo(() => {
     if (!activeResponseDelivery) return []
@@ -317,6 +326,14 @@ export function MobilePage({
     )
   }
 
+  const mobileTabButtons: Array<{ value: MobileView; label: string }> = [
+    { value: "home", label: "Home" },
+    { value: "patrol", label: "Patrol" },
+    { value: "overtime", label: "OT" },
+    { value: "detail", label: "Detail" },
+    { value: "force", label: "Force" }
+  ]
+
   return (
     <div style={{ display: "grid", gap: "18px" }}>
       <Card>
@@ -377,21 +394,21 @@ export function MobilePage({
               <div
                 style={{
                   width: "360px",
-                maxWidth: "100%",
-                margin: "0 auto",
-                border: "10px solid #0f172a",
-                borderRadius: "28px",
-                background: "#f8fafc",
-                overflow: "hidden",
-                boxShadow: "0 20px 36px rgba(15, 23, 42, 0.18)"
+                  maxWidth: "100%",
+                  margin: "0 auto",
+                  border: "10px solid #0f172a",
+                  borderRadius: "28px",
+                  background: "#f8fafc",
+                  overflow: "hidden",
+                  boxShadow: "0 20px 36px rgba(15, 23, 42, 0.18)"
                 }}
               >
-                <div style={{ padding: "10px 14px", background: "#0f172a", color: "#f8fafc", fontWeight: 700, display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+                <div style={{ padding: "12px 14px", background: "#0f172a", color: "#f8fafc", fontWeight: 700, display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
                   <span>
-                  {hasResponseToken
-                    ? "Overtime Response"
-                    : (effectiveSelectedEmployee ? `${effectiveSelectedEmployee.firstName} ${effectiveSelectedEmployee.lastName}` : "Mobile Preview")}
-                </span>
+                    {hasResponseToken
+                      ? "Overtime Response"
+                      : (effectiveSelectedEmployee ? `${effectiveSelectedEmployee.firstName} ${effectiveSelectedEmployee.lastName}` : "Mobile Preview")}
+                  </span>
                   {hasResponseToken && (
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       <button
@@ -431,14 +448,48 @@ export function MobilePage({
                 )}
               </div>
 
-              {!hasResponseToken && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", borderBottom: "1px solid #dbe3ee" }}>
-                  {([
-                    ["patrol", "Patrol"],
-                    ["force", "Force"],
-                    ["detail", "Detail"],
-                    ["overtime", "OT"]
-                  ] as const).map(([value, label]) => (
+                {!hasResponseToken && effectiveSelectedEmployee && (
+                  <div
+                    style={{
+                      padding: "14px 14px 12px 14px",
+                      borderBottom: "1px solid #dbe3ee",
+                      background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
+                      display: "grid",
+                      gap: "10px"
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: "2px" }}>
+                      <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>
+                        Dashboard
+                      </div>
+                      <div style={{ fontSize: "18px", fontWeight: 900, color: "#0f172a" }}>
+                        {effectiveSelectedEmployee.firstName} {effectiveSelectedEmployee.lastName}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#475569" }}>
+                        {effectiveSelectedEmployee.rank} | {effectiveSelectedEmployee.team}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
+                      <div style={{ borderRadius: "12px", background: "#ffffff", padding: "10px", border: "1px solid #dbe3ee" }}>
+                        <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", color: "#64748b" }}>Pending OT</div>
+                        <div style={{ fontSize: "20px", fontWeight: 900, color: "#1d4ed8", lineHeight: 1.1 }}>{pendingOvertimePreview.length}</div>
+                      </div>
+                      <div style={{ borderRadius: "12px", background: "#ffffff", padding: "10px", border: "1px solid #dbe3ee" }}>
+                        <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", color: "#64748b" }}>Interested</div>
+                        <div style={{ fontSize: "20px", fontWeight: 900, color: "#0f766e", lineHeight: 1.1 }}>{interestedOvertimePreview.length}</div>
+                      </div>
+                      <div style={{ borderRadius: "12px", background: "#ffffff", padding: "10px", border: "1px solid #dbe3ee" }}>
+                        <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", color: "#64748b" }}>Detail</div>
+                        <div style={{ fontSize: "20px", fontWeight: 900, color: "#7c3aed", lineHeight: 1.1 }}>{detailPreview.length}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!hasResponseToken && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", borderBottom: "1px solid #dbe3ee", background: "#ffffff" }}>
+                    {mobileTabButtons.map(({ value, label }) => (
                     <button
                       key={value}
                       onClick={() => setMobileView(value)}
@@ -447,8 +498,9 @@ export function MobilePage({
                         borderRight: "1px solid #dbe3ee",
                         background: mobileView === value ? "#e0ecff" : "#ffffff",
                         color: "#0f172a",
-                        padding: "10px 6px",
+                        padding: "12px 4px",
                         fontWeight: 700,
+                        fontSize: "11px",
                         cursor: "pointer"
                       }}
                     >
@@ -458,7 +510,7 @@ export function MobilePage({
                 </div>
               )}
 
-              <div style={{ padding: "12px", display: "grid", gap: "10px", maxHeight: "620px", overflowY: "auto" }}>
+              <div style={{ padding: "12px", display: "grid", gap: "10px", maxHeight: "620px", overflowY: "auto", background: "#f4f7fb" }}>
                 {hasResponseToken && !inResponsePortal && (
                   <div style={{ border: "1px solid #dbe3ee", borderRadius: "14px", padding: "12px", background: "#ffffff", display: "grid", gap: "8px" }}>
                     <div style={{ fontWeight: 800, color: "#1d4ed8" }}>
@@ -515,14 +567,85 @@ export function MobilePage({
                   </div>
                 )}
 
+                {mobileView === "home" && !hasResponseToken && effectiveSelectedEmployee && (
+                  <>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "14px", background: "#ffffff", display: "grid", gap: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                          <div>
+                            <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>Next Patrol</div>
+                            <div style={{ fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+                              {upcomingPatrolPreview[0] ? formatDate(upcomingPatrolPreview[0].date) : "No upcoming row"}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setMobileView("patrol")}
+                            style={{ border: "none", background: "#eff6ff", color: "#1d4ed8", borderRadius: "999px", padding: "6px 10px", fontSize: "11px", fontWeight: 800, cursor: "pointer" }}
+                          >
+                            Open Patrol
+                          </button>
+                        </div>
+                        {upcomingPatrolPreview[0] ? (
+                          <div style={{ fontSize: "13px", color: "#334155", lineHeight: 1.5 }}>
+                            {upcomingPatrolPreview[0].label}
+                            <div style={{ marginTop: "4px", color: "#64748b", fontSize: "12px" }}>{upcomingPatrolPreview[0].status}</div>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: "13px", color: "#64748b" }}>No Patrol rows found for this employee.</div>
+                        )}
+                      </div>
+
+                      <div style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "14px", background: "#ffffff", display: "grid", gap: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                          <div>
+                            <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>Open Overtime</div>
+                            <div style={{ fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+                              {pendingOvertimePreview.length} pending shift{pendingOvertimePreview.length === 1 ? "" : "s"}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setMobileView("overtime")}
+                            style={{ border: "none", background: "#eff6ff", color: "#1d4ed8", borderRadius: "999px", padding: "6px 10px", fontSize: "11px", fontWeight: 800, cursor: "pointer" }}
+                          >
+                            Open OT
+                          </button>
+                        </div>
+                        <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.5 }}>
+                          {pendingOvertimePreview[0]
+                            ? `${formatDate(pendingOvertimePreview[0].assignmentDate)} | ${pendingOvertimePreview[0].shiftType} | ${pendingOvertimePreview[0].description}`
+                            : "No pending overtime responses right now."}
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+                        <div style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "14px", background: "#ffffff", display: "grid", gap: "6px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>Detail</div>
+                          <div style={{ fontSize: "18px", fontWeight: 900, color: "#0f172a" }}>{detailPreview.length}</div>
+                          <div style={{ fontSize: "12px", color: "#64748b" }}>
+                            {latestDetailPreview ? latestDetailPreview.description : "No detail records"}
+                          </div>
+                        </div>
+
+                        <div style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "14px", background: "#ffffff", display: "grid", gap: "6px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>Force</div>
+                          <div style={{ fontSize: "18px", fontWeight: 900, color: "#0f172a" }}>{forcePreview.length}</div>
+                          <div style={{ fontSize: "12px", color: "#64748b" }}>
+                            {latestForceEntry ? `Last forced ${formatDate(latestForceEntry.forced_date)}` : "No force entries"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 {mobileView === "patrol" && (
                   <>
                     {patrolPreview.length === 0 && <div style={{ color: "#64748b", fontSize: "13px" }}>No Patrol rows found for this employee.</div>}
                     {patrolPreview.map((entry) => (
-                      <div key={entry.id} style={{ border: "1px solid #dbe3ee", borderRadius: "12px", padding: "10px", background: "#ffffff" }}>
+                      <div key={entry.id} style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "12px", background: "#ffffff" }}>
                         <div style={{ fontWeight: 800 }}>{formatDate(entry.date)}</div>
-                        <div style={{ marginTop: "4px", fontSize: "13px", color: "#334155" }}>{entry.label}</div>
-                        <div style={{ marginTop: "4px", fontSize: "12px", color: "#64748b" }}>{entry.status}</div>
+                        <div style={{ marginTop: "6px", fontSize: "13px", color: "#334155", lineHeight: 1.45 }}>{entry.label}</div>
+                        <div style={{ marginTop: "6px", fontSize: "12px", color: "#64748b" }}>{entry.status}</div>
                       </div>
                     ))}
                   </>
@@ -530,12 +653,12 @@ export function MobilePage({
 
                 {mobileView === "force" && (
                   <>
-                    <div style={{ border: "1px solid #dbe3ee", borderRadius: "12px", padding: "10px", background: "#ffffff" }}>
+                    <div style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "12px", background: "#ffffff" }}>
                       <div style={{ fontSize: "12px", color: "#64748b" }}>Total Force Entries</div>
                       <div style={{ fontSize: "22px", fontWeight: 800 }}>{forcePreview.length}</div>
                     </div>
                     {forcePreview.map((row) => (
-                      <div key={`${row.employee_id}-${row.forced_date}`} style={{ border: "1px solid #dbe3ee", borderRadius: "12px", padding: "10px", background: "#ffffff" }}>
+                      <div key={`${row.employee_id}-${row.forced_date}`} style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "12px", background: "#ffffff" }}>
                         <div style={{ fontWeight: 700 }}>Forced Assignment</div>
                         <div style={{ marginTop: "4px", color: "#475569", fontSize: "13px" }}>{formatDate(row.forced_date)}</div>
                       </div>
@@ -547,7 +670,7 @@ export function MobilePage({
                   <>
                     {detailPreview.length === 0 && <div style={{ color: "#64748b", fontSize: "13px" }}>No detail records yet.</div>}
                     {detailPreview.map((detail) => (
-                      <div key={detail.id} style={{ border: "1px solid #dbe3ee", borderRadius: "12px", padding: "10px", background: "#ffffff" }}>
+                      <div key={detail.id} style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "12px", background: "#ffffff" }}>
                         <div style={{ fontWeight: 800 }}>{detail.description}</div>
                         <div style={{ marginTop: "4px", color: "#475569", fontSize: "13px" }}>{formatDate(detail.date)} | {detail.hours} hrs</div>
                         <div style={{ marginTop: "4px", color: "#64748b", fontSize: "12px" }}>{detail.status}</div>
@@ -560,7 +683,7 @@ export function MobilePage({
                   <>
                     {activeResponseDelivery && responseEmployee && (
                       <>
-                        <div style={{ border: "1px solid #bfdbfe", borderRadius: "12px", padding: "10px", background: "#eff6ff", display: "grid", gap: "8px" }}>
+                        <div style={{ border: "1px solid #bfdbfe", borderRadius: "16px", padding: "12px", background: "#eff6ff", display: "grid", gap: "8px" }}>
                           <div style={{ fontWeight: 800, color: "#1d4ed8" }}>Respond To Shifts In This Notification</div>
                           <div style={{ fontSize: "12px", color: "#334155" }}>
                             Choose your status for each shift below. Only the shifts attached to this email are shown here.
@@ -570,7 +693,7 @@ export function MobilePage({
                         {responseShifts.map((request) => {
                           const response = request.responses.find((entry) => entry.employeeId === responseEmployee.id)
                           return (
-                            <div key={`response-${request.id}`} style={{ border: "1px solid #dbe3ee", borderRadius: "14px", padding: "12px", background: "#ffffff", display: "grid", gap: "10px" }}>
+                            <div key={`response-${request.id}`} style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "12px", background: "#ffffff", display: "grid", gap: "10px" }}>
                               <div style={{ display: "grid", gap: "3px" }}>
                                 <div style={{ fontWeight: 800 }}>{formatDate(request.assignmentDate)}</div>
                                 <div style={{ color: "#334155", fontSize: "13px" }}>
@@ -612,7 +735,7 @@ export function MobilePage({
 
                     {!inResponsePortal && overtimePreview.length === 0 && <div style={{ color: "#64748b", fontSize: "13px" }}>No open overtime shifts are visible right now.</div>}
                     {!inResponsePortal && overtimePreview.map((request) => (
-                      <div key={request.id} style={{ border: "1px solid #dbe3ee", borderRadius: "12px", padding: "10px", background: "#ffffff" }}>
+                      <div key={request.id} style={{ border: "1px solid #dbe3ee", borderRadius: "16px", padding: "12px", background: "#ffffff" }}>
                         <div style={{ fontWeight: 800 }}>{formatDate(request.assignmentDate)}</div>
                         <div style={{ marginTop: "4px", color: "#334155", fontSize: "13px" }}>
                           {request.shiftType} | {request.description}
