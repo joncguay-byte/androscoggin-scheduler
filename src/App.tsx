@@ -681,6 +681,8 @@ export default function App() {
   const [forceHistoryRows, setForceHistoryRows] = useState<ForceHistoryRow[]>([])
   const [responseTokenFromQuery, setResponseTokenFromQuery] = useState("")
   const [isMobileLayout, setIsMobileLayout] = useState(false)
+  const [deployedBuildId, setDeployedBuildId] = useState("")
+  const [buildSyncStatus, setBuildSyncStatus] = useState<"checking" | "current" | "update_available" | "error">("checking")
   const [appStateSyncStatus, setAppStateSyncStatus] = useState<{
     mode: "checking" | "connected" | "local"
     message: string
@@ -1870,6 +1872,67 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+
+    let active = true
+
+    const checkForDeployedBuild = async () => {
+      try {
+        const response = await fetch(`/version.json?ts=${Date.now()}`, {
+          cache: "no-store",
+          headers: {
+            "cache-control": "no-cache"
+          }
+        })
+
+        if (!response.ok) {
+          throw new Error(`Unable to load version.json (${response.status})`)
+        }
+
+        const payload = await response.json() as { buildId?: string }
+
+        if (!active) return
+
+        const nextBuildId = typeof payload.buildId === "string" ? payload.buildId : ""
+        setDeployedBuildId(nextBuildId)
+
+        if (nextBuildId && nextBuildId !== __APP_BUILD_ID__) {
+          setBuildSyncStatus("update_available")
+          return
+        }
+
+        setBuildSyncStatus("current")
+      } catch {
+        if (!active) return
+
+        setBuildSyncStatus((current) => (current === "update_available" ? current : "error"))
+      }
+    }
+
+    void checkForDeployedBuild()
+
+    const intervalId = window.setInterval(() => {
+      void checkForDeployedBuild()
+    }, 45000)
+
+    const handleRefreshCheck = () => {
+      if (document.visibilityState === "visible") {
+        void checkForDeployedBuild()
+      }
+    }
+
+    window.addEventListener("focus", handleRefreshCheck)
+    document.addEventListener("visibilitychange", handleRefreshCheck)
+
+    return () => {
+      active = false
+      window.clearInterval(intervalId)
+      window.removeEventListener("focus", handleRefreshCheck)
+      document.removeEventListener("visibilitychange", handleRefreshCheck)
+    }
+  }, [])
+
+  useEffect(() => {
     function syncFromQuery() {
       if (typeof window === "undefined") return
       const searchParams = new URLSearchParams(window.location.search)
@@ -2083,6 +2146,49 @@ export default function App() {
               : undefined
           }
         />
+
+        {buildSyncStatus === "update_available" && (
+          <div
+            style={{
+              marginTop: "12px",
+              marginBottom: "14px",
+              borderRadius: "12px",
+              padding: isMobileLayout ? "12px" : "12px 14px",
+              border: "1px solid #f59e0b",
+              background: "#fffbeb",
+              color: "#92400e",
+              display: "flex",
+              flexDirection: isMobileLayout ? "column" : "row",
+              alignItems: isMobileLayout ? "stretch" : "center",
+              justifyContent: "space-between",
+              gap: "10px",
+              fontSize: "13px",
+              fontWeight: 700
+            }}
+          >
+            <div>
+              A newer scheduler update is ready
+              {deployedBuildId ? ` (${deployedBuildId.replace("T", " ").slice(0, 16)})` : ""}.
+              Reload this page to use the latest build.
+            </div>
+
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                border: "none",
+                borderRadius: "999px",
+                padding: "8px 14px",
+                background: "#b45309",
+                color: "#ffffff",
+                fontWeight: 700,
+                cursor: "pointer",
+                minWidth: isMobileLayout ? undefined : "120px"
+              }}
+            >
+              Reload Now
+            </button>
+          </div>
+        )}
 
         {!isMobileLayout && <div style={{ marginTop: "14px", marginBottom: "14px" }}>
           <SummaryCards
