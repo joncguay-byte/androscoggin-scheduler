@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import type { StateCreator } from "zustand"
 
 export type UiModuleKey =
   | "command"
@@ -26,17 +27,19 @@ type UiStore = {
   clearNotificationDraftSelections: () => void
 }
 
-export const useUiStore = create<UiStore>((set) => ({
+export type { UiStore }
+
+const createUiStore: StateCreator<UiStore> = (set) => ({
   activeModule: "patrol",
   activeSummaryCard: null,
   notificationDraftShiftIds: [],
   notificationDraftRecipientIds: [],
-  setActiveModule: (module) => set({ activeModule: module }),
-  setActiveSummaryCard: (card) =>
+  setActiveModule: (module: UiModuleKey) => set({ activeModule: module }),
+  setActiveSummaryCard: (card: ActiveSummaryCard | ((current: ActiveSummaryCard) => ActiveSummaryCard)) =>
     set((state) => ({
       activeSummaryCard: typeof card === "function" ? card(state.activeSummaryCard) : card
     })),
-  openNotificationsForShiftIds: (shiftIds, recipientIds = []) =>
+  openNotificationsForShiftIds: (shiftIds: string[], recipientIds: string[] = []) =>
     set({
       activeModule: "notifications",
       notificationDraftShiftIds: shiftIds,
@@ -47,4 +50,6 @@ export const useUiStore = create<UiStore>((set) => ({
       notificationDraftShiftIds: [],
       notificationDraftRecipientIds: []
     })
-}))
+})
+
+export const useUiStore = create<UiStore>(createUiStore)

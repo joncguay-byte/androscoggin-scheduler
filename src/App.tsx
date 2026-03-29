@@ -35,6 +35,7 @@ import {
 import { buildNotificationDeliveries } from "./lib/notifications"
 import { notificationProviderConfigSchema, overtimeBackupSchema } from "./lib/schemas"
 import { useUiStore } from "./stores/ui-store"
+import type { UiStore } from "./stores/ui-store"
 import { getCurrentProfileRole, getLocalAccessUser, resolveAppRole, resolveDisplayName, signOut } from "./lib/auth"
 import { isForceRequired, isShiftCovered } from "./lib/staffing-engine"
 import { supabase } from "./lib/supabase"
@@ -694,14 +695,14 @@ export default function App() {
   const [overtimeNotificationsSyncReady, setOvertimeNotificationsSyncReady] = useState(false)
   const [overtimeNotificationsSyncError, setOvertimeNotificationsSyncError] = useState("")
 
-  const activeModule = useUiStore((state) => state.activeModule) as ModuleKey
-  const setActiveModule = useUiStore((state) => state.setActiveModule)
-  const activeSummaryCard = useUiStore((state) => state.activeSummaryCard)
-  const setActiveSummaryCard = useUiStore((state) => state.setActiveSummaryCard)
-  const notificationDraftShiftIds = useUiStore((state) => state.notificationDraftShiftIds)
-  const notificationDraftRecipientIds = useUiStore((state) => state.notificationDraftRecipientIds)
-  const openNotificationsForShiftIds = useUiStore((state) => state.openNotificationsForShiftIds)
-  const clearNotificationDraftSelections = useUiStore((state) => state.clearNotificationDraftSelections)
+  const activeModule = useUiStore((state: UiStore) => state.activeModule) as ModuleKey
+  const setActiveModule = useUiStore((state: UiStore) => state.setActiveModule)
+  const activeSummaryCard = useUiStore((state: UiStore) => state.activeSummaryCard)
+  const setActiveSummaryCard = useUiStore((state: UiStore) => state.setActiveSummaryCard)
+  const notificationDraftShiftIds = useUiStore((state: UiStore) => state.notificationDraftShiftIds)
+  const notificationDraftRecipientIds = useUiStore((state: UiStore) => state.notificationDraftRecipientIds)
+  const openNotificationsForShiftIds = useUiStore((state: UiStore) => state.openNotificationsForShiftIds)
+  const clearNotificationDraftSelections = useUiStore((state: UiStore) => state.clearNotificationDraftSelections)
   const hasHydratedSupabaseState = useRef(false)
   const hasHydratedPatrolOverrides = useRef(false)
   const hasHydratedOvertimeNotifications = useRef(false)
