@@ -153,6 +153,13 @@ export function OvertimePage({
         .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)),
     [employees]
   )
+  const alphabeticalEmployees = useMemo(
+    () =>
+      [...activeEmployees].sort(
+        (a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)
+      ),
+    [activeEmployees]
+  )
   const queueIndexByEmployeeId = useMemo(
     () => new Map(overtimeQueueList.map((employee, index) => [employee.id, index])),
     [overtimeQueueList]
@@ -1184,7 +1191,7 @@ export function OvertimePage({
           layoutPreview === "preview2"
             ? {
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 1.7fr) minmax(280px, 360px)",
+                gridTemplateColumns: "minmax(260px, 320px) minmax(280px, 1fr) minmax(260px, 320px)",
                 gap: "18px",
                 alignItems: "start"
               }
@@ -1198,7 +1205,7 @@ export function OvertimePage({
         style={
           layoutPreview === "preview2"
             ? {
-                gridColumn: "2",
+                gridColumn: "3",
                 gridRow: "1",
                 display: "flex",
                 justifyContent: "stretch"
@@ -1349,14 +1356,14 @@ export function OvertimePage({
         style={{
           display: "grid",
           gridTemplateColumns: layoutPreview === "preview2"
-            ? "minmax(240px, 290px) minmax(280px, 1fr) minmax(240px, 290px)"
+            ? "minmax(280px, 1fr) minmax(280px, 1.15fr)"
             : "minmax(250px, 320px) minmax(250px, 320px) minmax(0, 1fr)",
           gap: "18px",
           alignItems: "start",
           ...(layoutPreview === "preview2"
             ? {
-                gridColumn: "1",
-                gridRow: "1"
+                gridColumn: "2 / span 2",
+                gridRow: "2"
               }
             : {})
         }}
@@ -2067,8 +2074,8 @@ export function OvertimePage({
       {layoutPreview === "preview2" && (
         <div
           style={{
-            gridColumn: "2",
-            gridRow: "2"
+            gridColumn: "1",
+            gridRow: "1 / span 2"
           }}
         >
           <Card>
@@ -2085,7 +2092,7 @@ export function OvertimePage({
                   paddingRight: "4px"
                 }}
               >
-                {overtimeQueueList.map((employee, index) => (
+                {alphabeticalEmployees.map((employee) => (
                   <div
                     key={`preview2-employee-${employee.id}`}
                     style={{
@@ -2096,7 +2103,7 @@ export function OvertimePage({
                     }}
                   >
                     <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>
-                      {index === 0 ? "Next Up" : `#${index + 1}`} {employee.firstName} {employee.lastName}
+                      {employee.firstName} {employee.lastName}
                     </div>
                     <div style={{ fontSize: "12px", color: "#475569" }}>
                       {employee.rank} | {employee.defaultVehicle}
