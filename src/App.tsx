@@ -1862,12 +1862,27 @@ export default function App() {
   useEffect(() => {
     if (typeof window === "undefined") return
 
-    const media = window.matchMedia("(max-width: 900px)")
-    const syncLayout = () => setIsMobileLayout(media.matches)
+    const widthMedia = window.matchMedia("(max-width: 1100px)")
+    const pointerMedia = window.matchMedia("(pointer: coarse)")
+    const syncLayout = () => {
+      const ua = window.navigator.userAgent.toLowerCase()
+      const isPhoneUserAgent =
+        ua.includes("iphone") ||
+        ua.includes("android") ||
+        ua.includes("mobile") ||
+        ua.includes("ipad")
+
+      setIsMobileLayout(widthMedia.matches || pointerMedia.matches || isPhoneUserAgent)
+    }
 
     syncLayout()
-    media.addEventListener("change", syncLayout)
-    return () => media.removeEventListener("change", syncLayout)
+    widthMedia.addEventListener("change", syncLayout)
+    pointerMedia.addEventListener("change", syncLayout)
+
+    return () => {
+      widthMedia.removeEventListener("change", syncLayout)
+      pointerMedia.removeEventListener("change", syncLayout)
+    }
   }, [])
 
   useEffect(() => {
