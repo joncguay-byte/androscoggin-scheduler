@@ -2063,6 +2063,54 @@ export function OvertimePage({
         </CardContent>
       </Card>
       </div>
+
+      {layoutPreview === "preview2" && (
+        <div
+          style={{
+            gridColumn: "2",
+            gridRow: "2"
+          }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>Employees</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                style={{
+                  display: "grid",
+                  gap: "8px",
+                  maxHeight: "320px",
+                  overflowY: "auto",
+                  paddingRight: "4px"
+                }}
+              >
+                {overtimeQueueList.map((employee, index) => (
+                  <div
+                    key={`preview2-employee-${employee.id}`}
+                    style={{
+                      ...CARD_STYLE,
+                      padding: "8px 10px",
+                      display: "grid",
+                      gap: "3px"
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>
+                      {index === 0 ? "Next Up" : `#${index + 1}`} {employee.firstName} {employee.lastName}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#475569" }}>
+                      {employee.rank} | {employee.defaultVehicle}
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#64748b" }}>
+                      Hire Date: {employee.hireDate}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
       </div>
 
       {queueRecipientPickerOpen && (
