@@ -202,6 +202,7 @@ export function OvertimePage({
   const [layoutPreview, setLayoutPreview] = useState<PreviewLayout>("preview1")
   const [builderEmployeeId, setBuilderEmployeeId] = useState<string>("")
   const [builderSelectionMode, setBuilderSelectionMode] = useState<BuilderSelectionMode>("multiple")
+  const [builderSingleDate, setBuilderSingleDate] = useState("")
   const [builderReason, setBuilderReason] = useState<string>("Vacation")
   const [builderScheduleRows, setBuilderScheduleRows] = useState<PatrolScheduleRow[]>([])
   const [builderMonthAnchor, setBuilderMonthAnchor] = useState(() => {
@@ -496,6 +497,7 @@ export function OvertimePage({
   function resetBuilderSelection(nextEmployeeId = builderEmployeeId) {
     setBuilderEmployeeId(nextEmployeeId)
     setBuilderSelectedShiftKeys([])
+    setBuilderSingleDate("")
     setBuilderReason("Vacation")
     setBuilderSelectionMode("multiple")
     setBuilderCalendarOpen(false)
@@ -504,6 +506,33 @@ export function OvertimePage({
   function shiftBuilderMonth(offset: number) {
     setBuilderMonthAnchor((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1))
     setBuilderSelectedShiftKeys([])
+  }
+
+  function applyBuilderSingleDate(isoDate: string) {
+    setBuilderSingleDate(isoDate)
+
+    if (!builderEmployeeId || !isoDate) {
+      setBuilderSelectedShiftKeys([])
+      return
+    }
+
+    const targetDate = new Date(`${isoDate}T12:00:00`)
+    setBuilderMonthAnchor(new Date(targetDate.getFullYear(), targetDate.getMonth(), 1))
+
+    const matchingRows = builderEffectiveRows
+      .filter((row) => row.employee_id === builderEmployeeId && row.assignment_date === isoDate)
+      .sort((a, b) => {
+        if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
+        return a.position_code.localeCompare(b.position_code)
+      })
+
+    if (matchingRows.length === 0) {
+      setBuilderSelectedShiftKeys([])
+      window.alert("That employee is not scheduled for a Patrol shift on that date.")
+      return
+    }
+
+    setBuilderSelectedShiftKeys(matchingRows.map((row) => getPatrolRowKey(row)))
   }
 
   function toggleBuilderShiftSelection(row: PatrolScheduleRow) {
@@ -536,6 +565,12 @@ export function OvertimePage({
       return
     }
 
+    if (mode === "single") {
+      setBuilderCalendarOpen(false)
+      setBuilderSelectedShiftKeys((current) => current.slice(0, 1))
+      return
+    }
+
     if (mode === "month") {
       setBuilderSelectedShiftKeys(builderMonthRows.map((row) => getPatrolRowKey(row)))
       if (builderEmployeeId) {
@@ -544,13 +579,6 @@ export function OvertimePage({
       return
     }
 
-    if (mode === "single" && builderSelectedShiftKeys.length > 1) {
-      setBuilderSelectedShiftKeys(builderSelectedShiftKeys.slice(0, 1))
-    }
-
-    if (builderEmployeeId) {
-      setBuilderCalendarOpen(true)
-    }
   }
 
   async function saveBuilderTimeOffSelection() {
@@ -1637,7 +1665,7 @@ export function OvertimePage({
   const workspaceBuilderPanel = (
     <Card>
       <CardHeader>
-        <CardTitle>Shift Builder</CardTitle>
+        <CardTitle>Shift Selector</CardTitle>
       </CardHeader>
       <CardContent>
         <div style={{ display: "grid", gap: "12px" }}>
@@ -1808,27 +1836,47 @@ export function OvertimePage({
                           : "Review the month with every worked shift selected."}
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (!builderEmployee) return
-                      setBuilderCalendarOpen(false)
-                      onOpenPatrolTimeOffPicker(builderEmployee.id)
-                    }}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: "10px",
-                      border: "none",
-                      background: "#0f766e",
-                      color: "#ffffff",
-                      fontWeight: 800,
-                      cursor: "pointer"
-                    }}
-                  >
-                    Open Patrol Calendar
-                  </button>
+                  {builderSelectionMode === "single" ? (
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                      <input
+                        type="date"
+                        value={builderSingleDate}
+                        onChange={(event) => applyBuilderSingleDate(event.target.value)}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          border: "1px solid #cbd5e1",
+                          background: "#ffffff",
+                          color: "#0f172a",
+                          fontWeight: 700
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (!builderEmployee) return
+                        setBuilderCalendarOpen(false)
+                        onOpenPatrolTimeOffPicker(builderEmployee.id)
+                      }}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "10px",
+                        border: "none",
+                        background: "#0f766e",
+                        color: "#ffffff",
+                        fontWeight: 800,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Open Patrol Calendar
+                    </button>
+                  )}
                 </div>
                 <div style={{ fontSize: "12px", color: "#64748b" }}>
-                  This jumps you into the real Patrol module calendar with the selected employee armed for box-picking.
+                  {builderSelectionMode === "single"
+                    ? "Choose a date here and the employee's worked shift for that day will be selected without opening the full calendar."
+                    : "This jumps you into the real Patrol module calendar with the selected employee armed for box-picking."}
                 </div>
               </div>
               <div
