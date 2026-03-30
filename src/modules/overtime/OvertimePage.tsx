@@ -1541,62 +1541,6 @@ export function OvertimePage({
     )
   }
 
-  const workspaceOrderPanel = (
-    <Card>
-      <CardHeader>
-        <CardTitle>Overtime Order</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div style={{ display: "grid", gap: "10px" }}>
-          <select
-            value={nextUpEmployee?.id || ""}
-            onChange={() => undefined}
-            style={{
-              width: "100%",
-              padding: "8px 10px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              fontSize: "12px",
-              fontWeight: 600
-            }}
-          >
-            {overtimeQueueList.map((employee, index) => (
-              <option key={employee.id} value={employee.id}>
-                {index === 0 ? "✓ " : `${index + 1}. `}
-                {employee.firstName} {employee.lastName} | {employee.rank}
-              </option>
-            ))}
-          </select>
-          <div style={{ padding: "10px", borderRadius: "10px", background: "#eff6ff", border: "1px solid #bfdbfe" }}>
-            <div style={{ fontSize: "11px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Next Up
-            </div>
-            <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 800, color: "#166534" }}>
-              {nextUpEmployee ? `${nextUpEmployee.firstName} ${nextUpEmployee.lastName}` : "No one in queue"}
-            </div>
-          </div>
-          <button
-            onClick={() => printElementById("overtime-list-print-section", "Overtime List")}
-            style={{
-              width: "100%",
-              padding: "8px 10px",
-              borderRadius: "8px",
-              border: "none",
-              background: "#0f766e",
-              color: "#ffffff",
-              fontWeight: 700,
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            Print List
-          </button>
-        </div>
-      </CardContent>
-    </Card>
-  )
-
   const workspaceBuilderPanel = (
     <Card>
       <CardHeader>
@@ -2342,7 +2286,7 @@ export function OvertimePage({
                   Build time off, generate overtime, queue it, collect interest, and assign coverage from one control center.
                 </div>
               </div>
-              <div style={{ display: "grid", gap: "8px", minWidth: "220px" }}>
+              <div style={{ display: "grid", gap: "8px", minWidth: "220px", gridTemplateColumns: "1fr" }}>
                 <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>
                   <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
                     Open Queue
@@ -2357,14 +2301,37 @@ export function OvertimePage({
                     {overtimeShiftQueue.reduce((total, request) => total + request.responses.filter((response) => response.status === "Interested").length, 0)}
                   </div>
                 </div>
+                <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", display: "grid", gap: "8px" }}>
+                  <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
+                    Overtime Order
+                  </div>
+                  <select
+                    value={nextUpEmployee?.id || ""}
+                    onChange={() => undefined}
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      background: "rgba(15,23,42,0.45)",
+                      color: "#ffffff",
+                      fontSize: "12px",
+                      fontWeight: 700
+                    }}
+                  >
+                    {overtimeQueueList.map((employee, index) => (
+                      <option key={employee.id} value={employee.id} style={{ color: "#0f172a" }}>
+                        {index === 0 ? "✓ " : `${index + 1}. `}
+                        {employee.firstName} {employee.lastName} | {employee.rank}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(260px, 340px)", gap: "18px", alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
             {workspaceBuilderPanel}
-            <div style={{ display: "grid", gap: "18px" }}>
-              {workspaceOrderPanel}
-            </div>
           </div>
         </div>
       )}
@@ -3664,3 +3631,4 @@ export function OvertimePage({
     </div>
   )
 }
+
