@@ -2344,7 +2344,14 @@ export function OvertimePage({
               gap: "14px"
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(320px, 1.2fr) minmax(560px, 0.95fr)",
+                gap: "18px",
+                alignItems: "start"
+              }}
+            >
               <div>
                 <div style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#93c5fd" }}>
                   Preview 2
@@ -2356,8 +2363,19 @@ export function OvertimePage({
                   Build time off, generate overtime, queue it, collect interest, and assign coverage from one control center.
                 </div>
               </div>
-              <div style={{ display: "grid", gap: "12px", minWidth: "560px", gridTemplateColumns: "repeat(2, minmax(220px, 240px))", alignItems: "start", gridAutoFlow: "row" }}>
-                {missionControlCardOrder.map((cardKey) => (
+              <div
+                style={{
+                  display: "grid",
+                  width: "100%",
+                  minWidth: "560px",
+                  gridTemplateColumns: "minmax(250px, 1.08fr) minmax(220px, 0.92fr)",
+                  gridTemplateRows: "repeat(2, minmax(96px, auto))",
+                  gap: "12px",
+                  alignItems: "stretch",
+                  justifySelf: "end"
+                }}
+              >
+                {missionControlCardOrder.map((cardKey, index) => (
                   <div
                     key={cardKey}
                     draggable
@@ -2373,7 +2391,9 @@ export function OvertimePage({
                       display: "grid",
                       gap: "8px",
                       minHeight: "96px",
-                      cursor: "grab"
+                      cursor: "grab",
+                      gridColumn: index === 0 ? "1 / 2" : "2 / 3",
+                      gridRow: index === 0 ? "1 / 3" : index === 1 ? "1 / 2" : "2 / 3"
                     }}
                   >
                     <div style={{ fontSize: "10px", color: "#93c5fd", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
