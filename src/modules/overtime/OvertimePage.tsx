@@ -1541,71 +1541,6 @@ export function OvertimePage({
     )
   }
 
-  const workspaceCheckpointPanel = (
-    <Card>
-      <CardHeader>
-        <CardTitle>Checkpoints</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div style={{ display: "grid", gap: "10px" }}>
-          <div style={{ fontSize: "12px", color: "#475569" }}>
-            Draft: {builderSelectedRows.length} selected shift{builderSelectedRows.length === 1 ? "" : "s"}
-          </div>
-          <div style={{ fontSize: "12px", color: "#475569" }}>
-            Saved undo points: {undoStack.length}
-          </div>
-          <div style={{ display: "grid", gap: "8px" }}>
-            <button
-              onClick={() => void saveBuilderTimeOffSelection()}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: "none",
-                background: builderSelectedRows.length === 0 ? "#cbd5e1" : "#2563eb",
-                color: "#ffffff",
-                fontWeight: 700,
-                cursor: builderSelectedRows.length === 0 ? "not-allowed" : "pointer",
-                fontSize: "12px"
-              }}
-            >
-              Save To Patrol Feed
-            </button>
-            <button
-              onClick={undoLastQueueAction}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: "none",
-                background: "#e2e8f0",
-                color: "#0f172a",
-                fontWeight: 700,
-                cursor: "pointer",
-                fontSize: "12px"
-              }}
-            >
-              Undo Last Saved Change
-            </button>
-            <button
-              onClick={() => setBuilderSelectedShiftKeys([])}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: "none",
-                background: "#f1f5f9",
-                color: "#0f172a",
-                fontWeight: 700,
-                cursor: "pointer",
-                fontSize: "12px"
-              }}
-            >
-              Clear Current Selection
-            </button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-
   const workspaceOrderPanel = (
     <Card>
       <CardHeader>
@@ -1916,7 +1851,7 @@ export function OvertimePage({
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 340px)",
+                  gridTemplateColumns: "minmax(0, 1fr)",
                   gap: "14px",
                   alignItems: "start"
                 }}
@@ -1961,7 +1896,6 @@ export function OvertimePage({
                     ))
                   )}
                 </div>
-                {workspaceCheckpointPanel}
               </div>
             </div>
           )}
@@ -2430,7 +2364,6 @@ export function OvertimePage({
             {workspaceBuilderPanel}
             <div style={{ display: "grid", gap: "18px" }}>
               {workspaceOrderPanel}
-              {workspaceCheckpointPanel}
             </div>
           </div>
         </div>
