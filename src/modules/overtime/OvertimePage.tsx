@@ -2305,19 +2305,6 @@ export function OvertimePage({
 
   return (
     <div style={{ display: "grid", gap: "18px" }}>
-      <Card>
-        <CardHeader>
-          <CardTitle>Overtime</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div style={{ display: "grid", gap: "12px" }}>
-            <div style={{ fontSize: "13px", color: "#64748b" }}>
-              Review Patrol time off, move qualified shifts into the queue, collect interest, and assign overtime coverage.
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <div
         style={{
           display: "grid",
