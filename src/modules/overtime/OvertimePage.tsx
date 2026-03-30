@@ -60,6 +60,7 @@ const TIME_OFF_REASON_OPTIONS = [
 
 type PreviewLayout = "preview1" | "preview2"
 type BuilderSelectionMode = "single" | "multiple" | "month"
+type MissionControlCardKey = "order" | "queue" | "responses"
 
 function formatQueuePositionLabel(positionCode: OvertimeShiftRequest["positionCode"]) {
   if (positionCode === "SUP1" || positionCode === "SUP2") return "Supervisor"
@@ -211,6 +212,12 @@ export function OvertimePage({
   })
   const [builderSelectedShiftKeys, setBuilderSelectedShiftKeys] = useState<string[]>([])
   const [builderCalendarOpen, setBuilderCalendarOpen] = useState(false)
+  const [missionControlCardOrder, setMissionControlCardOrder] = useState<MissionControlCardKey[]>([
+    "order",
+    "queue",
+    "responses"
+  ])
+  const [draggingMissionCard, setDraggingMissionCard] = useState<MissionControlCardKey | null>(null)
   const [undoStack, setUndoStack] = useState<
     Array<{
       patrolOverrideRows: PatrolScheduleRow[]
@@ -506,6 +513,20 @@ export function OvertimePage({
   function shiftBuilderMonth(offset: number) {
     setBuilderMonthAnchor((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1))
     setBuilderSelectedShiftKeys([])
+  }
+
+  function moveMissionControlCard(target: MissionControlCardKey) {
+    if (!draggingMissionCard || draggingMissionCard === target) return
+
+    setMissionControlCardOrder((current) => {
+      const withoutDragged = current.filter((card) => card !== draggingMissionCard)
+      const targetIndex = withoutDragged.indexOf(target)
+      if (targetIndex === -1) return current
+
+      const next = [...withoutDragged]
+      next.splice(targetIndex, 0, draggingMissionCard)
+      return next
+    })
   }
 
   function applyBuilderSingleDate(isoDate: string) {
@@ -2219,6 +2240,55 @@ export function OvertimePage({
     </div>
   )
 
+  const missionControlCardContent: Record<MissionControlCardKey, React.ReactNode> = {
+    order: (
+      <div style={{ display: "grid", gap: "8px" }}>
+        <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
+          Overtime Order
+        </div>
+        <select
+          value={nextUpEmployee?.id || ""}
+          onChange={() => undefined}
+          style={{
+            width: "100%",
+            padding: "8px 10px",
+            borderRadius: "8px",
+            border: "1px solid rgba(255,255,255,0.18)",
+            background: "rgba(15,23,42,0.45)",
+            color: "#ffffff",
+            fontSize: "12px",
+            fontWeight: 700
+          }}
+        >
+          {overtimeQueueList.map((employee, index) => (
+            <option key={employee.id} value={employee.id} style={{ color: "#0f172a" }}>
+              {index === 0 ? "✓ " : `${index + 1}. `}
+              {employee.firstName} {employee.lastName} | {employee.rank}
+            </option>
+          ))}
+        </select>
+      </div>
+    ),
+    queue: (
+      <div>
+        <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
+          Open Queue
+        </div>
+        <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>{overtimeShiftQueue.length}</div>
+      </div>
+    ),
+    responses: (
+      <div>
+        <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
+          Interested Responses
+        </div>
+        <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>
+          {overtimeShiftQueue.reduce((total, request) => total + request.responses.filter((response) => response.status === "Interested").length, 0)}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: "grid", gap: "18px" }}>
       <Card>
@@ -2286,49 +2356,32 @@ export function OvertimePage({
                   Build time off, generate overtime, queue it, collect interest, and assign coverage from one control center.
                 </div>
               </div>
-              <div style={{ display: "grid", gap: "12px", minWidth: "560px", gridTemplateColumns: "minmax(220px, 240px) minmax(220px, 240px)", alignItems: "start" }}>
-                <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", display: "grid", gap: "8px", minHeight: "96px" }}>
-                  <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
-                    Overtime Order
-                  </div>
-                  <select
-                    value={nextUpEmployee?.id || ""}
-                    onChange={() => undefined}
+              <div style={{ display: "grid", gap: "12px", minWidth: "560px", gridTemplateColumns: "repeat(2, minmax(220px, 240px))", alignItems: "start", gridAutoFlow: "row" }}>
+                {missionControlCardOrder.map((cardKey) => (
+                  <div
+                    key={cardKey}
+                    draggable
+                    onDragStart={() => setDraggingMissionCard(cardKey)}
+                    onDragEnd={() => setDraggingMissionCard(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => moveMissionControlCard(cardKey)}
                     style={{
-                      width: "100%",
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(255,255,255,0.18)",
-                      background: "rgba(15,23,42,0.45)",
-                      color: "#ffffff",
-                      fontSize: "12px",
-                      fontWeight: 700
+                      padding: "10px 12px",
+                      borderRadius: "12px",
+                      background: "rgba(255,255,255,0.08)",
+                      border: draggingMissionCard === cardKey ? "1px solid #93c5fd" : "1px solid rgba(255,255,255,0.1)",
+                      display: "grid",
+                      gap: "8px",
+                      minHeight: "96px",
+                      cursor: "grab"
                     }}
                   >
-                    {overtimeQueueList.map((employee, index) => (
-                      <option key={employee.id} value={employee.id} style={{ color: "#0f172a" }}>
-                        {index === 0 ? "✓ " : `${index + 1}. `}
-                        {employee.firstName} {employee.lastName} | {employee.rank}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>
-                    <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
-                      Open Queue
+                    <div style={{ fontSize: "10px", color: "#93c5fd", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Drag To Reposition
                     </div>
-                    <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>{overtimeShiftQueue.length}</div>
+                    {missionControlCardContent[cardKey]}
                   </div>
-                  <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>
-                    <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
-                      Interested Responses
-                    </div>
-                    <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>
-                      {overtimeShiftQueue.reduce((total, request) => total + request.responses.filter((response) => response.status === "Interested").length, 0)}
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
