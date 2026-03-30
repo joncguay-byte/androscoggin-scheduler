@@ -2286,8 +2286,8 @@ export function OvertimePage({
                   Build time off, generate overtime, queue it, collect interest, and assign coverage from one control center.
                 </div>
               </div>
-              <div style={{ display: "grid", gap: "8px", minWidth: "520px", gridTemplateColumns: "minmax(220px, 1fr) minmax(220px, 1fr)" }}>
-                <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", display: "grid", gap: "8px" }}>
+              <div style={{ display: "grid", gap: "12px", minWidth: "560px", gridTemplateColumns: "minmax(220px, 240px) minmax(220px, 240px)", alignItems: "start" }}>
+                <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", display: "grid", gap: "8px", minHeight: "96px" }}>
                   <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
                     Overtime Order
                   </div>
