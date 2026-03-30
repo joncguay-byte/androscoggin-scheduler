@@ -1732,20 +1732,37 @@ export function OvertimePage({
                 ))}
               </div>
               {builderSelectionMode === "single" && (
-                <input
-                  type="date"
-                  value={builderSingleDate}
-                  onChange={(event) => applyBuilderSingleDate(event.target.value)}
-                  style={{
-                    width: "220px",
-                    padding: "10px 12px",
-                    borderRadius: "10px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    fontWeight: 700
-                  }}
-                />
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  <input
+                    type="date"
+                    value={builderSingleDate}
+                    onChange={(event) => applyBuilderSingleDate(event.target.value)}
+                    style={{
+                      width: "220px",
+                      padding: "10px 12px",
+                      borderRadius: "10px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#0f172a",
+                      fontWeight: 700
+                    }}
+                  />
+                  <button
+                    onClick={() => void saveBuilderTimeOffSelection()}
+                    disabled={builderSelectedRows.length === 0}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: "10px",
+                      border: "none",
+                      background: builderSelectedRows.length === 0 ? "#cbd5e1" : "#2563eb",
+                      color: "#ffffff",
+                      fontWeight: 800,
+                      cursor: builderSelectedRows.length === 0 ? "not-allowed" : "pointer"
+                    }}
+                  >
+                    Save To Patrol Feed
+                  </button>
+                </div>
               )}
             </div>
             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
