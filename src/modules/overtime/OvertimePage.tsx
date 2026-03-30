@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/simple-ui"
 import { buildForceRotationOrder, getEmployeeForceSummary } from "../../lib/force-rotation"
-import { invalidatePatrolScheduleCache } from "../../lib/patrol-schedule"
+import { fetchPatrolScheduleRange, invalidatePatrolScheduleCache } from "../../lib/patrol-schedule"
 import { printElementById } from "../../lib/print"
+import { ensureMonthSchedule } from "../../lib/schedule-generator"
 import { supabase } from "../../lib/supabase"
 import type {
   AppRole,
@@ -163,6 +164,7 @@ export function OvertimePage({
   const [builderEmployeeId, setBuilderEmployeeId] = useState<string>("")
   const [builderSelectionMode, setBuilderSelectionMode] = useState<BuilderSelectionMode>("multiple")
   const [builderReason, setBuilderReason] = useState<string>("Vacation")
+  const [builderScheduleRows, setBuilderScheduleRows] = useState<PatrolScheduleRow[]>([])
   const [builderMonthAnchor, setBuilderMonthAnchor] = useState(() => {
     const today = new Date()
     return new Date(today.getFullYear(), today.getMonth(), 1)
@@ -258,6 +260,10 @@ export function OvertimePage({
     () => alphabeticalEmployees.find((employee) => employee.id === builderEmployeeId) || null,
     [alphabeticalEmployees, builderEmployeeId]
   )
+  const builderEffectiveRows = useMemo(
+    () => mergePatrolRows(builderScheduleRows, patrolOverrideRows),
+    [builderScheduleRows, patrolOverrideRows]
+  )
   const builderMonthRows = useMemo(() => {
     if (!builderEmployeeId) return []
 
@@ -266,7 +272,7 @@ export function OvertimePage({
     const startIso = monthStart.toISOString().slice(0, 10)
     const endIso = monthEnd.toISOString().slice(0, 10)
 
-    return effectivePatrolRows
+    return builderEffectiveRows
       .filter((row) => row.employee_id === builderEmployeeId)
       .filter((row) => row.assignment_date >= startIso && row.assignment_date <= endIso)
       .sort((a, b) => {
@@ -274,7 +280,7 @@ export function OvertimePage({
         if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
         return a.position_code.localeCompare(b.position_code)
       })
-  }, [builderEmployeeId, builderMonthAnchor, effectivePatrolRows])
+  }, [builderEffectiveRows, builderEmployeeId, builderMonthAnchor])
   const builderSelectedRows = useMemo(
     () => builderMonthRows.filter((row) => builderSelectedShiftKeys.includes(getPatrolRowKey(row))),
     [builderMonthRows, builderSelectedShiftKeys]
@@ -373,6 +379,36 @@ export function OvertimePage({
       return overtimeShiftQueue[0]?.id || null
     })
   }, [overtimeShiftQueue])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadBuilderMonth() {
+      const monthStart = new Date(builderMonthAnchor.getFullYear(), builderMonthAnchor.getMonth(), 1)
+      const monthEnd = new Date(builderMonthAnchor.getFullYear(), builderMonthAnchor.getMonth() + 1, 0)
+      const startIso = monthStart.toISOString().slice(0, 10)
+      const endIso = monthEnd.toISOString().slice(0, 10)
+
+      await ensureMonthSchedule(builderMonthAnchor)
+      const { data, error } = await fetchPatrolScheduleRange(startIso, endIso)
+
+      if (!active) return
+
+      if (error) {
+        console.error("Failed to load builder patrol month:", error)
+        setBuilderScheduleRows([])
+        return
+      }
+
+      setBuilderScheduleRows((data || []) as PatrolScheduleRow[])
+    }
+
+    void loadBuilderMonth()
+
+    return () => {
+      active = false
+    }
+  }, [builderMonthAnchor])
 
   function toggleQueueShiftSelection(requestId: string) {
     setSelectedQueueShiftIds((current) =>
@@ -1697,7 +1733,7 @@ export function OvertimePage({
                 {builderMonthGrid.map((date) => {
                   const isoDate = date.toISOString().slice(0, 10)
                   const dayRows = builderMonthRows.filter((row) => row.assignment_date === isoDate)
-                  const dayCoverageRows = effectivePatrolRows
+                  const dayCoverageRows = builderEffectiveRows
                     .filter((row) => row.assignment_date === isoDate)
                     .sort((a, b) => {
                       if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
