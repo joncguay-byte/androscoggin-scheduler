@@ -2508,160 +2508,19 @@ export function OvertimePage({
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
             {workspaceBuilderPanel}
-            {patrolTimeOffFeedCard}
           </div>
-        </div>
-
-      <div style={{ display: "grid", gap: "18px" }}>
-
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <div style={{ width: "100%", maxWidth: "360px" }}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Overtime List</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              id="overtime-list-print-section"
-              style={{
-                display: "grid",
-                gap: "8px",
-                padding: "10px",
-                borderRadius: "12px",
-                border: "1px solid #dbe3ee",
-                background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-                boxShadow: "0 8px 18px rgba(15, 23, 42, 0.05)"
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gap: "8px",
-                  gridTemplateColumns: "1fr"
-                }}
-              >
-              <div
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: "10px",
-                  border: "1px solid #dbe3ee",
-                  background: "#ffffff",
-                  boxShadow: "0 6px 16px rgba(15, 23, 42, 0.04)"
-                }}
-              >
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Overtime Order
-                  </div>
-                <select
-                  value={nextUpEmployee?.id || ""}
-                  onChange={() => undefined}
-                  style={{
-                    width: "100%",
-                    padding: "8px 10px",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    fontSize: "12px",
-                    fontWeight: 600
-                  }}
-                >
-                  {overtimeQueueList.map((employee, index) => (
-                    <option key={employee.id} value={employee.id}>
-                      {index === 0 ? "✓ " : `${index + 1}. `}
-                      {employee.firstName} {employee.lastName} | {employee.rank}
-                    </option>
-                  ))}
-                </select>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#0f172a",
-                  fontWeight: 700,
-                  padding: "8px 10px",
-                  borderRadius: "10px",
-                  border: "1px solid #dbe3ee",
-                  background: "#ffffff",
-                  boxShadow: "0 6px 16px rgba(15, 23, 42, 0.04)"
-                }}
-              >
-                <div style={{ display: "grid", gap: "4px", textAlign: "center" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Next Up For Overtime
-                  </div>
-                  <div style={{ fontSize: "14px", color: "#166534", fontWeight: 800 }}>
-                    {nextUpEmployee ? `${nextUpEmployee.firstName} ${nextUpEmployee.lastName}` : "No one in queue"}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: "10px",
-                  border: "1px solid #dbe3ee",
-                  background: "#ffffff",
-                  boxShadow: "0 6px 16px rgba(15, 23, 42, 0.04)"
-                }}
-              >
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Print
-                  </div>
-                <button
-                  onClick={() => printElementById("overtime-list-print-section", "Overtime List")}
-                  style={{
-                    width: "100%",
-                    padding: "8px 10px",
-                    borderRadius: "8px",
-                    border: "none",
-                    background: "#2563eb",
-                    color: "#ffffff",
-                    fontWeight: 700,
-                    fontSize: "12px",
-                    cursor: "pointer"
-                  }}
-                >
-                  Print List
-                </button>
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                position: "absolute",
-                left: "-9999px",
-                top: 0,
-                width: "1px",
-                height: "1px",
-                overflow: "hidden"
-              }}
-            >
-              {overtimeQueueList.map((employee, index) => (
-                <div key={`print-${employee.id}`} style={{ padding: "4px 0", fontSize: "13px" }}>
-                  {index === 0 ? "✓ " : `${index + 1}. `}
-                  {employee.firstName} {employee.lastName} | {employee.rank} | Hire Date: {employee.hireDate}
-                </div>
-              ))}
-            </div>
-            </div>
-          </CardContent>
-        </Card>
-        </div>
       </div>
 
+      <div style={{ display: "grid", gap: "18px" }}>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(250px, 320px) minmax(250px, 320px) minmax(0, 1fr)",
+          gridTemplateColumns: "minmax(250px, 320px) minmax(250px, 360px) minmax(250px, 320px)",
           gap: "18px",
           alignItems: "start"
         }}
       >
+        {patrolTimeOffFeedCard}
         <Card>
           <div ref={queueSectionRef} />
           <CardHeader>
@@ -3149,7 +3008,6 @@ export function OvertimePage({
           </CardContent>
         </Card>
       </div>
-
       <div>
       <Card>
         <CardHeader>
