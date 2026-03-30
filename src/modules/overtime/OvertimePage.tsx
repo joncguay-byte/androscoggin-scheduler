@@ -2303,6 +2303,133 @@ export function OvertimePage({
     )
   }
 
+  const patrolTimeOffFeedCard = (
+    <Card>
+      <CardHeader>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <CardTitle>Patrol Time Off Feed</CardTitle>
+          <button
+            onClick={undoLastQueueAction}
+            style={{
+              padding: "5px 9px",
+              borderRadius: "8px",
+              border: "none",
+              background: "#e2e8f0",
+              color: "#0f172a",
+              fontWeight: 700,
+              cursor: "pointer",
+              fontSize: "12px"
+            }}
+          >
+            Undo
+          </button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div
+          style={{
+            display: "grid",
+            gap: "8px",
+            maxHeight: "520px",
+            overflowY: "auto",
+            paddingRight: "4px"
+          }}
+        >
+          {patrolTimeOffFeed.length === 0 && (
+            <div style={{ fontSize: "13px", color: "#64748b" }}>
+              No patrol time-off dates have been pushed into overtime yet.
+            </div>
+          )}
+
+          {patrolTimeOffFeed.map((request) => (
+            (() => {
+              const isQueued = overtimeShiftQueue.some((queuedRequest) => queuedRequest.id === request.id)
+
+              return (
+                <div
+                  key={request.id}
+                  style={{
+                    ...CARD_STYLE,
+                    padding: "8px 10px",
+                    display: "grid",
+                    gap: "4px"
+                  }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: "13px" }}>
+                    {new Date(`${request.assignmentDate}T12:00:00`).toLocaleDateString(undefined, {
+                      month: "numeric",
+                      day: "numeric",
+                      year: "numeric"
+                    })}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#0f172a" }}>
+                    {request.shiftType} {formatQueuePositionLabel(request.positionCode)} {request.offEmployeeLastName ? `| ${request.offEmployeeLastName}` : ""}
+                  </div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a" }}>
+                    {request.offHours || "Hours pending"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      color: isQueued ? "#166534" : "#92400e"
+                    }}
+                  >
+                    {isQueued ? "In queue" : "Not in queue"}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "8px"
+                    }}
+                  >
+                    <div>
+                      {!isQueued && (
+                        <button
+                          onClick={() => toggleManualQueue(request.id)}
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: "6px",
+                            border: "none",
+                            background: "#e2e8f0",
+                            color: "#0f172a",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            fontSize: "11px"
+                          }}
+                        >
+                          Send to Queue
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => void deletePatrolTimeOffFeedItem(request)}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: "6px",
+                        border: "none",
+                        background: "#dc2626",
+                        color: "#ffffff",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontSize: "11px"
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )
+            })()
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   return (
     <div style={{ display: "grid", gap: "18px" }}>
       <div
@@ -2381,6 +2508,7 @@ export function OvertimePage({
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
             {workspaceBuilderPanel}
+            {patrolTimeOffFeedCard}
           </div>
         </div>
 
@@ -2534,131 +2662,6 @@ export function OvertimePage({
           alignItems: "start"
         }}
       >
-        <Card>
-          <CardHeader>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-              <CardTitle>Patrol Time Off Feed</CardTitle>
-              <button
-                onClick={undoLastQueueAction}
-                style={{
-                  padding: "5px 9px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#e2e8f0",
-                  color: "#0f172a",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: "12px"
-                }}
-              >
-                Undo
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div
-              style={{
-                display: "grid",
-                gap: "8px",
-                maxHeight: "520px",
-                overflowY: "auto",
-                paddingRight: "4px"
-              }}
-            >
-              {patrolTimeOffFeed.length === 0 && (
-                <div style={{ fontSize: "13px", color: "#64748b" }}>
-                  No patrol time-off dates have been pushed into overtime yet.
-                </div>
-              )}
-
-              {patrolTimeOffFeed.map((request) => (
-                (() => {
-                  const isQueued = overtimeShiftQueue.some((queuedRequest) => queuedRequest.id === request.id)
-
-                  return (
-                <div
-                  key={request.id}
-                  style={{
-                    ...CARD_STYLE,
-                    padding: "8px 10px",
-                    display: "grid",
-                    gap: "4px"
-                  }}
-                >
-                  <div style={{ fontWeight: 700, fontSize: "13px" }}>
-                    {new Date(`${request.assignmentDate}T12:00:00`).toLocaleDateString(undefined, {
-                      month: "numeric",
-                      day: "numeric",
-                      year: "numeric"
-                    })}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#0f172a" }}>
-                    {request.shiftType} {formatQueuePositionLabel(request.positionCode)} {request.offEmployeeLastName ? `| ${request.offEmployeeLastName}` : ""}
-                  </div>
-                  <div style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a" }}>
-                    {request.offHours || "Hours pending"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      color: isQueued ? "#166534" : "#92400e"
-                    }}
-                  >
-                    {isQueued ? "In queue" : "Not in queue"}
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "8px"
-                    }}
-                  >
-                    <div>
-                      {!isQueued && (
-                        <button
-                          onClick={() => toggleManualQueue(request.id)}
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: "6px",
-                            border: "none",
-                            background: "#e2e8f0",
-                            color: "#0f172a",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            fontSize: "11px"
-                          }}
-                        >
-                          Send to Queue
-                        </button>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => void deletePatrolTimeOffFeedItem(request)}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: "6px",
-                        border: "none",
-                        background: "#dc2626",
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontSize: "11px"
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-                  )
-                })()
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
         <Card>
           <div ref={queueSectionRef} />
           <CardHeader>
