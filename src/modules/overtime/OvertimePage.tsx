@@ -11,9 +11,7 @@ import type {
   Employee,
   ForceHistoryRow,
   OvertimeShiftRequest,
-  PatrolPositionCode,
   PatrolScheduleRow,
-  ShiftType
 } from "../../types"
 
 type OvertimePageProps = {
@@ -30,13 +28,6 @@ type OvertimePageProps = {
   overtimeShiftRequests: OvertimeShiftRequest[]
   setOvertimeShiftRequests: React.Dispatch<React.SetStateAction<OvertimeShiftRequest[]>>
   onOpenNotificationsForShiftIds: (shiftIds: string[], recipientIds?: string[]) => void
-  onOpenPatrolMultiDatePicker: (payload: {
-    employeeId: string
-    positionCode: PatrolPositionCode
-    shiftType: ShiftType
-    team: Employee["team"]
-    assignmentDate: string
-  }) => void
   onQueueAssignmentNotice: (requestId: string, employeeId: string) => void
   onAuditEvent: (action: string, summary: string, details?: string) => void
 }
@@ -47,70 +38,11 @@ const CARD_STYLE = {
   background: "#ffffff"
 } as const
 
-const TIME_OFF_REASON_OPTIONS = [
-  "Sick",
-  "Vacation",
-  "Court",
-  "Training",
-  "FMLA",
-  "Professional Leave",
-  "Bereavement",
-  "Call Out",
-  "Detail",
-  "Extra",
-  "Swap",
-  "Off"
-] as const
-
-type Preview2TimeOffMode = "single" | "multiple"
-
 function formatQueuePositionLabel(positionCode: OvertimeShiftRequest["positionCode"]) {
   if (positionCode === "SUP1" || positionCode === "SUP2") return "Supervisor"
   if (positionCode === "DEP1" || positionCode === "DEP2") return "Deputy"
   if (positionCode === "POL") return "Poland"
   return positionCode
-}
-
-function buildPatrolOvertimeRequestId(assignmentDate: string, shiftType: ShiftType, positionCode: PatrolPositionCode) {
-  return `patrol-open-${assignmentDate}-${shiftType}-${positionCode}`
-}
-
-function getPatrolRowKey(row: Pick<PatrolScheduleRow, "assignment_date" | "shift_type" | "position_code">) {
-  return `${row.assignment_date}-${row.shift_type}-${row.position_code}`
-}
-
-function mergePatrolRows(baseRows: PatrolScheduleRow[], overrideRows: PatrolScheduleRow[]) {
-  const merged = new Map<string, PatrolScheduleRow>()
-
-  for (const row of baseRows) {
-    merged.set(getPatrolRowKey(row), row)
-  }
-
-  for (const row of overrideRows) {
-    merged.set(getPatrolRowKey(row), row)
-  }
-
-  return [...merged.values()].sort((a, b) => {
-    if (a.assignment_date !== b.assignment_date) return a.assignment_date.localeCompare(b.assignment_date)
-    if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
-    return a.position_code.localeCompare(b.position_code)
-  })
-}
-
-function toPatrolOverridePayload(row: PatrolScheduleRow) {
-  return {
-    assignment_date: row.assignment_date,
-    shift_type: row.shift_type,
-    position_code: row.position_code,
-    employee_id: row.employee_id,
-    vehicle: row.vehicle,
-    shift_hours: row.shift_hours,
-    status: row.status,
-    replacement_employee_id: row.replacement_employee_id,
-    replacement_vehicle: row.replacement_vehicle,
-    replacement_hours: row.replacement_hours,
-    updated_at: new Date().toISOString()
-  }
 }
 
 export function OvertimePage({
@@ -126,7 +58,6 @@ export function OvertimePage({
   overtimeShiftRequests,
   setOvertimeShiftRequests,
   onOpenNotificationsForShiftIds,
-  onOpenPatrolMultiDatePicker,
   onQueueAssignmentNotice,
   onAuditEvent
 }: OvertimePageProps) {
@@ -142,13 +73,6 @@ export function OvertimePage({
   const [selectedNotificationRecipientIds, setSelectedNotificationRecipientIds] = useState<string[]>([])
   const [forceAssignRequestId, setForceAssignRequestId] = useState<string | null>(null)
   const [forceAssignEmployeeId, setForceAssignEmployeeId] = useState<string>("")
-  const [layoutPreview, setLayoutPreview] = useState<"preview1" | "preview2">("preview1")
-  const [preview2SelectedEmployeeId, setPreview2SelectedEmployeeId] = useState<string | null>(null)
-  const [preview2TimeOffMode, setPreview2TimeOffMode] = useState<Preview2TimeOffMode | null>(null)
-  const [preview2SelectedShiftKeys, setPreview2SelectedShiftKeys] = useState<string[]>([])
-  const [preview2SingleDate, setPreview2SingleDate] = useState("")
-  const [preview2Reason, setPreview2Reason] = useState<string>("Vacation")
-  const [preview2Step, setPreview2Step] = useState<"mode" | "shifts" | "reason" | null>(null)
   const [undoStack, setUndoStack] = useState<
     Array<{
       patrolOverrideRows: PatrolScheduleRow[]
@@ -227,32 +151,6 @@ export function OvertimePage({
         .filter((employee) => employee.status === "Active")
         .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)),
     [employees]
-  )
-  const alphabeticalEmployees = useMemo(
-    () =>
-      [...activeEmployees].sort(
-        (a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)
-      ),
-    [activeEmployees]
-  )
-  const preview2SelectedEmployee = useMemo(
-    () => alphabeticalEmployees.find((employee) => employee.id === preview2SelectedEmployeeId) || null,
-    [alphabeticalEmployees, preview2SelectedEmployeeId]
-  )
-  const preview2EmployeeScheduledRows = useMemo(() => {
-    if (!preview2SelectedEmployeeId) return []
-
-    return effectivePatrolRows
-      .filter((row) => row.employee_id === preview2SelectedEmployeeId)
-      .sort((a, b) => {
-        if (a.assignment_date !== b.assignment_date) return a.assignment_date.localeCompare(b.assignment_date)
-        if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
-        return a.position_code.localeCompare(b.position_code)
-      })
-  }, [effectivePatrolRows, preview2SelectedEmployeeId])
-  const preview2SelectedRows = useMemo(
-    () => preview2EmployeeScheduledRows.filter((row) => preview2SelectedShiftKeys.includes(getPatrolRowKey(row))),
-    [preview2EmployeeScheduledRows, preview2SelectedShiftKeys]
   )
   const queueIndexByEmployeeId = useMemo(
     () => new Map(overtimeQueueList.map((employee, index) => [employee.id, index])),
@@ -1231,161 +1129,6 @@ export function OvertimePage({
     )
   }
 
-  function resetPreview2EmployeeFlow() {
-    setPreview2SelectedEmployeeId(null)
-    setPreview2TimeOffMode(null)
-    setPreview2SelectedShiftKeys([])
-    setPreview2SingleDate("")
-    setPreview2Reason("Vacation")
-    setPreview2Step(null)
-  }
-
-  function continuePreview2SelectedShifts() {
-    if (preview2SelectedShiftKeys.length === 0) return
-
-    setPreview2Reason("Vacation")
-    setPreview2Step("reason")
-  }
-
-  function openPreview2MultipleDatesInPatrol() {
-    if (!preview2SelectedEmployee || preview2EmployeeScheduledRows.length === 0) {
-      window.alert("No scheduled patrol shifts were found for this employee.")
-      return
-    }
-
-    const firstScheduledRow = preview2EmployeeScheduledRows[0]
-    if (!firstScheduledRow) return
-
-    onOpenPatrolMultiDatePicker({
-      employeeId: preview2SelectedEmployee.id,
-      positionCode: firstScheduledRow.position_code,
-      shiftType: firstScheduledRow.shift_type,
-      team: preview2SelectedEmployee.team,
-      assignmentDate: firstScheduledRow.assignment_date
-    })
-    resetPreview2EmployeeFlow()
-  }
-
-  function togglePreview2ShiftSelection(row: PatrolScheduleRow) {
-    const rowKey = getPatrolRowKey(row)
-
-    setPreview2SelectedShiftKeys((current) => {
-      if (preview2TimeOffMode === "single") {
-        return current.includes(rowKey) ? [] : [rowKey]
-      }
-
-      return current.includes(rowKey)
-        ? current.filter((key) => key !== rowKey)
-        : [...current, rowKey]
-    })
-  }
-
-  async function savePreview2EmployeeTimeOffSelection() {
-    if (!preview2SelectedEmployee || preview2SelectedRows.length === 0) return
-
-    const rowsToApply = preview2SelectedRows.map((row) => ({
-      ...row,
-      vehicle: preview2SelectedEmployee.defaultVehicle || row.vehicle,
-      shift_hours: row.shift_hours || preview2SelectedEmployee.defaultShiftHours,
-      status: preview2Reason,
-      replacement_employee_id: null,
-      replacement_vehicle: null,
-      replacement_hours: row.shift_hours || preview2SelectedEmployee.defaultShiftHours
-    }))
-
-    const createdAt = new Date().toISOString()
-    const nextRequests: OvertimeShiftRequest[] = rowsToApply.map((row) => ({
-      id: buildPatrolOvertimeRequestId(row.assignment_date, row.shift_type, row.position_code),
-      source: "Patrol Open Shift",
-      assignmentDate: row.assignment_date,
-      shiftType: row.shift_type,
-      positionCode: row.position_code,
-      description: `${formatQueuePositionLabel(row.position_code)} time off`,
-      offEmployeeId: preview2SelectedEmployee.id,
-      offEmployeeLastName: preview2SelectedEmployee.lastName,
-      offHours: row.shift_hours || preview2SelectedEmployee.defaultShiftHours,
-      offReason: preview2Reason,
-      selectionActive: true,
-      workflowStatus: "Open",
-      status: "Open",
-      assignedEmployeeId: null,
-      createdAt,
-      responses: []
-    }))
-
-    setPatrolOverrideRows((current) => mergePatrolRows(current, rowsToApply))
-    setOvertimeShiftRequests((current) => {
-      const next = [...current]
-
-      for (const request of nextRequests) {
-        const index = next.findIndex((entry) => entry.id === request.id)
-        if (index >= 0) {
-          next[index] = {
-            ...next[index],
-            ...request,
-            createdAt: next[index].createdAt || request.createdAt,
-            responses: next[index].responses || []
-          }
-        } else {
-          next.push(request)
-        }
-      }
-
-      return next
-    })
-
-    invalidatePatrolScheduleCache()
-    onAuditEvent(
-      "Overtime Preview 2 Time Off Saved",
-      `Saved ${preview2Reason} for ${preview2SelectedEmployee.firstName} ${preview2SelectedEmployee.lastName}.`,
-      `${rowsToApply.map((row) => `${row.assignment_date} ${row.shift_type} ${formatQueuePositionLabel(row.position_code)}`).join(" | ")}`
-    )
-
-    resetPreview2EmployeeFlow()
-
-    void Promise.all([
-      supabase
-        .from("patrol_overrides")
-        .upsert(
-          rowsToApply.map((row) => toPatrolOverridePayload(row)),
-          { onConflict: "assignment_date,shift_type,position_code" }
-        ),
-      supabase
-        .from("overtime_shift_requests")
-        .upsert(
-          nextRequests.map((request) => ({
-            id: request.id,
-            source: request.source,
-            batch_id: null,
-            batch_name: null,
-            assignment_date: request.assignmentDate,
-            shift_type: request.shiftType,
-            position_code: request.positionCode,
-            description: request.description,
-            off_employee_id: request.offEmployeeId || null,
-            off_employee_last_name: request.offEmployeeLastName || null,
-            off_hours: request.offHours || null,
-            off_reason: request.offReason || null,
-            assigned_hours: request.assignedHours || null,
-            selection_active: true,
-            manually_queued: request.manuallyQueued ?? false,
-            auto_assign_reason: request.autoAssignReason || null,
-            workflow_status: "Open",
-            status: "Open",
-            assigned_employee_id: null,
-            created_at: request.createdAt,
-            responses: request.responses
-          })),
-          { onConflict: "id" }
-        )
-    ]).catch((error) => {
-      console.error("Failed to save overtime preview 2 time off selection:", error)
-      window.setTimeout(() => {
-        alert("Time off saved locally, but the cloud update was delayed. Refresh in a moment if needed.")
-      }, 0)
-    })
-  }
-
   return (
     <div style={{ display: "grid", gap: "18px" }}>
       <Card>
@@ -1397,435 +1140,13 @@ export function OvertimePage({
             <div style={{ fontSize: "13px", color: "#64748b" }}>
               Review Patrol time off, move qualified shifts into the queue, collect interest, and assign overtime coverage.
             </div>
-
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              <button
-                onClick={() => setLayoutPreview("preview1")}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: layoutPreview === "preview1" ? "#2563eb" : "#e2e8f0",
-                  color: layoutPreview === "preview1" ? "#ffffff" : "#0f172a",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: "12px"
-                }}
-              >
-                Preview 1
-              </button>
-
-              <button
-                onClick={() => setLayoutPreview("preview2")}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: layoutPreview === "preview2" ? "#0f766e" : "#e2e8f0",
-                  color: layoutPreview === "preview2" ? "#ffffff" : "#0f172a",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: "12px"
-                }}
-              >
-                Preview 2
-              </button>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      <div
-        style={
-          layoutPreview === "preview2"
-            ? {
-                display: "grid",
-                gridTemplateColumns: "minmax(260px, 320px) minmax(280px, 1fr) minmax(260px, 320px)",
-                gap: "18px",
-                alignItems: "start"
-              }
-            : {
-                display: "grid",
-                gap: "18px"
-              }
-        }
-      >
-      {layoutPreview === "preview2" && preview2SelectedEmployee && preview2Step === "mode" && (
-        <div style={{ gridColumn: "2", gridRow: "1" }}>
-          <Card>
-            <CardHeader>
-              <CardTitle>Select Shift</CardTitle>
-            </CardHeader>
-              <CardContent>
-              <div style={{ display: "grid", gap: "12px" }}>
-                <div style={{ fontSize: "13px", color: "#334155" }}>
-                  {preview2SelectedEmployee.firstName} {preview2SelectedEmployee.lastName}
-                </div>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px", alignItems: "center" }}>
-                    <button
-                      onClick={() => {
-                        if (!preview2SingleDate) {
-                          window.alert("Choose a date first.")
-                          return
-                        }
+      <div style={{ display: "grid", gap: "18px" }}>
 
-                        const matchingRows = preview2EmployeeScheduledRows.filter(
-                          (row) => row.assignment_date === preview2SingleDate
-                        )
-
-                        if (matchingRows.length === 0) {
-                          window.alert("That employee is not scheduled on the selected date.")
-                          return
-                        }
-
-                        setPreview2TimeOffMode("single")
-                        setPreview2SelectedShiftKeys(matchingRows.map((row) => getPatrolRowKey(row)))
-                        setPreview2Reason("Vacation")
-                        setPreview2Step("reason")
-                      }}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: "#e2e8f0",
-                        color: "#0f172a",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        whiteSpace: "nowrap"
-                      }}
-                    >
-                      Single Date
-                    </button>
-                    <input
-                      type="date"
-                      value={preview2SingleDate}
-                      onChange={(event) => setPreview2SingleDate(event.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "8px 10px",
-                        borderRadius: "8px",
-                        border: "1px solid #cbd5e1",
-                        background: "#ffffff",
-                        fontSize: "12px"
-                      }}
-                    />
-                  </div>
-                  <button
-                    onClick={() => {
-                      setPreview2TimeOffMode("multiple")
-                      setPreview2SelectedShiftKeys([])
-                      openPreview2MultipleDatesInPatrol()
-                    }}
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: "8px",
-                      border: "none",
-                      background: "#2563eb",
-                      color: "#ffffff",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontSize: "12px"
-                    }}
-                  >
-                    Multiple Dates
-                  </button>
-                </div>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    onClick={resetPreview2EmployeeFlow}
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: "8px",
-                      border: "none",
-                      background: "#e2e8f0",
-                      color: "#0f172a",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontSize: "12px"
-                    }}
-                  >
-                    Undo
-                  </button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {layoutPreview === "preview2" && preview2SelectedEmployee && preview2Step === "shifts" && (
-        <>
-          <div style={{ gridColumn: "2", gridRow: "1" }}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Selection</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div style={{ display: "grid", gap: "10px" }}>
-                  <div style={{ fontSize: "13px", color: "#334155", fontWeight: 700 }}>
-                    {preview2SelectedEmployee.firstName} {preview2SelectedEmployee.lastName}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#64748b" }}>
-                    {preview2TimeOffMode === "single" ? "Single Date" : "Multiple Dates"} | Selected: {preview2SelectedShiftKeys.length}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                    <button
-                      onClick={() => {
-                        setPreview2TimeOffMode(null)
-                        setPreview2SelectedShiftKeys([])
-                        setPreview2Step("mode")
-                      }}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: "#e2e8f0",
-                        color: "#0f172a",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontSize: "12px"
-                      }}
-                    >
-                      Undo
-                    </button>
-                    <button
-                      onClick={continuePreview2SelectedShifts}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: preview2SelectedShiftKeys.length === 0 ? "#cbd5e1" : "#2563eb",
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        cursor: preview2SelectedShiftKeys.length === 0 ? "not-allowed" : "pointer",
-                        fontSize: "12px"
-                      }}
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div style={{ gridColumn: "3", gridRow: "1" }}>
-            <Card>
-              <CardHeader>
-                <CardTitle>{preview2TimeOffMode === "single" ? "Select Shift Single Date" : "Select Shift Multiple Dates"}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "8px",
-                    maxHeight: "320px",
-                    overflowY: "auto",
-                    paddingRight: "4px"
-                  }}
-                >
-                  {preview2EmployeeScheduledRows.length === 0 && (
-                    <div style={{ fontSize: "13px", color: "#64748b" }}>
-                      No scheduled patrol shifts were found for this employee.
-                    </div>
-                  )}
-                  <div style={{ fontSize: "12px", color: "#475569", fontWeight: 700 }}>
-                    Current Patrol Schedule
-                  </div>
-                  {preview2EmployeeScheduledRows.map((row) => {
-                    const rowKey = getPatrolRowKey(row)
-                    const selected = preview2SelectedShiftKeys.includes(rowKey)
-                    return (
-                      <button
-                        key={`preview2-shift-${rowKey}`}
-                        onClick={() => togglePreview2ShiftSelection(row)}
-                        style={{
-                          ...CARD_STYLE,
-                          padding: "8px 10px",
-                          display: "grid",
-                          gap: "4px",
-                          textAlign: "left",
-                          cursor: "pointer",
-                          borderColor: selected ? "#2563eb" : "#dbe3ee",
-                          background: selected ? "#eff6ff" : "#ffffff"
-                        }}
-                      >
-                        <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>
-                          {new Date(`${row.assignment_date}T12:00:00`).toLocaleDateString(undefined, {
-                            month: "numeric",
-                            day: "numeric",
-                            year: "numeric"
-                          })}
-                        </div>
-                        <div style={{ fontSize: "12px", color: "#334155" }}>
-                          {row.shift_type} {formatQueuePositionLabel(row.position_code)}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#64748b" }}>
-                          {row.vehicle || preview2SelectedEmployee.defaultVehicle} | {row.shift_hours || preview2SelectedEmployee.defaultShiftHours}
-                        </div>
-                      </button>
-                    )
-                  })}
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", marginTop: "4px" }}>
-                    <button
-                      onClick={() => {
-                        setPreview2TimeOffMode(null)
-                        setPreview2SelectedShiftKeys([])
-                        setPreview2Step("mode")
-                      }}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: "#e2e8f0",
-                        color: "#0f172a",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontSize: "12px"
-                      }}
-                    >
-                      Undo
-                    </button>
-                    <button
-                      onClick={continuePreview2SelectedShifts}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: preview2SelectedShiftKeys.length === 0 ? "#cbd5e1" : "#2563eb",
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        cursor: preview2SelectedShiftKeys.length === 0 ? "not-allowed" : "pointer",
-                        fontSize: "12px"
-                      }}
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </>
-      )}
-
-      {layoutPreview === "preview2" && preview2SelectedEmployee && preview2Step === "reason" && (
-        <>
-          <div style={{ gridColumn: "2", gridRow: "1" }}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Selected Shifts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <div style={{ fontSize: "13px", color: "#334155", fontWeight: 700 }}>
-                    {preview2SelectedEmployee.firstName} {preview2SelectedEmployee.lastName}
-                  </div>
-                  {preview2SelectedRows.map((row) => (
-                    <div key={`preview2-summary-${getPatrolRowKey(row)}`} style={{ fontSize: "12px", color: "#64748b" }}>
-                      {row.assignment_date} | {row.shift_type} {formatQueuePositionLabel(row.position_code)}
-                    </div>
-                  ))}
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button
-                      onClick={() => setPreview2Step("shifts")}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: "#e2e8f0",
-                        color: "#0f172a",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontSize: "12px"
-                      }}
-                    >
-                      Undo
-                    </button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div style={{ gridColumn: "3", gridRow: "1" }}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Select Time-Off Reason</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div style={{ display: "grid", gap: "10px" }}>
-                  <select
-                    value={preview2Reason}
-                    onChange={(event) => setPreview2Reason(event.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      fontSize: "12px"
-                    }}
-                  >
-                    {TIME_OFF_REASON_OPTIONS.map((reason) => (
-                      <option key={reason} value={reason}>
-                        {reason}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                    <button
-                      onClick={() => setPreview2Step("shifts")}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: "#e2e8f0",
-                        color: "#0f172a",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontSize: "12px"
-                      }}
-                    >
-                      Undo
-                    </button>
-                    <button
-                      onClick={() => void savePreview2EmployeeTimeOffSelection()}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: "#2563eb",
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontSize: "12px"
-                      }}
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </>
-      )}
-
-      <div
-        style={
-          layoutPreview === "preview2"
-            ? {
-                gridColumn: "3",
-                gridRow: preview2SelectedEmployee && preview2Step ? "2" : "1",
-                display: "flex",
-                justifyContent: "stretch"
-              }
-            : { display: "flex", justifyContent: "flex-end" }
-        }
-      >
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <div style={{ width: "100%", maxWidth: "360px" }}>
         <Card>
           <CardHeader>
@@ -1968,17 +1289,9 @@ export function OvertimePage({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: layoutPreview === "preview2"
-            ? "minmax(280px, 1fr) minmax(280px, 1.15fr)"
-            : "minmax(250px, 320px) minmax(250px, 320px) minmax(0, 1fr)",
+          gridTemplateColumns: "minmax(250px, 320px) minmax(250px, 320px) minmax(0, 1fr)",
           gap: "18px",
-          alignItems: "start",
-          ...(layoutPreview === "preview2"
-            ? {
-                gridColumn: "2 / span 2",
-                gridRow: preview2SelectedEmployee && preview2Step ? "3" : "2"
-              }
-            : {})
+          alignItems: "start"
         }}
       >
         <Card>
@@ -2594,16 +1907,7 @@ export function OvertimePage({
         </Card>
       </div>
 
-      <div
-        style={
-          layoutPreview === "preview2"
-            ? {
-                gridColumn: "1 / span 2",
-                gridRow: preview2SelectedEmployee && preview2Step ? "4" : "3"
-              }
-            : undefined
-        }
-      >
+      <div>
       <Card>
         <CardHeader>
           <CardTitle>Assigned Queue Shifts</CardTitle>
@@ -2684,61 +1988,6 @@ export function OvertimePage({
       </Card>
       </div>
 
-      {layoutPreview === "preview2" && (
-        <div
-          style={{
-            gridColumn: "1",
-            gridRow: preview2SelectedEmployee && preview2Step ? "1 / span 3" : "1 / span 2"
-          }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>Employees</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div
-                style={{
-                  display: "grid",
-                  gap: "8px",
-                  maxHeight: "320px",
-                  overflowY: "auto",
-                  paddingRight: "4px"
-                }}
-              >
-                {alphabeticalEmployees.map((employee) => (
-                  <div
-                    key={`preview2-employee-${employee.id}`}
-                    onClick={() => {
-                      setPreview2SelectedEmployeeId(employee.id)
-                      setPreview2TimeOffMode(null)
-                      setPreview2SelectedShiftKeys([])
-                      setPreview2SingleDate("")
-                      setPreview2Reason("Vacation")
-                      setPreview2Step("mode")
-                    }}
-                    style={{
-                      ...CARD_STYLE,
-                      padding: "8px 10px",
-                      display: "grid",
-                      gap: "3px",
-                      cursor: "pointer",
-                      borderColor: preview2SelectedEmployeeId === employee.id ? "#2563eb" : "#dbe3ee",
-                      background: preview2SelectedEmployeeId === employee.id ? "#eff6ff" : "#ffffff"
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>
-                      {employee.firstName} {employee.lastName}
-                    </div>
-                    <div style={{ fontSize: "12px", color: "#475569" }}>
-                      {employee.rank} | {employee.defaultVehicle}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
       </div>
 
       {queueRecipientPickerOpen && (
