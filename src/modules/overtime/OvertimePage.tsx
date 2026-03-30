@@ -2242,7 +2242,7 @@ export function OvertimePage({
 
   const missionControlCardContent: Record<MissionControlCardKey, React.ReactNode> = {
     order: (
-      <div style={{ display: "grid", gap: "8px" }}>
+      <div style={{ display: "grid", gap: "6px" }}>
         <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
           Overtime Order
         </div>
@@ -2267,6 +2267,22 @@ export function OvertimePage({
             </option>
           ))}
         </select>
+        <button
+          onClick={() => printElementById("overtime-list-print-section", "Overtime List")}
+          style={{
+            justifySelf: "start",
+            padding: "6px 10px",
+            borderRadius: "8px",
+            border: "none",
+            background: "#2563eb",
+            color: "#ffffff",
+            fontWeight: 800,
+            fontSize: "11px",
+            cursor: "pointer"
+          }}
+        >
+          Print
+        </button>
       </div>
     ),
     queue: (
@@ -2387,18 +2403,15 @@ export function OvertimePage({
                       borderRadius: "12px",
                       background: "rgba(255,255,255,0.08)",
                       border: draggingMissionCard === cardKey ? "1px solid #93c5fd" : "1px solid rgba(255,255,255,0.1)",
-                      padding: "10px 12px",
+                      padding: cardKey === "order" ? "9px 10px" : "10px 12px",
                       display: "grid",
-                      gap: "8px",
-                      minHeight: "96px",
+                      gap: "6px",
+                      minHeight: cardKey === "order" ? "84px" : "96px",
                       cursor: "grab",
                       gridColumn: index === 0 ? "1 / 2" : "2 / 3",
-                      gridRow: index === 0 ? "1 / 3" : index === 1 ? "1 / 2" : "2 / 3"
+                      gridRow: index === 0 ? "1 / 2" : index === 1 ? "1 / 2" : "2 / 3"
                     }}
                   >
-                    <div style={{ fontSize: "10px", color: "#93c5fd", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Drag To Reposition
-                    </div>
                     {missionControlCardContent[cardKey]}
                   </div>
                 ))}
