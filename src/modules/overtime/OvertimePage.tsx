@@ -58,7 +58,7 @@ const TIME_OFF_REASON_OPTIONS = [
   "Off"
 ] as const
 
-type PreviewLayout = "preview1" | "preview2" | "preview3" | "preview4"
+type PreviewLayout = "preview1" | "preview2"
 type BuilderSelectionMode = "single" | "multiple" | "month"
 
 function formatQueuePositionLabel(positionCode: OvertimeShiftRequest["positionCode"]) {
@@ -2273,9 +2273,7 @@ export function OvertimePage({
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               {([
                 { key: "preview1", label: "Preview 1", color: "#2563eb" },
-                { key: "preview2", label: "Preview 2", color: "#0f766e" },
-                { key: "preview3", label: "Preview 3", color: "#b45309" },
-                { key: "preview4", label: "Preview 4", color: "#7c3aed" }
+                { key: "preview2", label: "Preview 2", color: "#7c3aed" }
               ] as const).map((preview) => (
                 <button
                   key={preview.key}
@@ -2306,63 +2304,6 @@ export function OvertimePage({
             gap: "18px"
           }}
         >
-          {workspaceBuilderPanel}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 340px) minmax(260px, 340px)", gap: "18px", justifyContent: "start" }}>
-            {workspaceOrderPanel}
-          </div>
-        </div>
-      )}
-
-      {layoutPreview === "preview3" && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(240px, 300px) minmax(0, 1.5fr) minmax(240px, 300px)",
-            gap: "18px",
-            alignItems: "start"
-          }}
-        >
-          <div style={{ display: "grid", gap: "18px" }}>
-            {workspaceOrderPanel}
-            {workspaceCheckpointPanel}
-          </div>
-          {workspaceBuilderPanel}
-          <Card>
-            <CardHeader>
-              <CardTitle>Builder Snapshot</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div style={{ display: "grid", gap: "8px" }}>
-                <div style={{ fontSize: "12px", color: "#475569" }}>
-                  Employee: {builderEmployee ? `${builderEmployee.firstName} ${builderEmployee.lastName}` : "No one selected"}
-                </div>
-                <div style={{ fontSize: "12px", color: "#475569" }}>
-                  Reason: {builderReason}
-                </div>
-                <div style={{ fontSize: "12px", color: "#475569" }}>
-                  Mode: {builderSelectionMode === "single" ? "Single Date" : builderSelectionMode === "multiple" ? "Multiple Dates" : "Month"}
-                </div>
-                <div style={{ fontSize: "12px", color: "#475569" }}>
-                  Selected: {builderSelectedRows.length}
-                </div>
-                {builderSelectedRows.slice(0, 5).map((row) => (
-                  <div key={`builder-snapshot-${getPatrolRowKey(row)}`} style={{ fontSize: "11px", color: "#0f172a", padding: "6px 8px", borderRadius: "8px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                    {formatShortDate(row.assignment_date)} | {row.shift_type} {formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {layoutPreview === "preview4" && (
-        <div
-          style={{
-            display: "grid",
-            gap: "18px"
-          }}
-        >
           <div
             style={{
               ...CARD_STYLE,
@@ -2376,7 +2317,7 @@ export function OvertimePage({
             <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#93c5fd" }}>
-                  Preview 4
+                  Preview 2
                 </div>
                 <div style={{ fontSize: "24px", fontWeight: 900, marginTop: "4px" }}>
                   Overtime Mission Control
