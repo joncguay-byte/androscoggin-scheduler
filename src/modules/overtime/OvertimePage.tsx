@@ -1709,26 +1709,44 @@ export function OvertimePage({
             </select>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {(["single", "multiple", "month"] as BuilderSelectionMode[]).map((mode) => (
-                <button
-                  key={`builder-mode-${mode}`}
-                  onClick={() => setBuilderMode(mode)}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ display: "grid", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {(["single", "multiple", "month"] as BuilderSelectionMode[]).map((mode) => (
+                  <button
+                    key={`builder-mode-${mode}`}
+                    onClick={() => setBuilderMode(mode)}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "999px",
+                      border: "none",
+                      background: builderSelectionMode === mode ? "#0f172a" : "#e2e8f0",
+                      color: builderSelectionMode === mode ? "#ffffff" : "#0f172a",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontSize: "12px"
+                    }}
+                  >
+                    {mode === "single" ? "Single Date" : mode === "multiple" ? "Multiple Dates" : "Month"}
+                  </button>
+                ))}
+              </div>
+              {builderSelectionMode === "single" && (
+                <input
+                  type="date"
+                  value={builderSingleDate}
+                  onChange={(event) => applyBuilderSingleDate(event.target.value)}
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: "999px",
-                    border: "none",
-                    background: builderSelectionMode === mode ? "#0f172a" : "#e2e8f0",
-                    color: builderSelectionMode === mode ? "#ffffff" : "#0f172a",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontSize: "12px"
+                    width: "220px",
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    fontWeight: 700
                   }}
-                >
-                  {mode === "single" ? "Single Date" : mode === "multiple" ? "Multiple Dates" : "Month"}
-                </button>
-              ))}
+                />
+              )}
             </div>
             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
               <button
@@ -1836,23 +1854,7 @@ export function OvertimePage({
                           : "Review the month with every worked shift selected."}
                     </div>
                   </div>
-                  {builderSelectionMode === "single" ? (
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                      <input
-                        type="date"
-                        value={builderSingleDate}
-                        onChange={(event) => applyBuilderSingleDate(event.target.value)}
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: "10px",
-                          border: "1px solid #cbd5e1",
-                          background: "#ffffff",
-                          color: "#0f172a",
-                          fontWeight: 700
-                        }}
-                      />
-                    </div>
-                  ) : (
+                  {builderSelectionMode !== "single" && (
                     <button
                       onClick={() => {
                         if (!builderEmployee) return
