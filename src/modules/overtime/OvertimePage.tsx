@@ -1762,6 +1762,21 @@ export function OvertimePage({
                   >
                     Save To Patrol Feed
                   </button>
+                  <button
+                    onClick={undoLastQueueAction}
+                    disabled={undoStack.length === 0}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: "10px",
+                      border: "none",
+                      background: undoStack.length === 0 ? "#cbd5e1" : "#e2e8f0",
+                      color: "#0f172a",
+                      fontWeight: 800,
+                      cursor: undoStack.length === 0 ? "not-allowed" : "pointer"
+                    }}
+                  >
+                    Undo
+                  </button>
                 </div>
               )}
             </div>
