@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/simple-ui"
+import { patrolPositions } from "../../data/constants"
 import { buildForceRotationOrder, getEmployeeForceSummary } from "../../lib/force-rotation"
 import { fetchPatrolScheduleRange, invalidatePatrolScheduleCache } from "../../lib/patrol-schedule"
 import { printElementById } from "../../lib/print"
@@ -132,6 +133,42 @@ function buildMonthGrid(anchorDate: Date) {
   return dates
 }
 
+function chunkDates(dates: Date[], chunkSize: number) {
+  const chunks: Date[][] = []
+
+  for (let index = 0; index < dates.length; index += chunkSize) {
+    chunks.push(dates.slice(index, index + chunkSize))
+  }
+
+  return chunks
+}
+
+function getCalendarDayDiff(date: Date, anchor: Date) {
+  const utcDate = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+  const utcAnchor = Date.UTC(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())
+  return Math.round((utcDate - utcAnchor) / 86400000)
+}
+
+function getActiveTeam(date: Date, shift: ShiftType) {
+  const pitman = [0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0]
+  const start = new Date("2026-03-01T12:00:00")
+  const diff = getCalendarDayDiff(date, start)
+  const idx = pitman[((diff % pitman.length) + pitman.length) % pitman.length]
+
+  if (shift === "Days") return idx ? "Days A" : "Days B"
+  return idx ? "Nights A" : "Nights B"
+}
+
+function formatStatusLabel(status?: string | null) {
+  if (!status || status === "Scheduled") return ""
+  if (status === "Vacation") return "Vac"
+  if (status === "Training") return "Trng"
+  if (status === "Professional Leave") return "Prof"
+  if (status === "Bereavement") return "BRVMT"
+  if (status === "Call Out") return "Call"
+  return status
+}
+
 export function OvertimePage({
   employees,
   patrolRows,
@@ -170,6 +207,7 @@ export function OvertimePage({
     return new Date(today.getFullYear(), today.getMonth(), 1)
   })
   const [builderSelectedShiftKeys, setBuilderSelectedShiftKeys] = useState<string[]>([])
+  const [builderCalendarOpen, setBuilderCalendarOpen] = useState(false)
   const [undoStack, setUndoStack] = useState<
     Array<{
       patrolOverrideRows: PatrolScheduleRow[]
@@ -286,6 +324,7 @@ export function OvertimePage({
     [builderMonthRows, builderSelectedShiftKeys]
   )
   const builderMonthGrid = useMemo(() => buildMonthGrid(builderMonthAnchor), [builderMonthAnchor])
+  const builderWeekRows = useMemo(() => chunkDates(builderMonthGrid, 7), [builderMonthGrid])
   const queueIndexByEmployeeId = useMemo(
     () => new Map(overtimeQueueList.map((employee, index) => [employee.id, index])),
     [overtimeQueueList]
@@ -449,6 +488,7 @@ export function OvertimePage({
     setBuilderSelectedShiftKeys([])
     setBuilderReason("Vacation")
     setBuilderSelectionMode("multiple")
+    setBuilderCalendarOpen(false)
   }
 
   function shiftBuilderMonth(offset: number) {
@@ -483,11 +523,18 @@ export function OvertimePage({
 
     if (mode === "month") {
       setBuilderSelectedShiftKeys(builderMonthRows.map((row) => getPatrolRowKey(row)))
+      if (builderEmployeeId) {
+        setBuilderCalendarOpen(true)
+      }
       return
     }
 
     if (mode === "single" && builderSelectedShiftKeys.length > 1) {
       setBuilderSelectedShiftKeys(builderSelectedShiftKeys.slice(0, 1))
+    }
+
+    if (builderEmployeeId) {
+      setBuilderCalendarOpen(true)
     }
   }
 
@@ -557,6 +604,7 @@ export function OvertimePage({
     )
 
     setBuilderSelectedShiftKeys([])
+    setBuilderCalendarOpen(false)
 
     void Promise.all([
       supabase
@@ -1722,116 +1770,47 @@ export function OvertimePage({
                   Each day below shows the full staffing picture. Click this employee’s scheduled shift box to mark it off and create overtime from this module.
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "8px" }}>
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
-                  <div key={`builder-weekday-${label}`} style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {label}
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "8px" }}>
-                {builderMonthGrid.map((date) => {
-                  const isoDate = date.toISOString().slice(0, 10)
-                  const dayRows = builderMonthRows.filter((row) => row.assignment_date === isoDate)
-                  const dayCoverageRows = builderEffectiveRows
-                    .filter((row) => row.assignment_date === isoDate)
-                    .sort((a, b) => {
-                      if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
-                      return a.position_code.localeCompare(b.position_code)
-                    })
-                  const inMonth = date.getMonth() === builderMonthAnchor.getMonth()
-
-                  return (
-                    <div
-                      key={`builder-day-${isoDate}`}
-                      style={{
-                        minHeight: "132px",
-                        borderRadius: "12px",
-                        border: `1px solid ${inMonth ? "#dbe3ee" : "#e5e7eb"}`,
-                        background: inMonth ? "#ffffff" : "#f8fafc",
-                        padding: "8px",
-                        display: "grid",
-                        alignContent: "start",
-                        gap: "6px",
-                        opacity: inMonth ? 1 : 0.6
-                      }}
-                    >
-                      <div style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
-                        {date.getDate()}
-                      </div>
-                      {dayRows.length === 0 ? (
-                        <div style={{ fontSize: "11px", color: "#94a3b8" }}>
-                          {inMonth ? "No scheduled shift" : ""}
-                        </div>
-                      ) : (
-                        <div style={{ display: "grid", gap: "6px" }}>
-                          {dayCoverageRows.map((row) => {
-                            const rowKey = getPatrolRowKey(row)
-                            const selected = builderSelectedShiftKeys.includes(rowKey)
-                            const rowEmployee = row.employee_id ? employeeMap.get(row.employee_id) || null : null
-                            const isBuilderEmployeeRow = row.employee_id === builderEmployee.id
-
-                            if (isBuilderEmployeeRow) {
-                              return (
-                                <button
-                                  key={`builder-row-${rowKey}`}
-                                  onClick={() => toggleBuilderShiftSelection(row)}
-                                  style={{
-                                    border: "none",
-                                    borderRadius: "10px",
-                                    padding: "8px",
-                                    textAlign: "left",
-                                    cursor: "pointer",
-                                    background: selected ? "#dbeafe" : "#eff6ff",
-                                    boxShadow: selected ? "inset 0 0 0 2px #2563eb" : "inset 0 0 0 1px #93c5fd",
-                                    display: "grid",
-                                    gap: "3px"
-                                  }}
-                                >
-                                  <div style={{ display: "flex", justifyContent: "space-between", gap: "6px", alignItems: "center" }}>
-                                    <div style={{ fontSize: "12px", fontWeight: 900, color: "#0f172a" }}>
-                                      {row.shift_type} {formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}
-                                    </div>
-                                    <div style={{ fontSize: "10px", fontWeight: 800, color: "#1d4ed8", textTransform: "uppercase" }}>
-                                      Your Shift
-                                    </div>
-                                  </div>
-                                  <div style={{ fontSize: "11px", color: "#334155", fontWeight: 700 }}>
-                                    {builderEmployee.lastName} | {row.vehicle || builderEmployee.defaultVehicle} | {row.shift_hours || builderEmployee.defaultShiftHours}
-                                  </div>
-                                  <div style={{ fontSize: "10px", fontWeight: 700, color: selected ? "#1d4ed8" : "#64748b" }}>
-                                    {selected ? "Selected for time off" : "Click this box to mark off"}
-                                  </div>
-                                </button>
-                              )
-                            }
-
-                            return (
-                              <div
-                                key={`builder-coverage-${rowKey}`}
-                                style={{
-                                  borderRadius: "10px",
-                                  padding: "7px 8px",
-                                  background: "#f8fafc",
-                                  boxShadow: "inset 0 0 0 1px #e2e8f0",
-                                  display: "grid",
-                                  gap: "2px"
-                                }}
-                              >
-                                <div style={{ fontSize: "11px", fontWeight: 800, color: "#0f172a" }}>
-                                  {row.shift_type} {formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}
-                                </div>
-                                <div style={{ fontSize: "10px", color: "#64748b" }}>
-                                  {rowEmployee ? rowEmployee.lastName : "Open"} | {row.vehicle || rowEmployee?.defaultVehicle || ""} | {row.shift_hours || rowEmployee?.defaultShiftHours || ""}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
+              <div
+                style={{
+                  padding: "14px",
+                  borderRadius: "12px",
+                  border: "1px solid #dbe3ee",
+                  background: "#ffffff",
+                  display: "grid",
+                  gap: "12px"
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                  <div style={{ display: "grid", gap: "4px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Patrol Calendar Picker
                     </div>
-                  )
-                })}
+                    <div style={{ fontSize: "13px", color: "#334155" }}>
+                      {builderSelectionMode === "single"
+                        ? "Pick one worked shift."
+                        : builderSelectionMode === "multiple"
+                          ? "Pick as many worked shifts as you need."
+                          : "Review the month with every worked shift selected."}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setBuilderCalendarOpen(true)}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: "10px",
+                      border: "none",
+                      background: "#0f766e",
+                      color: "#ffffff",
+                      fontWeight: 800,
+                      cursor: "pointer"
+                    }}
+                  >
+                    Open Patrol Calendar
+                  </button>
+                </div>
+                <div style={{ fontSize: "12px", color: "#64748b" }}>
+                  This popup mirrors the Patrol month layout and keeps the staffing picture visible while you click the selected employee's worked cells.
+                </div>
               </div>
               <div
                 style={{
@@ -1888,6 +1867,368 @@ export function OvertimePage({
         </div>
       </CardContent>
     </Card>
+  )
+
+  const builderCalendarModal = builderEmployee && builderCalendarOpen && (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: "24px"
+      }}
+    >
+      <div
+        style={{
+          width: "min(1240px, 96vw)",
+          maxHeight: "92vh",
+          overflow: "auto",
+          background: "#ffffff",
+          borderRadius: "16px",
+          boxShadow: "0 20px 45px rgba(15, 23, 42, 0.28)",
+          padding: "18px"
+        }}
+      >
+        <div style={{ display: "grid", gap: "14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ display: "grid", gap: "4px" }}>
+              <div style={{ fontSize: "20px", fontWeight: 900, color: "#0f172a" }}>
+                Patrol Calendar Shift Picker
+              </div>
+              <div style={{ fontSize: "13px", color: "#475569" }}>
+                {builderEmployee.firstName} {builderEmployee.lastName} | {builderSelectionMode === "single" ? "Single Date" : builderSelectionMode === "multiple" ? "Multiple Dates" : "Month"}
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>
+                Click this employee's worked Patrol boxes to mark time off. The rest of the grid shows who else is scheduled or off.
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={() => shiftBuilderMonth(-1)}
+                style={{ padding: "8px 12px", borderRadius: "8px", border: "none", background: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}
+              >
+                Prev Month
+              </button>
+              <div style={{ minWidth: "170px", textAlign: "center", fontSize: "16px", fontWeight: 800, color: "#0f172a" }}>
+                {builderMonthAnchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+              </div>
+              <button
+                onClick={() => setBuilderMonthAnchor(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}
+                style={{ padding: "8px 12px", borderRadius: "8px", border: "none", background: "#f1f5f9", fontWeight: 700, cursor: "pointer" }}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => shiftBuilderMonth(1)}
+                style={{ padding: "8px 12px", borderRadius: "8px", border: "none", background: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}
+              >
+                Next Month
+              </button>
+              <button
+                onClick={() => setBuilderCalendarOpen(false)}
+                style={{ padding: "8px 12px", borderRadius: "8px", border: "none", background: "#0f172a", color: "#ffffff", fontWeight: 700, cursor: "pointer" }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: "8px" }}>
+            {builderWeekRows.map((week, weekIndex) => (
+              <div
+                key={`builder-week-${weekIndex}`}
+                style={{
+                  border: "1px solid #dbeafe",
+                  borderRadius: "10px",
+                  overflow: "hidden",
+                  background: "#ffffff"
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "112px repeat(7, minmax(0, 1fr))",
+                    background: "#f8fafc",
+                    borderBottom: "1px solid #dbeafe",
+                    boxShadow: "0 2px 8px rgba(15, 23, 42, 0.08)"
+                  }}
+                >
+                  <div style={{ padding: "8px 6px", fontWeight: 700, color: "#475569", fontSize: "12px" }}>
+                    Week {weekIndex + 1}
+                  </div>
+                  {week.map((date) => {
+                    const inCurrentMonth = date.getMonth() === builderMonthAnchor.getMonth()
+
+                    return (
+                      <div
+                        key={`builder-header-${date.toISOString()}`}
+                        style={{
+                          padding: "6px 4px",
+                          textAlign: "center",
+                          borderLeft: "1px solid #dbeafe",
+                          background: !inCurrentMonth ? "#f8fafc" : "#ffffff",
+                          opacity: !inCurrentMonth ? 0.65 : 1
+                        }}
+                      >
+                        <div style={{ fontSize: "10px", fontWeight: 700, color: "#475569" }}>
+                          {date.toLocaleDateString(undefined, { weekday: "short" })}
+                        </div>
+                        <div style={{ fontWeight: 700, fontSize: "12px" }}>
+                          {date.toLocaleDateString(undefined, { month: "numeric", day: "numeric" })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div style={{ display: "grid", gap: 0 }}>
+                  {([
+                    { kind: "team", shift: "Days", label: "Days Team" },
+                    ...patrolPositions.map((position) => ({
+                      kind: "position" as const,
+                      shift: "Days" as ShiftType,
+                      label: position.label,
+                      code: position.code
+                    })),
+                    { kind: "team", shift: "Nights", label: "Nights Team" },
+                    ...patrolPositions.map((position) => ({
+                      kind: "position" as const,
+                      shift: "Nights" as ShiftType,
+                      label: position.label,
+                      code: position.code
+                    }))
+                  ] as const).map((row, rowIndex) => (
+                    <div
+                      key={`builder-modal-row-${row.label}-${rowIndex}-${weekIndex}`}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "112px repeat(7, minmax(0, 1fr))",
+                        borderTop: rowIndex === 0 ? "none" : "1px solid #e2e8f0"
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: row.kind === "team" ? "5px 6px" : "4px 6px",
+                          fontWeight: 700,
+                          fontSize: row.kind === "team" ? "11px" : "12px",
+                          background: row.kind === "team" ? "#f8fafc" : "#ffffff",
+                          color: "#ec4899",
+                          display: "flex",
+                          alignItems: row.kind === "team" ? "center" : "stretch"
+                        }}
+                      >
+                        {row.kind === "team" ? (
+                          row.label
+                        ) : (
+                          <div style={{ display: "grid", gridTemplateRows: "1fr 1fr", width: "100%" }}>
+                            <div style={{ display: "flex", alignItems: "center" }}>{row.label}</div>
+                            <div style={{ display: "flex", alignItems: "center", fontSize: "9px", color: "#ec4899" }}>
+                              Replacement
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {week.map((date) => {
+                        const inCurrentMonth = date.getMonth() === builderMonthAnchor.getMonth()
+                        const isoDate = date.toISOString().slice(0, 10)
+
+                        if (row.kind === "team") {
+                          return (
+                            <div
+                              key={`builder-team-${row.label}-${isoDate}`}
+                              style={{
+                                padding: "3px",
+                                borderLeft: "1px solid #e2e8f0",
+                                background: !inCurrentMonth ? "#f8fafc" : "#ffffff",
+                                opacity: !inCurrentMonth ? 0.7 : 1
+                              }}
+                            >
+                              <div
+                                style={{
+                                  textAlign: "center",
+                                  fontSize: "11px",
+                                  fontWeight: 800,
+                                  color: "#1e3a8a",
+                                  padding: "7px 2px",
+                                  borderRadius: "8px",
+                                  border: "1px solid #93c5fd",
+                                  background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
+                                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8)"
+                                }}
+                              >
+                                {getActiveTeam(date, row.shift)}
+                              </div>
+                            </div>
+                          )
+                        }
+
+                        const scheduleRow = builderEffectiveRows.find(
+                          (entry) =>
+                            entry.assignment_date === isoDate &&
+                            entry.shift_type === row.shift &&
+                            entry.position_code === row.code
+                        )
+                        const rowEmployee = scheduleRow?.employee_id ? employeeMap.get(scheduleRow.employee_id) || null : null
+                        const replacementEmployee = scheduleRow?.replacement_employee_id ? employeeMap.get(scheduleRow.replacement_employee_id) || null : null
+                        const isBuilderEmployeeRow = scheduleRow?.employee_id === builderEmployee.id
+                        const rowKey = scheduleRow ? getPatrolRowKey(scheduleRow) : `${isoDate}-${row.shift}-${row.code}`
+                        const selected = scheduleRow ? builderSelectedShiftKeys.includes(getPatrolRowKey(scheduleRow)) : false
+                        const leaveLabel = formatStatusLabel(scheduleRow?.status) || scheduleRow?.shift_hours || rowEmployee?.defaultShiftHours || ""
+
+                        return (
+                          <div
+                            key={`builder-cell-${rowKey}`}
+                            style={{
+                              padding: "3px",
+                              borderLeft: "1px solid #e2e8f0",
+                              background: !inCurrentMonth ? "#f8fafc" : "#ffffff",
+                              opacity: !inCurrentMonth ? 0.7 : 1
+                            }}
+                          >
+                            {!scheduleRow ? (
+                              <div
+                                style={{
+                                  minHeight: "44px",
+                                  padding: "1px 5px",
+                                  border: "1px solid #e5e7eb",
+                                  borderRadius: "6px",
+                                  background: "#ffffff",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "12px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                OPEN
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  if (isBuilderEmployeeRow) {
+                                    toggleBuilderShiftSelection(scheduleRow)
+                                  }
+                                }}
+                                disabled={!isBuilderEmployeeRow}
+                                style={{
+                                  width: "100%",
+                                  minHeight: "44px",
+                                  padding: "1px 5px",
+                                  border: isBuilderEmployeeRow
+                                    ? `2px solid ${selected ? "#2563eb" : "#94a3b8"}`
+                                    : "1px solid #e5e7eb",
+                                  borderRadius: "6px",
+                                  background: selected
+                                    ? "#dbeafe"
+                                    : isBuilderEmployeeRow
+                                      ? "#f8fafc"
+                                      : "#ffffff",
+                                  display: "grid",
+                                  gridTemplateRows: "auto auto",
+                                  gap: "3px",
+                                  cursor: isBuilderEmployeeRow ? "pointer" : "default",
+                                  opacity: !isBuilderEmployeeRow && scheduleRow.status && scheduleRow.status !== "Scheduled" ? 0.9 : 1
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: "100%",
+                                    fontWeight: 600,
+                                    background: scheduleRow.status && scheduleRow.status !== "Scheduled" ? "#fde68a" : "transparent",
+                                    border: "1px solid #d1d5db",
+                                    padding: "2px 4px",
+                                    borderRadius: "4px",
+                                    minHeight: "16px",
+                                    fontSize: "13px",
+                                    lineHeight: 1,
+                                    display: "grid",
+                                    gridTemplateColumns: "26px minmax(0, 1fr) 30px",
+                                    alignItems: "center",
+                                    columnGap: "4px",
+                                    textAlign: "center"
+                                  }}
+                                >
+                                  <span style={{ textAlign: "left", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                                    {(scheduleRow.vehicle || rowEmployee?.defaultVehicle || "").trim()}
+                                  </span>
+                                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {rowEmployee?.lastName || "OPEN"}
+                                  </span>
+                                  <span style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                    {leaveLabel}
+                                  </span>
+                                </div>
+                                <div
+                                  style={{
+                                    width: "100%",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "4px",
+                                    padding: "2px 4px",
+                                    minHeight: "16px",
+                                    background: "#ffffff",
+                                    display: "grid",
+                                    gridTemplateColumns: "26px minmax(0, 1fr) 30px",
+                                    alignItems: "center",
+                                    columnGap: "4px",
+                                    fontSize: "12px",
+                                    lineHeight: 1,
+                                    textAlign: "center",
+                                    color: replacementEmployee ? "#2563eb" : "#94a3b8"
+                                  }}
+                                >
+                                  {replacementEmployee ? (
+                                    <>
+                                      <span style={{ textAlign: "left", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                                        {(scheduleRow.replacement_vehicle || replacementEmployee.defaultVehicle || "").trim()}
+                                      </span>
+                                      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {replacementEmployee.lastName}
+                                      </span>
+                                      <span style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                        {scheduleRow.replacement_hours || replacementEmployee.defaultShiftHours || ""}
+                                      </span>
+                                    </>
+                                  ) : ""}
+                                </div>
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ fontSize: "13px", color: "#475569" }}>
+              {builderSelectedRows.length} shift{builderSelectedRows.length === 1 ? "" : "s"} selected
+            </div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button
+                onClick={() => setBuilderSelectedShiftKeys([])}
+                style={{ padding: "8px 12px", borderRadius: "8px", border: "none", background: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}
+              >
+                Clear Selection
+              </button>
+              <button
+                onClick={() => setBuilderCalendarOpen(false)}
+                style={{ padding: "8px 12px", borderRadius: "8px", border: "none", background: "#cbd5e1", fontWeight: 700, cursor: "pointer" }}
+              >
+                Done Selecting
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 
   return (
@@ -3335,6 +3676,7 @@ export function OvertimePage({
           )
         })()
       )}
+      {builderCalendarModal}
     </div>
   )
 }
