@@ -58,7 +58,6 @@ const TIME_OFF_REASON_OPTIONS = [
   "Off"
 ] as const
 
-type PreviewLayout = "preview1" | "preview2"
 type BuilderSelectionMode = "single" | "multiple" | "month"
 type MissionControlCardKey = "order" | "queue" | "responses"
 
@@ -200,7 +199,6 @@ export function OvertimePage({
   const [selectedNotificationRecipientIds, setSelectedNotificationRecipientIds] = useState<string[]>([])
   const [forceAssignRequestId, setForceAssignRequestId] = useState<string | null>(null)
   const [forceAssignEmployeeId, setForceAssignEmployeeId] = useState<string>("")
-  const [layoutPreview, setLayoutPreview] = useState<PreviewLayout>("preview1")
   const [builderEmployeeId, setBuilderEmployeeId] = useState<string>("")
   const [builderSelectionMode, setBuilderSelectionMode] = useState<BuilderSelectionMode>("multiple")
   const [builderSingleDate, setBuilderSingleDate] = useState("")
@@ -2316,40 +2314,16 @@ export function OvertimePage({
             <div style={{ fontSize: "13px", color: "#64748b" }}>
               Review Patrol time off, move qualified shifts into the queue, collect interest, and assign overtime coverage.
             </div>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {([
-                { key: "preview1", label: "Preview 1", color: "#2563eb" },
-                { key: "preview2", label: "Preview 2", color: "#7c3aed" }
-              ] as const).map((preview) => (
-                <button
-                  key={preview.key}
-                  onClick={() => setLayoutPreview(preview.key)}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: "999px",
-                    border: "none",
-                    background: layoutPreview === preview.key ? preview.color : "#e2e8f0",
-                    color: layoutPreview === preview.key ? "#ffffff" : "#0f172a",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontSize: "12px"
-                  }}
-                >
-                  {preview.label}
-                </button>
-              ))}
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      {layoutPreview === "preview2" && (
-        <div
-          style={{
-            display: "grid",
-            gap: "18px"
-          }}
-        >
+      <div
+        style={{
+          display: "grid",
+          gap: "18px"
+        }}
+      >
           <div
             style={{
               ...CARD_STYLE,
@@ -2422,9 +2396,8 @@ export function OvertimePage({
             {workspaceBuilderPanel}
           </div>
         </div>
-      )}
 
-      <div style={{ display: "grid", gap: "18px", opacity: layoutPreview === "preview1" ? 1 : 1 }}>
+      <div style={{ display: "grid", gap: "18px" }}>
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <div style={{ width: "100%", maxWidth: "360px" }}>
