@@ -1809,7 +1809,11 @@ export function OvertimePage({
                     </div>
                   </div>
                   <button
-                    onClick={() => setBuilderCalendarOpen(true)}
+                    onClick={() => {
+                      if (!builderEmployee) return
+                      setBuilderCalendarOpen(false)
+                      onOpenPatrolTimeOffPicker(builderEmployee.id)
+                    }}
                     style={{
                       padding: "10px 14px",
                       borderRadius: "10px",
@@ -1824,7 +1828,7 @@ export function OvertimePage({
                   </button>
                 </div>
                 <div style={{ fontSize: "12px", color: "#64748b" }}>
-                  This popup mirrors the Patrol month layout and keeps the staffing picture visible while you click the selected employee's worked cells.
+                  This jumps you into the real Patrol module calendar with the selected employee armed for box-picking.
                 </div>
               </div>
               <div
