@@ -319,6 +319,14 @@ export function OvertimePage({
         return a.position_code.localeCompare(b.position_code)
       })
   }, [builderEffectiveRows, builderEmployeeId, builderMonthAnchor])
+  const builderRowByKey = useMemo(
+    () => new Map(builderEffectiveRows.map((row) => [getPatrolRowKey(row), row])),
+    [builderEffectiveRows]
+  )
+  const builderSelectedShiftKeySet = useMemo(
+    () => new Set(builderSelectedShiftKeys),
+    [builderSelectedShiftKeys]
+  )
   const builderSelectedRows = useMemo(
     () => builderMonthRows.filter((row) => builderSelectedShiftKeys.includes(getPatrolRowKey(row))),
     [builderMonthRows, builderSelectedShiftKeys]
@@ -1884,13 +1892,13 @@ export function OvertimePage({
     >
       <div
         style={{
-          width: "min(1240px, 96vw)",
-          maxHeight: "92vh",
+          width: "min(1340px, 98vw)",
+          maxHeight: "96vh",
           overflow: "auto",
           background: "#ffffff",
           borderRadius: "16px",
           boxShadow: "0 20px 45px rgba(15, 23, 42, 0.28)",
-          padding: "18px"
+          padding: "14px"
         }}
       >
         <div style={{ display: "grid", gap: "14px" }}>
@@ -1944,7 +1952,7 @@ export function OvertimePage({
                 fontWeight: 700,
                 background: "#e2e8f0",
                 border: "1px solid #dbeafe",
-                padding: "10px",
+                padding: "8px",
                 borderRadius: "6px",
                 marginBottom: "6px"
               }}
@@ -1977,20 +1985,20 @@ export function OvertimePage({
                     const inCurrentMonth = date.getMonth() === builderMonthAnchor.getMonth()
 
                     return (
-                      <div
-                        key={`builder-header-${date.toISOString()}`}
-                        style={{
-                          padding: "6px 4px",
-                          textAlign: "center",
-                          borderLeft: "1px solid #dbeafe",
-                          background: !inCurrentMonth ? "#f8fafc" : "#ffffff",
-                          opacity: !inCurrentMonth ? 0.65 : 1
-                        }}
-                      >
-                        <div style={{ fontSize: "10px", fontWeight: 700, color: "#475569" }}>
+                    <div
+                      key={`builder-header-${date.toISOString()}`}
+                      style={{
+                        padding: "4px 3px",
+                        textAlign: "center",
+                        borderLeft: "1px solid #dbeafe",
+                        background: !inCurrentMonth ? "#f8fafc" : "#ffffff",
+                        opacity: !inCurrentMonth ? 0.65 : 1
+                      }}
+                    >
+                        <div style={{ fontSize: "9px", fontWeight: 700, color: "#475569" }}>
                           {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()]}
                         </div>
-                        <div style={{ fontWeight: 700, fontSize: "12px" }}>
+                        <div style={{ fontWeight: 700, fontSize: "11px" }}>
                           {date.toLocaleDateString(undefined, { month: "numeric", day: "numeric" })}
                         </div>
                       </div>
@@ -2025,9 +2033,9 @@ export function OvertimePage({
                     >
                       <div
                         style={{
-                          padding: row.kind === "team" ? "5px 6px" : "4px 6px",
+                          padding: row.kind === "team" ? "4px 6px" : "3px 6px",
                           fontWeight: 700,
-                          fontSize: row.kind === "team" ? "11px" : "12px",
+                          fontSize: row.kind === "team" ? "10px" : "11px",
                           background: row.kind === "team" ? "#f8fafc" : "#ffffff",
                           color: "#ec4899",
                           display: "flex",
@@ -2080,41 +2088,37 @@ export function OvertimePage({
                           )
                         }
 
-                        const scheduleRow = builderEffectiveRows.find(
-                          (entry) =>
-                            entry.assignment_date === isoDate &&
-                            entry.shift_type === row.shift &&
-                            entry.position_code === row.code
-                        )
-                        const rowEmployee = scheduleRow?.employee_id ? employeeMap.get(scheduleRow.employee_id) || null : null
-                        const replacementEmployee = scheduleRow?.replacement_employee_id ? employeeMap.get(scheduleRow.replacement_employee_id) || null : null
-                        const isBuilderEmployeeRow = scheduleRow?.employee_id === builderEmployee.id
-                        const rowKey = scheduleRow ? getPatrolRowKey(scheduleRow) : `${isoDate}-${row.shift}-${row.code}`
-                        const selected = scheduleRow ? builderSelectedShiftKeys.includes(getPatrolRowKey(scheduleRow)) : false
-                        const leaveLabel = formatStatusLabel(scheduleRow?.status) || scheduleRow?.shift_hours || rowEmployee?.defaultShiftHours || ""
+                        const keyedRow = builderRowByKey.get(`${isoDate}-${row.shift}-${row.code}`)
+                        const resolvedRow = keyedRow || null
+                        const rowEmployee = resolvedRow?.employee_id ? employeeMap.get(resolvedRow.employee_id) || null : null
+                        const replacementEmployee = resolvedRow?.replacement_employee_id ? employeeMap.get(resolvedRow.replacement_employee_id) || null : null
+                        const isBuilderEmployeeRow = resolvedRow?.employee_id === builderEmployee.id
+                        const rowKey = resolvedRow ? getPatrolRowKey(resolvedRow) : `${isoDate}-${row.shift}-${row.code}`
+                        const selected = resolvedRow ? builderSelectedShiftKeySet.has(getPatrolRowKey(resolvedRow)) : false
+                        const leaveLabel = formatStatusLabel(resolvedRow?.status) || resolvedRow?.shift_hours || rowEmployee?.defaultShiftHours || ""
 
                         return (
                           <div
                             key={`builder-cell-${rowKey}`}
                             style={{
-                              padding: "3px",
+                              padding: "2px",
                               borderLeft: "1px solid #e2e8f0",
                               background: !inCurrentMonth ? "#f8fafc" : "#ffffff",
                               opacity: !inCurrentMonth ? 0.7 : 1
                             }}
                           >
-                            {!scheduleRow ? (
+                            {!resolvedRow ? (
                               <div
                                 style={{
-                                  minHeight: "44px",
-                                  padding: "1px 5px",
+                                  minHeight: "38px",
+                                  padding: "1px 4px",
                                   border: "1px solid #e5e7eb",
                                   borderRadius: "6px",
                                   background: "#ffffff",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  fontSize: "12px",
+                                  fontSize: "11px",
                                   fontWeight: 700
                                 }}
                               >
@@ -2124,14 +2128,14 @@ export function OvertimePage({
                               <button
                                 onClick={() => {
                                   if (isBuilderEmployeeRow) {
-                                    toggleBuilderShiftSelection(scheduleRow)
+                                    toggleBuilderShiftSelection(resolvedRow)
                                   }
                                 }}
                                 disabled={!isBuilderEmployeeRow}
                                 style={{
                                   width: "100%",
-                                  minHeight: "44px",
-                                  padding: "1px 5px",
+                                  minHeight: "38px",
+                                  padding: "1px 4px",
                                   border: isBuilderEmployeeRow
                                     ? `2px solid ${selected ? "#2563eb" : "#94a3b8"}`
                                     : "1px solid #e5e7eb",
@@ -2145,29 +2149,29 @@ export function OvertimePage({
                                   gridTemplateRows: "auto auto",
                                   gap: "3px",
                                   cursor: isBuilderEmployeeRow ? "pointer" : "default",
-                                  opacity: !isBuilderEmployeeRow && scheduleRow.status && scheduleRow.status !== "Scheduled" ? 0.9 : 1
+                                  opacity: !isBuilderEmployeeRow && resolvedRow.status && resolvedRow.status !== "Scheduled" ? 0.9 : 1
                                 }}
                               >
                                 <div
                                   style={{
                                     width: "100%",
                                     fontWeight: 600,
-                                    background: scheduleRow.status && scheduleRow.status !== "Scheduled" ? "#fde68a" : "transparent",
+                                    background: resolvedRow.status && resolvedRow.status !== "Scheduled" ? "#fde68a" : "transparent",
                                     border: "1px solid #d1d5db",
-                                    padding: "2px 4px",
+                                    padding: "1px 3px",
                                     borderRadius: "4px",
-                                    minHeight: "16px",
-                                    fontSize: "13px",
+                                    minHeight: "14px",
+                                    fontSize: "11px",
                                     lineHeight: 1,
                                     display: "grid",
-                                    gridTemplateColumns: "26px minmax(0, 1fr) 30px",
+                                    gridTemplateColumns: "22px minmax(0, 1fr) 26px",
                                     alignItems: "center",
-                                    columnGap: "4px",
+                                    columnGap: "3px",
                                     textAlign: "center"
                                   }}
                                 >
                                   <span style={{ textAlign: "left", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-                                    {(scheduleRow.vehicle || rowEmployee?.defaultVehicle || "").trim()}
+                                    {(resolvedRow.vehicle || rowEmployee?.defaultVehicle || "").trim()}
                                   </span>
                                   <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                     {rowEmployee?.lastName || "OPEN"}
@@ -2181,14 +2185,14 @@ export function OvertimePage({
                                     width: "100%",
                                     border: "1px solid #d1d5db",
                                     borderRadius: "4px",
-                                    padding: "2px 4px",
-                                    minHeight: "16px",
+                                    padding: "1px 3px",
+                                    minHeight: "14px",
                                     background: "#ffffff",
                                     display: "grid",
-                                    gridTemplateColumns: "26px minmax(0, 1fr) 30px",
+                                    gridTemplateColumns: "22px minmax(0, 1fr) 26px",
                                     alignItems: "center",
-                                    columnGap: "4px",
-                                    fontSize: "12px",
+                                    columnGap: "3px",
+                                    fontSize: "11px",
                                     lineHeight: 1,
                                     textAlign: "center",
                                     color: replacementEmployee ? "#2563eb" : "#94a3b8"
@@ -2197,13 +2201,13 @@ export function OvertimePage({
                                   {replacementEmployee ? (
                                     <>
                                       <span style={{ textAlign: "left", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-                                        {(scheduleRow.replacement_vehicle || replacementEmployee.defaultVehicle || "").trim()}
+                                        {(resolvedRow.replacement_vehicle || replacementEmployee.defaultVehicle || "").trim()}
                                       </span>
                                       <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                         {replacementEmployee.lastName}
                                       </span>
                                       <span style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                                        {scheduleRow.replacement_hours || replacementEmployee.defaultShiftHours || ""}
+                                        {resolvedRow.replacement_hours || replacementEmployee.defaultShiftHours || ""}
                                       </span>
                                     </>
                                   ) : ""}
