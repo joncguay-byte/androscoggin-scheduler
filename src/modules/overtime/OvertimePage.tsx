@@ -12,6 +12,8 @@ import type {
   ForceHistoryRow,
   OvertimeShiftRequest,
   PatrolScheduleRow,
+  PatrolPositionCode,
+  ShiftType,
 } from "../../types"
 
 type OvertimePageProps = {
@@ -38,11 +40,95 @@ const CARD_STYLE = {
   background: "#ffffff"
 } as const
 
+const TIME_OFF_REASON_OPTIONS = [
+  "Sick",
+  "Vacation",
+  "Court",
+  "Training",
+  "FMLA",
+  "Professional Leave",
+  "Bereavement",
+  "Call Out",
+  "Detail",
+  "Extra",
+  "Swap",
+  "Off"
+] as const
+
+type PreviewLayout = "preview1" | "preview2" | "preview3" | "preview4"
+type BuilderSelectionMode = "single" | "multiple" | "month"
+
 function formatQueuePositionLabel(positionCode: OvertimeShiftRequest["positionCode"]) {
   if (positionCode === "SUP1" || positionCode === "SUP2") return "Supervisor"
   if (positionCode === "DEP1" || positionCode === "DEP2") return "Deputy"
   if (positionCode === "POL") return "Poland"
   return positionCode
+}
+
+function buildPatrolOvertimeRequestId(assignmentDate: string, shiftType: ShiftType, positionCode: PatrolPositionCode) {
+  return `patrol-open-${assignmentDate}-${shiftType}-${positionCode}`
+}
+
+function getPatrolRowKey(row: Pick<PatrolScheduleRow, "assignment_date" | "shift_type" | "position_code">) {
+  return `${row.assignment_date}-${row.shift_type}-${row.position_code}`
+}
+
+function mergePatrolRows(baseRows: PatrolScheduleRow[], overrideRows: PatrolScheduleRow[]) {
+  const merged = new Map<string, PatrolScheduleRow>()
+
+  for (const row of baseRows) {
+    merged.set(getPatrolRowKey(row), row)
+  }
+
+  for (const row of overrideRows) {
+    merged.set(getPatrolRowKey(row), row)
+  }
+
+  return [...merged.values()].sort((a, b) => {
+    if (a.assignment_date !== b.assignment_date) return a.assignment_date.localeCompare(b.assignment_date)
+    if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
+    return a.position_code.localeCompare(b.position_code)
+  })
+}
+
+function toPatrolOverridePayload(row: PatrolScheduleRow) {
+  return {
+    assignment_date: row.assignment_date,
+    shift_type: row.shift_type,
+    position_code: row.position_code,
+    employee_id: row.employee_id,
+    vehicle: row.vehicle,
+    shift_hours: row.shift_hours,
+    status: row.status,
+    replacement_employee_id: row.replacement_employee_id,
+    replacement_vehicle: row.replacement_vehicle,
+    replacement_hours: row.replacement_hours,
+    updated_at: new Date().toISOString()
+  }
+}
+
+function formatShortDate(isoDate: string) {
+  return new Date(`${isoDate}T12:00:00`).toLocaleDateString(undefined, {
+    month: "numeric",
+    day: "numeric",
+    year: "numeric"
+  })
+}
+
+function buildMonthGrid(anchorDate: Date) {
+  const firstDay = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
+  const lastDay = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0)
+  const gridStart = new Date(firstDay)
+  gridStart.setDate(firstDay.getDate() - firstDay.getDay())
+  const gridEnd = new Date(lastDay)
+  gridEnd.setDate(lastDay.getDate() + (6 - lastDay.getDay()))
+  const dates: Date[] = []
+
+  for (let date = new Date(gridStart); date <= gridEnd; date.setDate(date.getDate() + 1)) {
+    dates.push(new Date(date))
+  }
+
+  return dates
 }
 
 export function OvertimePage({
@@ -73,6 +159,15 @@ export function OvertimePage({
   const [selectedNotificationRecipientIds, setSelectedNotificationRecipientIds] = useState<string[]>([])
   const [forceAssignRequestId, setForceAssignRequestId] = useState<string | null>(null)
   const [forceAssignEmployeeId, setForceAssignEmployeeId] = useState<string>("")
+  const [layoutPreview, setLayoutPreview] = useState<PreviewLayout>("preview1")
+  const [builderEmployeeId, setBuilderEmployeeId] = useState<string>("")
+  const [builderSelectionMode, setBuilderSelectionMode] = useState<BuilderSelectionMode>("multiple")
+  const [builderReason, setBuilderReason] = useState<string>("Vacation")
+  const [builderMonthAnchor, setBuilderMonthAnchor] = useState(() => {
+    const today = new Date()
+    return new Date(today.getFullYear(), today.getMonth(), 1)
+  })
+  const [builderSelectedShiftKeys, setBuilderSelectedShiftKeys] = useState<string[]>([])
   const [undoStack, setUndoStack] = useState<
     Array<{
       patrolOverrideRows: PatrolScheduleRow[]
@@ -152,6 +247,39 @@ export function OvertimePage({
         .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)),
     [employees]
   )
+  const alphabeticalEmployees = useMemo(
+    () =>
+      [...activeEmployees].sort(
+        (a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)
+      ),
+    [activeEmployees]
+  )
+  const builderEmployee = useMemo(
+    () => alphabeticalEmployees.find((employee) => employee.id === builderEmployeeId) || null,
+    [alphabeticalEmployees, builderEmployeeId]
+  )
+  const builderMonthRows = useMemo(() => {
+    if (!builderEmployeeId) return []
+
+    const monthStart = new Date(builderMonthAnchor.getFullYear(), builderMonthAnchor.getMonth(), 1)
+    const monthEnd = new Date(builderMonthAnchor.getFullYear(), builderMonthAnchor.getMonth() + 1, 0)
+    const startIso = monthStart.toISOString().slice(0, 10)
+    const endIso = monthEnd.toISOString().slice(0, 10)
+
+    return effectivePatrolRows
+      .filter((row) => row.employee_id === builderEmployeeId)
+      .filter((row) => row.assignment_date >= startIso && row.assignment_date <= endIso)
+      .sort((a, b) => {
+        if (a.assignment_date !== b.assignment_date) return a.assignment_date.localeCompare(b.assignment_date)
+        if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
+        return a.position_code.localeCompare(b.position_code)
+      })
+  }, [builderEmployeeId, builderMonthAnchor, effectivePatrolRows])
+  const builderSelectedRows = useMemo(
+    () => builderMonthRows.filter((row) => builderSelectedShiftKeys.includes(getPatrolRowKey(row))),
+    [builderMonthRows, builderSelectedShiftKeys]
+  )
+  const builderMonthGrid = useMemo(() => buildMonthGrid(builderMonthAnchor), [builderMonthAnchor])
   const queueIndexByEmployeeId = useMemo(
     () => new Map(overtimeQueueList.map((employee, index) => [employee.id, index])),
     [overtimeQueueList]
@@ -278,6 +406,163 @@ export function OvertimePage({
         ? current.filter((id) => id !== employeeId)
         : [...current, employeeId]
     )
+  }
+
+  function resetBuilderSelection(nextEmployeeId = builderEmployeeId) {
+    setBuilderEmployeeId(nextEmployeeId)
+    setBuilderSelectedShiftKeys([])
+    setBuilderReason("Vacation")
+    setBuilderSelectionMode("multiple")
+  }
+
+  function shiftBuilderMonth(offset: number) {
+    setBuilderMonthAnchor((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1))
+    setBuilderSelectedShiftKeys([])
+  }
+
+  function toggleBuilderShiftSelection(row: PatrolScheduleRow) {
+    const rowKey = getPatrolRowKey(row)
+
+    setBuilderSelectedShiftKeys((current) => {
+      if (builderSelectionMode === "single") {
+        return current.includes(rowKey) ? [] : [rowKey]
+      }
+
+      if (builderSelectionMode === "month") {
+        const monthKeys = builderMonthRows.map((entry) => getPatrolRowKey(entry))
+        const next = current.includes(rowKey)
+          ? monthKeys.filter((key) => key !== rowKey && current.includes(key))
+          : [...new Set([...monthKeys, rowKey])]
+        return next
+      }
+
+      return current.includes(rowKey)
+        ? current.filter((key) => key !== rowKey)
+        : [...current, rowKey]
+    })
+  }
+
+  function setBuilderMode(mode: BuilderSelectionMode) {
+    setBuilderSelectionMode(mode)
+
+    if (mode === "month") {
+      setBuilderSelectedShiftKeys(builderMonthRows.map((row) => getPatrolRowKey(row)))
+      return
+    }
+
+    if (mode === "single" && builderSelectedShiftKeys.length > 1) {
+      setBuilderSelectedShiftKeys(builderSelectedShiftKeys.slice(0, 1))
+    }
+  }
+
+  async function saveBuilderTimeOffSelection() {
+    if (!builderEmployee || builderSelectedRows.length === 0) {
+      window.alert("Choose an employee and at least one scheduled shift first.")
+      return
+    }
+
+    const rowsToApply = builderSelectedRows.map((row) => ({
+      ...row,
+      vehicle: builderEmployee.defaultVehicle || row.vehicle,
+      shift_hours: row.shift_hours || builderEmployee.defaultShiftHours,
+      status: builderReason,
+      replacement_employee_id: null,
+      replacement_vehicle: null,
+      replacement_hours: row.shift_hours || builderEmployee.defaultShiftHours
+    }))
+
+    const createdAt = new Date().toISOString()
+    const nextRequests: OvertimeShiftRequest[] = rowsToApply.map((row) => ({
+      id: buildPatrolOvertimeRequestId(row.assignment_date, row.shift_type as ShiftType, row.position_code as PatrolPositionCode),
+      source: "Patrol Open Shift",
+      assignmentDate: row.assignment_date,
+      shiftType: row.shift_type as ShiftType,
+      positionCode: row.position_code as PatrolPositionCode,
+      description: `${formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])} time off`,
+      offEmployeeId: builderEmployee.id,
+      offEmployeeLastName: builderEmployee.lastName,
+      offHours: row.shift_hours || builderEmployee.defaultShiftHours,
+      offReason: builderReason,
+      selectionActive: true,
+      workflowStatus: "Open",
+      status: "Open",
+      assignedEmployeeId: null,
+      createdAt,
+      responses: []
+    }))
+
+    pushUndoSnapshot()
+    setPatrolOverrideRows((current) => mergePatrolRows(current, rowsToApply))
+    setOvertimeShiftRequests((current) => {
+      const next = [...current]
+
+      for (const request of nextRequests) {
+        const index = next.findIndex((entry) => entry.id === request.id)
+        if (index >= 0) {
+          next[index] = {
+            ...next[index],
+            ...request,
+            createdAt: next[index].createdAt || request.createdAt,
+            responses: next[index].responses || []
+          }
+        } else {
+          next.push(request)
+        }
+      }
+
+      return next
+    })
+
+    invalidatePatrolScheduleCache()
+    onAuditEvent(
+      "Overtime Builder Time Off Saved",
+      `Saved ${builderReason} for ${builderEmployee.firstName} ${builderEmployee.lastName}.`,
+      `${rowsToApply.map((row) => `${row.assignment_date} ${row.shift_type} ${formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}`).join(" | ")}`
+    )
+
+    setBuilderSelectedShiftKeys([])
+
+    void Promise.all([
+      supabase
+        .from("patrol_overrides")
+        .upsert(
+          rowsToApply.map((row) => toPatrolOverridePayload(row)),
+          { onConflict: "assignment_date,shift_type,position_code" }
+        ),
+      supabase
+        .from("overtime_shift_requests")
+        .upsert(
+          nextRequests.map((request) => ({
+            id: request.id,
+            source: request.source,
+            batch_id: null,
+            batch_name: null,
+            assignment_date: request.assignmentDate,
+            shift_type: request.shiftType,
+            position_code: request.positionCode,
+            description: request.description,
+            off_employee_id: request.offEmployeeId || null,
+            off_employee_last_name: request.offEmployeeLastName || null,
+            off_hours: request.offHours || null,
+            off_reason: request.offReason || null,
+            assigned_hours: request.assignedHours || null,
+            selection_active: true,
+            manually_queued: request.manuallyQueued ?? false,
+            auto_assign_reason: request.autoAssignReason || null,
+            workflow_status: "Open",
+            status: "Open",
+            assigned_employee_id: null,
+            created_at: request.createdAt,
+            responses: request.responses
+          })),
+          { onConflict: "id" }
+        )
+    ]).catch((error) => {
+      console.error("Failed to save overtime builder time off selection:", error)
+      window.setTimeout(() => {
+        alert("Time off saved locally, but the cloud update was delayed. Refresh in a moment if needed.")
+      }, 0)
+    })
   }
 
   function pushUndoSnapshot() {
@@ -1129,6 +1414,334 @@ export function OvertimePage({
     )
   }
 
+  const workspaceCheckpointPanel = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Checkpoints</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div style={{ display: "grid", gap: "10px" }}>
+          <div style={{ fontSize: "12px", color: "#475569" }}>
+            Draft: {builderSelectedRows.length} selected shift{builderSelectedRows.length === 1 ? "" : "s"}
+          </div>
+          <div style={{ fontSize: "12px", color: "#475569" }}>
+            Saved undo points: {undoStack.length}
+          </div>
+          <div style={{ display: "grid", gap: "8px" }}>
+            <button
+              onClick={() => void saveBuilderTimeOffSelection()}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: "none",
+                background: builderSelectedRows.length === 0 ? "#cbd5e1" : "#2563eb",
+                color: "#ffffff",
+                fontWeight: 700,
+                cursor: builderSelectedRows.length === 0 ? "not-allowed" : "pointer",
+                fontSize: "12px"
+              }}
+            >
+              Save To Patrol Feed
+            </button>
+            <button
+              onClick={undoLastQueueAction}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: "none",
+                background: "#e2e8f0",
+                color: "#0f172a",
+                fontWeight: 700,
+                cursor: "pointer",
+                fontSize: "12px"
+              }}
+            >
+              Undo Last Saved Change
+            </button>
+            <button
+              onClick={() => setBuilderSelectedShiftKeys([])}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: "none",
+                background: "#f1f5f9",
+                color: "#0f172a",
+                fontWeight: 700,
+                cursor: "pointer",
+                fontSize: "12px"
+              }}
+            >
+              Clear Current Selection
+            </button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  const workspaceOrderPanel = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Overtime Order</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div style={{ display: "grid", gap: "10px" }}>
+          <select
+            value={nextUpEmployee?.id || ""}
+            onChange={() => undefined}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              fontSize: "12px",
+              fontWeight: 600
+            }}
+          >
+            {overtimeQueueList.map((employee, index) => (
+              <option key={employee.id} value={employee.id}>
+                {index === 0 ? "✓ " : `${index + 1}. `}
+                {employee.firstName} {employee.lastName} | {employee.rank}
+              </option>
+            ))}
+          </select>
+          <div style={{ padding: "10px", borderRadius: "10px", background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+            <div style={{ fontSize: "11px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Next Up
+            </div>
+            <div style={{ marginTop: "4px", fontSize: "15px", fontWeight: 800, color: "#166534" }}>
+              {nextUpEmployee ? `${nextUpEmployee.firstName} ${nextUpEmployee.lastName}` : "No one in queue"}
+            </div>
+          </div>
+          <button
+            onClick={() => printElementById("overtime-list-print-section", "Overtime List")}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              border: "none",
+              background: "#0f766e",
+              color: "#ffffff",
+              fontWeight: 700,
+              fontSize: "12px",
+              cursor: "pointer"
+            }}
+          >
+            Print List
+          </button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  const workspaceBuilderPanel = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Shift Builder</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div style={{ display: "grid", gap: "12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1.2fr) minmax(160px, 1fr)", gap: "10px" }}>
+            <select
+              value={builderEmployeeId}
+              onChange={(event) => resetBuilderSelection(event.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                fontSize: "12px"
+              }}
+            >
+              <option value="">Select employee</option>
+              {alphabeticalEmployees.map((employee) => (
+                <option key={`builder-${employee.id}`} value={employee.id}>
+                  {employee.lastName}, {employee.firstName} | {employee.team} | {employee.rank}
+                </option>
+              ))}
+            </select>
+            <select
+              value={builderReason}
+              onChange={(event) => setBuilderReason(event.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                fontSize: "12px"
+              }}
+            >
+              {TIME_OFF_REASON_OPTIONS.map((reason) => (
+                <option key={reason} value={reason}>
+                  {reason}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {(["single", "multiple", "month"] as BuilderSelectionMode[]).map((mode) => (
+                <button
+                  key={`builder-mode-${mode}`}
+                  onClick={() => setBuilderMode(mode)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "999px",
+                    border: "none",
+                    background: builderSelectionMode === mode ? "#0f172a" : "#e2e8f0",
+                    color: builderSelectionMode === mode ? "#ffffff" : "#0f172a",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontSize: "12px"
+                  }}
+                >
+                  {mode === "single" ? "Single Date" : mode === "multiple" ? "Multiple Dates" : "Month"}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={() => shiftBuilderMonth(-1)}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "#e2e8f0",
+                  color: "#0f172a",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontSize: "12px"
+                }}
+              >
+                Prev
+              </button>
+              <div style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a", minWidth: "130px", textAlign: "center" }}>
+                {builderMonthAnchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+              </div>
+              <button
+                onClick={() => setBuilderMonthAnchor(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "#f1f5f9",
+                  color: "#0f172a",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontSize: "12px"
+                }}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => shiftBuilderMonth(1)}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "#e2e8f0",
+                  color: "#0f172a",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontSize: "12px"
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          {!builderEmployee && (
+            <div style={{ padding: "18px", borderRadius: "12px", background: "#f8fafc", border: "1px dashed #cbd5e1", fontSize: "13px", color: "#64748b" }}>
+              Choose an employee, then click the scheduled shift boxes for the dates you want to mark off. Saving here writes those shifts into the patrol overtime feed without leaving this module.
+            </div>
+          )}
+
+          {builderEmployee && (
+            <div style={{ display: "grid", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "8px" }}>
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
+                  <div key={`builder-weekday-${label}`} style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {label}
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "8px" }}>
+                {builderMonthGrid.map((date) => {
+                  const isoDate = date.toISOString().slice(0, 10)
+                  const dayRows = builderMonthRows.filter((row) => row.assignment_date === isoDate)
+                  const inMonth = date.getMonth() === builderMonthAnchor.getMonth()
+
+                  return (
+                    <div
+                      key={`builder-day-${isoDate}`}
+                      style={{
+                        minHeight: "132px",
+                        borderRadius: "12px",
+                        border: `1px solid ${inMonth ? "#dbe3ee" : "#e5e7eb"}`,
+                        background: inMonth ? "#ffffff" : "#f8fafc",
+                        padding: "8px",
+                        display: "grid",
+                        alignContent: "start",
+                        gap: "6px",
+                        opacity: inMonth ? 1 : 0.6
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
+                        {date.getDate()}
+                      </div>
+                      {dayRows.length === 0 ? (
+                        <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                          {inMonth ? "No scheduled shift" : ""}
+                        </div>
+                      ) : (
+                        dayRows.map((row) => {
+                          const rowKey = getPatrolRowKey(row)
+                          const selected = builderSelectedShiftKeys.includes(rowKey)
+                          return (
+                            <button
+                              key={`builder-row-${rowKey}`}
+                              onClick={() => toggleBuilderShiftSelection(row)}
+                              style={{
+                                border: "none",
+                                borderRadius: "10px",
+                                padding: "8px",
+                                textAlign: "left",
+                                cursor: "pointer",
+                                background: selected ? "#dbeafe" : "#f8fafc",
+                                boxShadow: selected ? "inset 0 0 0 2px #2563eb" : "inset 0 0 0 1px #e2e8f0",
+                                display: "grid",
+                                gap: "3px"
+                              }}
+                            >
+                              <div style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
+                                {row.shift_type} {formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}
+                              </div>
+                              <div style={{ fontSize: "11px", color: "#475569" }}>
+                                {row.vehicle || builderEmployee.defaultVehicle} | {row.shift_hours || builderEmployee.defaultShiftHours}
+                              </div>
+                              <div style={{ fontSize: "10px", fontWeight: 700, color: selected ? "#1d4ed8" : "#64748b" }}>
+                                {selected ? "Selected" : "Click to mark off"}
+                              </div>
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   return (
     <div style={{ display: "grid", gap: "18px" }}>
       <Card>
@@ -1140,11 +1753,153 @@ export function OvertimePage({
             <div style={{ fontSize: "13px", color: "#64748b" }}>
               Review Patrol time off, move qualified shifts into the queue, collect interest, and assign overtime coverage.
             </div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {([
+                { key: "preview1", label: "Preview 1", color: "#2563eb" },
+                { key: "preview2", label: "Preview 2", color: "#0f766e" },
+                { key: "preview3", label: "Preview 3", color: "#b45309" },
+                { key: "preview4", label: "Preview 4", color: "#7c3aed" }
+              ] as const).map((preview) => (
+                <button
+                  key={preview.key}
+                  onClick={() => setLayoutPreview(preview.key)}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    border: "none",
+                    background: layoutPreview === preview.key ? preview.color : "#e2e8f0",
+                    color: layoutPreview === preview.key ? "#ffffff" : "#0f172a",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontSize: "12px"
+                  }}
+                >
+                  {preview.label}
+                </button>
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <div style={{ display: "grid", gap: "18px" }}>
+      {layoutPreview === "preview2" && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.8fr) minmax(280px, 360px)",
+            gap: "18px",
+            alignItems: "start"
+          }}
+        >
+          {workspaceBuilderPanel}
+          <div style={{ display: "grid", gap: "18px" }}>
+            {workspaceOrderPanel}
+            {workspaceCheckpointPanel}
+          </div>
+        </div>
+      )}
+
+      {layoutPreview === "preview3" && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(240px, 300px) minmax(0, 1.5fr) minmax(240px, 300px)",
+            gap: "18px",
+            alignItems: "start"
+          }}
+        >
+          <div style={{ display: "grid", gap: "18px" }}>
+            {workspaceOrderPanel}
+            {workspaceCheckpointPanel}
+          </div>
+          {workspaceBuilderPanel}
+          <Card>
+            <CardHeader>
+              <CardTitle>Builder Snapshot</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div style={{ display: "grid", gap: "8px" }}>
+                <div style={{ fontSize: "12px", color: "#475569" }}>
+                  Employee: {builderEmployee ? `${builderEmployee.firstName} ${builderEmployee.lastName}` : "No one selected"}
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569" }}>
+                  Reason: {builderReason}
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569" }}>
+                  Mode: {builderSelectionMode === "single" ? "Single Date" : builderSelectionMode === "multiple" ? "Multiple Dates" : "Month"}
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569" }}>
+                  Selected: {builderSelectedRows.length}
+                </div>
+                {builderSelectedRows.slice(0, 5).map((row) => (
+                  <div key={`builder-snapshot-${getPatrolRowKey(row)}`} style={{ fontSize: "11px", color: "#0f172a", padding: "6px 8px", borderRadius: "8px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                    {formatShortDate(row.assignment_date)} | {row.shift_type} {formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {layoutPreview === "preview4" && (
+        <div
+          style={{
+            display: "grid",
+            gap: "18px"
+          }}
+        >
+          <div
+            style={{
+              ...CARD_STYLE,
+              padding: "18px",
+              background: "linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%)",
+              color: "#ffffff",
+              display: "grid",
+              gap: "14px"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#93c5fd" }}>
+                  Preview 4
+                </div>
+                <div style={{ fontSize: "24px", fontWeight: 900, marginTop: "4px" }}>
+                  Overtime Mission Control
+                </div>
+                <div style={{ fontSize: "13px", color: "#cbd5e1", marginTop: "6px", maxWidth: "700px" }}>
+                  Build time off, generate overtime, queue it, collect interest, and assign coverage from one control center.
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: "8px", minWidth: "220px" }}>
+                <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                  <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
+                    Open Queue
+                  </div>
+                  <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>{overtimeShiftQueue.length}</div>
+                </div>
+                <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                  <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
+                    Interested Responses
+                  </div>
+                  <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>
+                    {overtimeShiftQueue.reduce((total, request) => total + request.responses.filter((response) => response.status === "Interested").length, 0)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(260px, 340px)", gap: "18px", alignItems: "start" }}>
+            {workspaceBuilderPanel}
+            <div style={{ display: "grid", gap: "18px" }}>
+              {workspaceOrderPanel}
+              {workspaceCheckpointPanel}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gap: "18px", opacity: layoutPreview === "preview1" ? 1 : 1 }}>
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <div style={{ width: "100%", maxWidth: "360px" }}>
