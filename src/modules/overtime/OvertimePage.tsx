@@ -212,10 +212,9 @@ export function OvertimePage({
   })
   const [builderSelectedShiftKeys, setBuilderSelectedShiftKeys] = useState<string[]>([])
   const [builderCalendarOpen, setBuilderCalendarOpen] = useState(false)
-  const [missionControlCardSlots, setMissionControlCardSlots] = useState<Array<MissionControlCardKey | null>>([
+  const [missionControlCardOrder, setMissionControlCardOrder] = useState<MissionControlCardKey[]>([
     "order",
     "queue",
-    null,
     "responses"
   ])
   const [draggingMissionCard, setDraggingMissionCard] = useState<MissionControlCardKey | null>(null)
@@ -516,17 +515,16 @@ export function OvertimePage({
     setBuilderSelectedShiftKeys([])
   }
 
-  function placeMissionControlCard(slotIndex: number) {
-    if (!draggingMissionCard) return
+  function moveMissionControlCard(target: MissionControlCardKey) {
+    if (!draggingMissionCard || draggingMissionCard === target) return
 
-    setMissionControlCardSlots((current) => {
-      const next = [...current]
-      const fromIndex = next.findIndex((card) => card === draggingMissionCard)
-      if (fromIndex === -1) return current
+    setMissionControlCardOrder((current) => {
+      const withoutDragged = current.filter((card) => card !== draggingMissionCard)
+      const targetIndex = withoutDragged.indexOf(target)
+      if (targetIndex === -1) return current
 
-      const targetCard = next[slotIndex]
-      next[fromIndex] = targetCard ?? null
-      next[slotIndex] = draggingMissionCard
+      const next = [...withoutDragged]
+      next.splice(targetIndex, 0, draggingMissionCard)
       return next
     })
   }
@@ -2343,11 +2341,7 @@ export function OvertimePage({
               background: "linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%)",
               color: "#ffffff",
               display: "grid",
-              gap: "14px",
-              resize: "both",
-              overflow: "auto",
-              minWidth: "760px",
-              minHeight: "220px"
+              gap: "14px"
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
@@ -2362,59 +2356,30 @@ export function OvertimePage({
                   Build time off, generate overtime, queue it, collect interest, and assign coverage from one control center.
                 </div>
               </div>
-              <div style={{ display: "grid", gap: "12px", minWidth: "560px", gridTemplateColumns: "repeat(2, minmax(220px, 240px))", alignItems: "start" }}>
-                {missionControlCardSlots.map((cardKey, slotIndex) => (
+              <div style={{ display: "grid", gap: "12px", minWidth: "560px", gridTemplateColumns: "repeat(2, minmax(220px, 240px))", alignItems: "start", gridAutoFlow: "row" }}>
+                {missionControlCardOrder.map((cardKey) => (
                   <div
-                    key={`mission-slot-${slotIndex}`}
+                    key={cardKey}
+                    draggable
+                    onDragStart={() => setDraggingMissionCard(cardKey)}
+                    onDragEnd={() => setDraggingMissionCard(null)}
                     onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => placeMissionControlCard(slotIndex)}
+                    onDrop={() => moveMissionControlCard(cardKey)}
                     style={{
-                      minHeight: "96px",
                       borderRadius: "12px",
-                      border: "1px dashed rgba(255,255,255,0.18)",
-                      background: "rgba(255,255,255,0.03)",
-                      padding: cardKey ? 0 : "10px",
+                      background: "rgba(255,255,255,0.08)",
+                      border: draggingMissionCard === cardKey ? "1px solid #93c5fd" : "1px solid rgba(255,255,255,0.1)",
+                      padding: "10px 12px",
                       display: "grid",
-                      alignContent: "stretch"
+                      gap: "8px",
+                      minHeight: "96px",
+                      cursor: "grab"
                     }}
                   >
-                    {cardKey ? (
-                      <div
-                        draggable
-                        onDragStart={() => setDraggingMissionCard(cardKey)}
-                        onDragEnd={() => setDraggingMissionCard(null)}
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: "12px",
-                          background: "rgba(255,255,255,0.08)",
-                          border: draggingMissionCard === cardKey ? "1px solid #93c5fd" : "1px solid rgba(255,255,255,0.1)",
-                          display: "grid",
-                          gap: "8px",
-                          minHeight: "96px",
-                          cursor: "grab"
-                        }}
-                      >
-                        <div style={{ fontSize: "10px", color: "#93c5fd", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                          Drag To Reposition
-                        </div>
-                        {missionControlCardContent[cardKey]}
-                      </div>
-                    ) : (
-                      <div
-                        style={{
-                          minHeight: "96px",
-                          borderRadius: "12px",
-                          color: "#cbd5e1",
-                          fontSize: "12px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          textAlign: "center"
-                        }}
-                      >
-                        Drop a Mission Control card here
-                      </div>
-                    )}
+                    <div style={{ fontSize: "10px", color: "#93c5fd", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Drag To Reposition
+                    </div>
+                    {missionControlCardContent[cardKey]}
                   </div>
                 ))}
               </div>
