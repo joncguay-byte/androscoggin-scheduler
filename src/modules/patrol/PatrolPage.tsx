@@ -70,6 +70,21 @@ type MultiDatePickerSelection = {
   selectedDates: string[]
 }
 
+type OvertimeBuilderSelection = {
+  employeeId: string
+  selectedRowKeys: string[]
+}
+
+type OvertimeBuilderReasonSelection = {
+  employeeId: string
+  selectedRowKeys: string[]
+  reason: string
+}
+
+type OvertimeBuilderLaunch = {
+  employeeId: string
+}
+
 const STATUS_OPTIONS = [
   "Scheduled",
   "Sick",
@@ -352,6 +367,8 @@ export function PatrolPage({
   overtimeShiftRequests,
   setOvertimeShiftRequests,
   colorSettings,
+  overtimeBuilderLaunch,
+  onConsumeOvertimeBuilderLaunch,
   onAuditEvent
 }: {
   employees: Employee[]
@@ -369,6 +386,8 @@ export function PatrolPage({
     cellBackground: string
     cellHighlight: string
   }
+  overtimeBuilderLaunch?: OvertimeBuilderLaunch | null
+  onConsumeOvertimeBuilderLaunch?: () => void
   onAuditEvent?: (action: string, summary: string, details?: string) => void
 }) {
   const today = new Date()
@@ -384,6 +403,8 @@ export function PatrolPage({
   const [timeOffDateSelection, setTimeOffDateSelection] = useState<TimeOffDateSelection | null>(null)
   const [timeOffReasonSelection, setTimeOffReasonSelection] = useState<TimeOffReasonSelection | null>(null)
   const [multiDatePickerSelection, setMultiDatePickerSelection] = useState<MultiDatePickerSelection | null>(null)
+  const [overtimeBuilderSelection, setOvertimeBuilderSelection] = useState<OvertimeBuilderSelection | null>(null)
+  const [overtimeBuilderReasonSelection, setOvertimeBuilderReasonSelection] = useState<OvertimeBuilderReasonSelection | null>(null)
   const [saving, setSaving] = useState(false)
   const scheduleRefreshTimeoutRef = useRef<number | null>(null)
   const weekSectionRefs = useRef<Array<HTMLDivElement | null>>([])
@@ -400,6 +421,10 @@ export function PatrolPage({
       ),
     [overtimeShiftRequests]
   )
+  const employeeMap = useMemo(
+    () => new Map(employees.map((employee) => [employee.id, employee])),
+    [employees]
+  )
   const months = Array.from({ length: 12 }, (_, index) =>
     new Date(today.getFullYear(), index, 1).toLocaleDateString(undefined, { month: "long" })
   )
@@ -408,6 +433,25 @@ export function PatrolPage({
   useEffect(() => {
     setView(defaultView)
   }, [defaultView])
+
+  useEffect(() => {
+    if (!overtimeBuilderLaunch) return
+
+    const today = new Date()
+    setView("month")
+    setBaseDate(new Date(today.getFullYear(), today.getMonth(), 1))
+    setTeamEditor(null)
+    setTeamEmployeeSelection(null)
+    setTimeOffDateSelection(null)
+    setTimeOffReasonSelection(null)
+    setMultiDatePickerSelection(null)
+    setOvertimeBuilderReasonSelection(null)
+    setOvertimeBuilderSelection({
+      employeeId: overtimeBuilderLaunch.employeeId,
+      selectedRowKeys: []
+    })
+    onConsumeOvertimeBuilderLaunch?.()
+  }, [onConsumeOvertimeBuilderLaunch, overtimeBuilderLaunch])
 
   useEffect(() => {
     let active = true
@@ -907,6 +951,22 @@ export function PatrolPage({
     })
   }
 
+  function toggleOvertimeBuilderRow(row: ScheduleRow) {
+    setOvertimeBuilderSelection((current) => {
+      if (!current) return current
+
+      const rowKey = getScheduleRowKey(row)
+      const exists = current.selectedRowKeys.includes(rowKey)
+
+      return {
+        ...current,
+        selectedRowKeys: exists
+          ? current.selectedRowKeys.filter((key) => key !== rowKey)
+          : [...current.selectedRowKeys, rowKey]
+      }
+    })
+  }
+
   async function saveTeamTimeOffSelection() {
     if (!timeOffReasonSelection) return
 
@@ -1072,6 +1132,124 @@ export function PatrolPage({
     })
   }
 
+  async function saveOvertimeBuilderSelection() {
+    if (!overtimeBuilderReasonSelection) return
+
+    const employee = employeeMap.get(overtimeBuilderReasonSelection.employeeId)
+    if (!employee) return
+
+    const selectedRows = effectiveScheduleRows.filter(
+      (row) =>
+        overtimeBuilderReasonSelection.selectedRowKeys.includes(getScheduleRowKey(row)) &&
+        row.employee_id === overtimeBuilderReasonSelection.employeeId
+    )
+
+    if (selectedRows.length === 0) return
+
+    setSaving(true)
+
+    const rowsToApply: ScheduleRow[] = selectedRows.map((row) => ({
+      ...row,
+      vehicle: employee.defaultVehicle || row.vehicle,
+      shift_hours: employee.defaultShiftHours || row.shift_hours,
+      status: overtimeBuilderReasonSelection.reason,
+      replacement_employee_id: null,
+      replacement_vehicle: null,
+      replacement_hours: row.shift_hours || employee.defaultShiftHours
+    }))
+
+    const nextRequests: OvertimeShiftRequest[] = rowsToApply.map((row) => ({
+      id: buildPatrolOvertimeRequestId(row.assignment_date, row.shift_type, row.position_code),
+      source: "Patrol Open Shift",
+      assignmentDate: row.assignment_date,
+      shiftType: row.shift_type,
+      positionCode: row.position_code,
+      description: `${positionLabelFromCode(row.position_code)} time off`,
+      offEmployeeId: employee.id,
+      offEmployeeLastName: employee.lastName,
+      offHours: row.shift_hours || employee.defaultShiftHours,
+      offReason: overtimeBuilderReasonSelection.reason,
+      selectionActive: true,
+      workflowStatus: "Open",
+      status: "Open",
+      assignedEmployeeId: null,
+      createdAt: new Date().toISOString(),
+      responses: []
+    }))
+
+    setPatrolOverrideRows((current) => mergeScheduleRows(current, rowsToApply))
+    setScheduleRows((current) => mergeScheduleRows(current, rowsToApply))
+    setOvertimeShiftRequests((current) => {
+      const next = [...current]
+
+      for (const request of nextRequests) {
+        const requestIndex = next.findIndex((entry) => entry.id === request.id)
+        if (requestIndex >= 0) {
+          next[requestIndex] = {
+            ...next[requestIndex],
+            ...request,
+            createdAt: next[requestIndex].createdAt || request.createdAt,
+            responses: next[requestIndex].responses || []
+          }
+        } else {
+          next.push(request)
+        }
+      }
+
+      return next
+    })
+
+    invalidatePatrolScheduleCache()
+    setSaving(false)
+    setOvertimeBuilderReasonSelection(null)
+    setOvertimeBuilderSelection(null)
+
+    onAuditEvent?.(
+      "Overtime Builder Time Off Saved",
+      `Saved ${overtimeBuilderReasonSelection.reason} for ${employee.firstName} ${employee.lastName}.`,
+      rowsToApply.map((row) => `${row.assignment_date} ${row.shift_type} ${positionLabelFromCode(row.position_code)}`).join(" | ")
+    )
+
+    void Promise.all([
+      supabase
+        .from("patrol_overrides")
+        .upsert(
+          rowsToApply.map((row) => toPatrolOverridePayload(row)),
+          { onConflict: "assignment_date,shift_type,position_code" }
+        ),
+      supabase
+        .from("overtime_shift_requests")
+        .upsert(
+          nextRequests.map((request) => ({
+            id: request.id,
+            source: request.source,
+            batch_id: null,
+            batch_name: null,
+            assignment_date: request.assignmentDate,
+            shift_type: request.shiftType,
+            position_code: request.positionCode,
+            description: request.description,
+            off_employee_id: request.offEmployeeId || null,
+            off_employee_last_name: request.offEmployeeLastName || null,
+            off_hours: request.offHours || null,
+            off_reason: request.offReason || null,
+            selection_active: true,
+            workflow_status: "Open",
+            status: "Open",
+            assigned_employee_id: null,
+            created_at: request.createdAt,
+            responses: request.responses
+          })),
+          { onConflict: "id" }
+        )
+    ]).catch((error) => {
+      console.error("Failed to batch save overtime builder selection:", error)
+      window.setTimeout(() => {
+        alert("Time off saved locally, but the cloud update was delayed. Refresh in a moment if needed.")
+      }, 0)
+    })
+  }
+
   async function deleteEditingRow() {
     if (!editingRow?.id) {
       setEditingRow(null)
@@ -1167,6 +1345,15 @@ export function PatrolPage({
     const isMultiDateDimmed =
       !!multiDatePickerSelection &&
       !isMultiDateCandidate
+    const isOvertimeBuilderCandidate =
+      !!overtimeBuilderSelection &&
+      row.employee_id === overtimeBuilderSelection.employeeId
+    const isOvertimeBuilderSelected =
+      !!overtimeBuilderSelection &&
+      overtimeBuilderSelection.selectedRowKeys.includes(getScheduleRowKey(row))
+    const isOvertimeBuilderDimmed =
+      !!overtimeBuilderSelection &&
+      !isOvertimeBuilderCandidate
     const rowDate = new Date(`${row.assignment_date}T12:00:00`)
     const shiftRows = patrolPositions
       .map((position) => cellFor(rowDate, position.code, row.shift_type))
@@ -1186,12 +1373,18 @@ export function PatrolPage({
           padding: compact ? "1px 5px" : "10px",
           border: isMultiDateCandidate
             ? `2px solid ${isMultiDateSelected ? "#2563eb" : "#94a3b8"}`
+            : isOvertimeBuilderCandidate
+              ? `2px solid ${isOvertimeBuilderSelected ? "#2563eb" : "#94a3b8"}`
             : `1px solid ${colorSettings?.cardBorder || colorSettings?.border || "#e5e7eb"}`,
           borderRadius: "6px",
           background: isMultiDateSelected
             ? "#dbeafe"
             : isMultiDateCandidate
               ? "#f8fafc"
+              : isOvertimeBuilderSelected
+                ? "#dbeafe"
+                : isOvertimeBuilderCandidate
+                  ? "#f8fafc"
               : colorSettings?.cellBackground || "#ffffff",
           display: "grid",
           gridTemplateRows: compact ? "auto auto" : "1fr auto",
@@ -1200,9 +1393,9 @@ export function PatrolPage({
           fontSize: compact ? "12px" : "13px",
           cursor: canEdit ? "pointer" : "default",
           position: "relative",
-          boxShadow: isMultiDateCandidate ? "0 0 0 1px rgba(148, 163, 184, 0.18)" : "none",
-          opacity: isMultiDateDimmed ? 0.4 : 1,
-          filter: isMultiDateDimmed ? "grayscale(0.2)" : "none"
+          boxShadow: isMultiDateCandidate || isOvertimeBuilderCandidate ? "0 0 0 1px rgba(148, 163, 184, 0.18)" : "none",
+          opacity: isMultiDateDimmed || isOvertimeBuilderDimmed ? 0.4 : 1,
+          filter: isMultiDateDimmed || isOvertimeBuilderDimmed ? "grayscale(0.2)" : "none"
         }}
       >
         {isMultiDateCandidate && (
@@ -1237,6 +1430,38 @@ export function PatrolPage({
           </button>
         )}
 
+        {isOvertimeBuilderCandidate && (
+          <button
+            onClick={(event) => {
+              event.stopPropagation()
+              toggleOvertimeBuilderRow(row)
+            }}
+            style={{
+              position: "absolute",
+              top: compact ? "3px" : "6px",
+              right: compact ? "24px" : "30px",
+              width: compact ? "16px" : "20px",
+              height: compact ? "16px" : "20px",
+              borderRadius: "4px",
+              border: `2px solid ${isOvertimeBuilderSelected ? "#2563eb" : "#94a3b8"}`,
+              background: isOvertimeBuilderSelected ? "#2563eb" : "#ffffff",
+              color: "#ffffff",
+              fontSize: compact ? "10px" : "12px",
+              fontWeight: 800,
+              lineHeight: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              padding: 0,
+              boxShadow: "0 2px 6px rgba(15, 23, 42, 0.16)"
+            }}
+            aria-label={`Select ${row.assignment_date}`}
+          >
+            {isOvertimeBuilderSelected ? "✓" : ""}
+          </button>
+        )}
+
         <div style={{ display: "flex", alignItems: "center", gap: compact ? "2px" : "6px" }}>
           <div
             style={{
@@ -1266,6 +1491,8 @@ export function PatrolPage({
                 ? "1px solid #f59e0b"
                 : isMultiDateCandidate
                   ? "1px solid #94a3b8"
+                  : isOvertimeBuilderCandidate
+                    ? "1px solid #94a3b8"
                   : "none"
             }}
           >
@@ -1278,9 +1505,9 @@ export function PatrolPage({
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                background: isMultiDateCandidate ? "#e5e7eb" : "transparent",
+                background: isMultiDateCandidate || isOvertimeBuilderCandidate ? "#e5e7eb" : "transparent",
                 borderRadius: "4px",
-                padding: isMultiDateCandidate ? "1px 4px" : "0"
+                padding: isMultiDateCandidate || isOvertimeBuilderCandidate ? "1px 4px" : "0"
               }}
             >
               {employee?.lastName || "OPEN"}
@@ -1448,7 +1675,7 @@ const next = ranking[0]
         : "Patrol Schedule"
   const weekdayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
   const labelColumnWidth = view === "day" ? "84px" : "90px"
-  const stickyWeekHeaderTop = multiDatePickerSelection ? "108px" : "8px"
+  const stickyWeekHeaderTop = multiDatePickerSelection || overtimeBuilderSelection ? "108px" : "8px"
 
   return (
     <>
@@ -2253,6 +2480,117 @@ const next = ranking[0]
         </div>
       )}
 
+      {overtimeBuilderSelection && (
+        <div
+          style={{
+            position: "fixed",
+            top: "16px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 999,
+            width: "min(920px, calc(100vw - 32px))",
+            background: "#0f172a",
+            color: "#ffffff",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            boxShadow: "0 18px 40px rgba(15, 23, 42, 0.3)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "14px",
+            flexWrap: "wrap"
+          }}
+        >
+          <div style={{ display: "grid", gap: "2px" }}>
+            <div style={{ fontWeight: 800, fontSize: "14px" }}>Overtime Builder Patrol Picker</div>
+            <div style={{ fontSize: "12px", color: "#cbd5e1" }}>
+              Click the selected employee's Patrol boxes. Selected: {overtimeBuilderSelection.selectedRowKeys.length}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              onClick={prevMonth}
+              style={{
+                padding: "8px 10px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#1e293b",
+                color: "#ffffff",
+                cursor: "pointer",
+                fontWeight: 700
+              }}
+            >
+              Prev Month
+            </button>
+
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: "8px",
+                background: "#1e293b",
+                color: "#cbd5e1",
+                fontSize: "12px",
+                fontWeight: 700
+              }}
+            >
+              {baseDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+            </div>
+
+            <button
+              onClick={nextMonth}
+              style={{
+                padding: "8px 10px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#1e293b",
+                color: "#ffffff",
+                cursor: "pointer",
+                fontWeight: 700
+              }}
+            >
+              Next Month
+            </button>
+
+            <button
+              onClick={() => setOvertimeBuilderSelection(null)}
+              style={{
+                padding: "8px 12px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#334155",
+                color: "#ffffff",
+                cursor: "pointer"
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={() => {
+                if (overtimeBuilderSelection.selectedRowKeys.length === 0) return
+
+                setOvertimeBuilderReasonSelection({
+                  employeeId: overtimeBuilderSelection.employeeId,
+                  selectedRowKeys: overtimeBuilderSelection.selectedRowKeys,
+                  reason: "Vacation"
+                })
+              }}
+              style={{
+                padding: "8px 12px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#2563eb",
+                color: "#ffffff",
+                cursor: "pointer"
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
       {timeOffReasonSelection && (
         <div
           style={{
@@ -2334,6 +2672,88 @@ const next = ranking[0]
                 }}
               >
                 {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {overtimeBuilderReasonSelection && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.38)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1001
+          }}
+        >
+          <div
+            style={{
+              width: "420px",
+              maxWidth: "92vw",
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "18px",
+              boxShadow: "0 18px 40px rgba(15, 23, 42, 0.25)"
+            }}
+          >
+            <div style={{ fontWeight: 800, fontSize: "18px", marginBottom: "12px" }}>Select Time-Off Reason</div>
+
+            <div style={{ display: "grid", gap: "12px" }}>
+              <div style={{ fontSize: "13px", color: "#475569" }}>
+                Selected shifts: {overtimeBuilderReasonSelection.selectedRowKeys.length}
+              </div>
+
+              <label>
+                <div style={{ fontWeight: 600, marginBottom: "4px" }}>Reason</div>
+                <select
+                  value={overtimeBuilderReasonSelection.reason}
+                  onChange={(event) =>
+                    setOvertimeBuilderReasonSelection({
+                      ...overtimeBuilderReasonSelection,
+                      reason: event.target.value
+                    })
+                  }
+                  style={{ width: "100%", padding: "8px" }}
+                >
+                  {STATUS_OPTIONS.filter((status) => status !== "Scheduled" && status !== "Open Shift").map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px" }}>
+              <button
+                onClick={() => setOvertimeBuilderReasonSelection(null)}
+                style={{
+                  padding: "8px 12px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#e2e8f0",
+                  cursor: "pointer"
+                }}
+              >
+                Back
+              </button>
+
+              <button
+                onClick={() => void saveOvertimeBuilderSelection()}
+                style={{
+                  padding: "8px 12px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  cursor: "pointer"
+                }}
+              >
+                Save
               </button>
             </div>
           </div>

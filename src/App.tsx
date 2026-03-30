@@ -86,6 +86,10 @@ type ModuleKey =
   | "employees"
   | "settings"
 
+type OvertimeBuilderPatrolLaunch = {
+  employeeId: string
+}
+
 
 const moduleOrder: ModuleDefinition[] = [
 
@@ -681,6 +685,7 @@ export default function App() {
   const [localPatrolOverrideRows, setLocalPatrolOverrideRows] = useState<PatrolScheduleSummaryRow[]>([])
   const [forceHistoryRows, setForceHistoryRows] = useState<ForceHistoryRow[]>([])
   const [responseTokenFromQuery, setResponseTokenFromQuery] = useState("")
+  const [overtimeBuilderPatrolLaunch, setOvertimeBuilderPatrolLaunch] = useState<OvertimeBuilderPatrolLaunch | null>(null)
   const [isMobileLayout, setIsMobileLayout] = useState(false)
   const [deployedBuildId, setDeployedBuildId] = useState("")
   const [buildSyncStatus, setBuildSyncStatus] = useState<"checking" | "current" | "update_available" | "error">("checking")
@@ -1961,6 +1966,11 @@ export default function App() {
     }
   }, [activeModule, visibleModulesForRole])
 
+  function openPatrolForOvertimeBuilder(employeeId: string) {
+    setOvertimeBuilderPatrolLaunch({ employeeId })
+    setActiveModule("patrol")
+  }
+
   function formatSummaryDate(date: string) {
     return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
       month: "short",
@@ -2338,6 +2348,8 @@ export default function App() {
             overtimeShiftRequests={overtimeShiftRequests}
             setOvertimeShiftRequests={setOvertimeShiftRequests}
             colorSettings={activeColorSettings}
+            overtimeBuilderLaunch={overtimeBuilderPatrolLaunch}
+            onConsumeOvertimeBuilderLaunch={() => setOvertimeBuilderPatrolLaunch(null)}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Patrol", action, summary, details)}
           />
         )}
@@ -2357,6 +2369,7 @@ export default function App() {
             overtimeShiftRequests={overtimeShiftRequests}
             setOvertimeShiftRequests={setOvertimeShiftRequests}
             onOpenNotificationsForShiftIds={openNotificationsForShiftIds}
+            onOpenPatrolTimeOffPicker={openPatrolForOvertimeBuilder}
             onQueueAssignmentNotice={queueAssignmentNoticeForShift}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Overtime", action, summary, details)}
           />

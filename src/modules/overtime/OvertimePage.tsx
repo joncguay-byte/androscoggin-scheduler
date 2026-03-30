@@ -32,6 +32,7 @@ type OvertimePageProps = {
   overtimeShiftRequests: OvertimeShiftRequest[]
   setOvertimeShiftRequests: React.Dispatch<React.SetStateAction<OvertimeShiftRequest[]>>
   onOpenNotificationsForShiftIds: (shiftIds: string[], recipientIds?: string[]) => void
+  onOpenPatrolTimeOffPicker: (employeeId: string) => void
   onQueueAssignmentNotice: (requestId: string, employeeId: string) => void
   onAuditEvent: (action: string, summary: string, details?: string) => void
 }
@@ -182,6 +183,7 @@ export function OvertimePage({
   overtimeShiftRequests,
   setOvertimeShiftRequests,
   onOpenNotificationsForShiftIds,
+  onOpenPatrolTimeOffPicker,
   onQueueAssignmentNotice,
   onAuditEvent
 }: OvertimePageProps) {
@@ -528,6 +530,11 @@ export function OvertimePage({
 
   function setBuilderMode(mode: BuilderSelectionMode) {
     setBuilderSelectionMode(mode)
+
+    if (mode === "multiple" && builderEmployeeId) {
+      onOpenPatrolTimeOffPicker(builderEmployeeId)
+      return
+    }
 
     if (mode === "month") {
       setBuilderSelectedShiftKeys(builderMonthRows.map((row) => getPatrolRowKey(row)))
@@ -1797,7 +1804,7 @@ export function OvertimePage({
                       {builderSelectionMode === "single"
                         ? "Pick one worked shift."
                         : builderSelectionMode === "multiple"
-                          ? "Pick as many worked shifts as you need."
+                          ? "Jump straight into the Patrol calendar and click the employee's worked boxes there."
                           : "Review the month with every worked shift selected."}
                     </div>
                   </div>
