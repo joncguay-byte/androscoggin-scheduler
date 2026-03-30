@@ -1663,6 +1663,29 @@ export function OvertimePage({
 
           {builderEmployee && (
             <div style={{ display: "grid", gap: "10px" }}>
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  background: "linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%)",
+                  border: "1px solid #bfdbfe",
+                  display: "grid",
+                  gap: "4px"
+                }}
+              >
+                <div style={{ fontSize: "11px", fontWeight: 800, color: "#1d4ed8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Selected Employee
+                </div>
+                <div style={{ fontSize: "18px", fontWeight: 900, color: "#0f172a" }}>
+                  {builderEmployee.firstName} {builderEmployee.lastName}
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569" }}>
+                  {builderEmployee.team} | {builderEmployee.rank} | Default {builderEmployee.defaultVehicle} | {builderEmployee.defaultShiftHours}
+                </div>
+                <div style={{ fontSize: "12px", color: "#334155" }}>
+                  Each day below shows the full staffing picture. Click this employee’s scheduled shift box to mark it off and create overtime from this module.
+                </div>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "8px" }}>
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
                   <div key={`builder-weekday-${label}`} style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -1674,6 +1697,12 @@ export function OvertimePage({
                 {builderMonthGrid.map((date) => {
                   const isoDate = date.toISOString().slice(0, 10)
                   const dayRows = builderMonthRows.filter((row) => row.assignment_date === isoDate)
+                  const dayCoverageRows = effectivePatrolRows
+                    .filter((row) => row.assignment_date === isoDate)
+                    .sort((a, b) => {
+                      if (a.shift_type !== b.shift_type) return a.shift_type.localeCompare(b.shift_type)
+                      return a.position_code.localeCompare(b.position_code)
+                    })
                   const inMonth = date.getMonth() === builderMonthAnchor.getMonth()
 
                   return (
@@ -1699,41 +1728,124 @@ export function OvertimePage({
                           {inMonth ? "No scheduled shift" : ""}
                         </div>
                       ) : (
-                        dayRows.map((row) => {
-                          const rowKey = getPatrolRowKey(row)
-                          const selected = builderSelectedShiftKeys.includes(rowKey)
-                          return (
-                            <button
-                              key={`builder-row-${rowKey}`}
-                              onClick={() => toggleBuilderShiftSelection(row)}
-                              style={{
-                                border: "none",
-                                borderRadius: "10px",
-                                padding: "8px",
-                                textAlign: "left",
-                                cursor: "pointer",
-                                background: selected ? "#dbeafe" : "#f8fafc",
-                                boxShadow: selected ? "inset 0 0 0 2px #2563eb" : "inset 0 0 0 1px #e2e8f0",
-                                display: "grid",
-                                gap: "3px"
-                              }}
-                            >
-                              <div style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
-                                {row.shift_type} {formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}
+                        <div style={{ display: "grid", gap: "6px" }}>
+                          {dayCoverageRows.map((row) => {
+                            const rowKey = getPatrolRowKey(row)
+                            const selected = builderSelectedShiftKeys.includes(rowKey)
+                            const rowEmployee = row.employee_id ? employeeMap.get(row.employee_id) || null : null
+                            const isBuilderEmployeeRow = row.employee_id === builderEmployee.id
+
+                            if (isBuilderEmployeeRow) {
+                              return (
+                                <button
+                                  key={`builder-row-${rowKey}`}
+                                  onClick={() => toggleBuilderShiftSelection(row)}
+                                  style={{
+                                    border: "none",
+                                    borderRadius: "10px",
+                                    padding: "8px",
+                                    textAlign: "left",
+                                    cursor: "pointer",
+                                    background: selected ? "#dbeafe" : "#eff6ff",
+                                    boxShadow: selected ? "inset 0 0 0 2px #2563eb" : "inset 0 0 0 1px #93c5fd",
+                                    display: "grid",
+                                    gap: "3px"
+                                  }}
+                                >
+                                  <div style={{ display: "flex", justifyContent: "space-between", gap: "6px", alignItems: "center" }}>
+                                    <div style={{ fontSize: "12px", fontWeight: 900, color: "#0f172a" }}>
+                                      {row.shift_type} {formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}
+                                    </div>
+                                    <div style={{ fontSize: "10px", fontWeight: 800, color: "#1d4ed8", textTransform: "uppercase" }}>
+                                      Your Shift
+                                    </div>
+                                  </div>
+                                  <div style={{ fontSize: "11px", color: "#334155", fontWeight: 700 }}>
+                                    {builderEmployee.lastName} | {row.vehicle || builderEmployee.defaultVehicle} | {row.shift_hours || builderEmployee.defaultShiftHours}
+                                  </div>
+                                  <div style={{ fontSize: "10px", fontWeight: 700, color: selected ? "#1d4ed8" : "#64748b" }}>
+                                    {selected ? "Selected for time off" : "Click this box to mark off"}
+                                  </div>
+                                </button>
+                              )
+                            }
+
+                            return (
+                              <div
+                                key={`builder-coverage-${rowKey}`}
+                                style={{
+                                  borderRadius: "10px",
+                                  padding: "7px 8px",
+                                  background: "#f8fafc",
+                                  boxShadow: "inset 0 0 0 1px #e2e8f0",
+                                  display: "grid",
+                                  gap: "2px"
+                                }}
+                              >
+                                <div style={{ fontSize: "11px", fontWeight: 800, color: "#0f172a" }}>
+                                  {row.shift_type} {formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}
+                                </div>
+                                <div style={{ fontSize: "10px", color: "#64748b" }}>
+                                  {rowEmployee ? rowEmployee.lastName : "Open"} | {row.vehicle || rowEmployee?.defaultVehicle || ""} | {row.shift_hours || rowEmployee?.defaultShiftHours || ""}
+                                </div>
                               </div>
-                              <div style={{ fontSize: "11px", color: "#475569" }}>
-                                {row.vehicle || builderEmployee.defaultVehicle} | {row.shift_hours || builderEmployee.defaultShiftHours}
-                              </div>
-                              <div style={{ fontSize: "10px", fontWeight: 700, color: selected ? "#1d4ed8" : "#64748b" }}>
-                                {selected ? "Selected" : "Click to mark off"}
-                              </div>
-                            </button>
-                          )
-                        })
+                            )
+                          })}
+                        </div>
                       )}
                     </div>
                   )
                 })}
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 340px)",
+                  gap: "14px",
+                  alignItems: "start"
+                }}
+              >
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "12px",
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    display: "grid",
+                    gap: "8px"
+                  }}
+                >
+                  <div style={{ fontSize: "11px", fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Selected Shifts
+                  </div>
+                  {builderSelectedRows.length === 0 ? (
+                    <div style={{ fontSize: "12px", color: "#64748b" }}>
+                      No shifts selected yet.
+                    </div>
+                  ) : (
+                    builderSelectedRows.map((row) => (
+                      <div
+                        key={`builder-selected-${getPatrolRowKey(row)}`}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: "10px",
+                          background: "#ffffff",
+                          border: "1px solid #dbe3ee",
+                          display: "grid",
+                          gap: "2px"
+                        }}
+                      >
+                        <div style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}>
+                          {formatShortDate(row.assignment_date)} | {row.shift_type} {formatQueuePositionLabel(row.position_code as OvertimeShiftRequest["positionCode"])}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#64748b" }}>
+                          {row.vehicle || builderEmployee.defaultVehicle} | {row.shift_hours || builderEmployee.defaultShiftHours}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {workspaceCheckpointPanel}
               </div>
             </div>
           )}
@@ -1786,15 +1898,12 @@ export function OvertimePage({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1.8fr) minmax(280px, 360px)",
-            gap: "18px",
-            alignItems: "start"
+            gap: "18px"
           }}
         >
           {workspaceBuilderPanel}
-          <div style={{ display: "grid", gap: "18px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 340px) minmax(260px, 340px)", gap: "18px", justifyContent: "start" }}>
             {workspaceOrderPanel}
-            {workspaceCheckpointPanel}
           </div>
         </div>
       )}
