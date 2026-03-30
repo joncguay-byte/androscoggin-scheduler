@@ -1938,6 +1938,19 @@ export function OvertimePage({
           </div>
 
           <div style={{ display: "grid", gap: "8px" }}>
+            <div
+              style={{
+                textAlign: "center",
+                fontWeight: 700,
+                background: "#e2e8f0",
+                border: "1px solid #dbeafe",
+                padding: "10px",
+                borderRadius: "6px",
+                marginBottom: "6px"
+              }}
+            >
+              {builderMonthAnchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+            </div>
             {builderWeekRows.map((week, weekIndex) => (
               <div
                 key={`builder-week-${weekIndex}`}
@@ -1951,7 +1964,7 @@ export function OvertimePage({
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "112px repeat(7, minmax(0, 1fr))",
+                    gridTemplateColumns: "90px repeat(7, minmax(0, 1fr))",
                     background: "#f8fafc",
                     borderBottom: "1px solid #dbeafe",
                     boxShadow: "0 2px 8px rgba(15, 23, 42, 0.08)"
@@ -1975,7 +1988,7 @@ export function OvertimePage({
                         }}
                       >
                         <div style={{ fontSize: "10px", fontWeight: 700, color: "#475569" }}>
-                          {date.toLocaleDateString(undefined, { weekday: "short" })}
+                          {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()]}
                         </div>
                         <div style={{ fontWeight: 700, fontSize: "12px" }}>
                           {date.toLocaleDateString(undefined, { month: "numeric", day: "numeric" })}
@@ -2006,7 +2019,7 @@ export function OvertimePage({
                       key={`builder-modal-row-${row.label}-${rowIndex}-${weekIndex}`}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "112px repeat(7, minmax(0, 1fr))",
+                        gridTemplateColumns: "90px repeat(7, minmax(0, 1fr))",
                         borderTop: rowIndex === 0 ? "none" : "1px solid #e2e8f0"
                       }}
                     >
