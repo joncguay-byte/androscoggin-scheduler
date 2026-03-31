@@ -99,6 +99,8 @@ export function NotificationsPage({
   const [fetchedResponseShifts, setFetchedResponseShifts] = useState<OvertimeShiftRequest[]>([])
   const [isResponseLookupLoading, setIsResponseLookupLoading] = useState(false)
   const [responseLookupError, setResponseLookupError] = useState("")
+  const [responseDrafts, setResponseDrafts] = useState<Record<string, OvertimeAvailabilityStatus | "">>({})
+  const [savingResponseIds, setSavingResponseIds] = useState<string[]>([])
   const [providerConfigDraft, setProviderConfigDraft] = useState<NotificationProviderConfig>(() => {
     if (typeof window === "undefined") return notificationProviderConfig
 
@@ -143,6 +145,8 @@ export function NotificationsPage({
       setFetchedResponseShifts([])
       setIsResponseLookupLoading(false)
       setResponseLookupError("")
+      setResponseDrafts({})
+      setSavingResponseIds([])
       return
     }
 
@@ -530,18 +534,63 @@ export function NotificationsPage({
   }
 
   function setResponse(requestId: string, employeeId: string, status: OvertimeAvailabilityStatus) {
+    setResponseDrafts((current) => ({
+      ...current,
+      [requestId]: status
+    }))
+    const employee = employeeMap.get(employeeId)
+    onAuditEvent("Overtime Response Selected", `${employee ? `${employee.firstName} ${employee.lastName}` : "Employee"} selected ${status}.`, requestId)
+  }
+
+  async function saveResponse(requestId: string, employeeId: string) {
+    const status = responseDrafts[requestId]
+    if (!status) {
+      window.alert("Choose Interested or Declined first.")
+      return
+    }
+
+    const sourceRequest =
+      requestMap.get(requestId) ||
+      fetchedResponseShifts.find((request) => request.id === requestId) ||
+      null
+
+    if (!sourceRequest) {
+      window.alert("That overtime shift could not be found. Refresh and try again.")
+      return
+    }
+
+    const nextResponses = [...sourceRequest.responses]
+    const existingIndex = nextResponses.findIndex((entry) => entry.employeeId === employeeId)
+    const nextResponse = { employeeId, status, updatedAt: new Date().toISOString() }
+
+    if (existingIndex >= 0) {
+      nextResponses[existingIndex] = nextResponse
+    } else {
+      nextResponses.push(nextResponse)
+    }
+
+    setSavingResponseIds((current) => [...current, requestId])
+
+    const { error } = await supabase
+      .from("overtime_shift_requests")
+      .update({ responses: nextResponses })
+      .eq("id", requestId)
+
+    setSavingResponseIds((current) => current.filter((entry) => entry !== requestId))
+
+    if (error) {
+      window.alert(`Failed to save overtime response: ${error.message}`)
+      return
+    }
+
     setOvertimeShiftRequests((current) =>
       current.map((request) => {
         if (request.id !== requestId) return request
-        const nextResponses = [...request.responses]
-        const existingIndex = nextResponses.findIndex((entry) => entry.employeeId === employeeId)
-        if (existingIndex >= 0) {
-          nextResponses[existingIndex] = { employeeId, status, updatedAt: new Date().toISOString() }
-        } else {
-          nextResponses.push({ employeeId, status, updatedAt: new Date().toISOString() })
-        }
         return { ...request, responses: nextResponses }
       })
+    )
+    setFetchedResponseShifts((current) =>
+      current.map((request) => (request.id === requestId ? { ...request, responses: nextResponses } : request))
     )
     const employee = employeeMap.get(employeeId)
     onAuditEvent("Overtime Response Captured", `${employee ? `${employee.firstName} ${employee.lastName}` : "Employee"} marked ${status}.`, requestId)
@@ -585,6 +634,8 @@ export function NotificationsPage({
 
         {responseEmployee && responseShifts.map((request) => {
           const response = request.responses.find((entry) => entry.employeeId === responseEmployee.id)
+          const draftStatus = responseDrafts[request.id] || response?.status || ""
+          const isSaving = savingResponseIds.includes(request.id)
           return (
             <Card key={request.id}>
               <CardContent>
@@ -606,9 +657,9 @@ export function NotificationsPage({
                         key={`${request.id}-${status}`}
                         onClick={() => setResponse(request.id, responseEmployee.id, status)}
                         style={{
-                          border: response?.status === status ? "1px solid #1d4ed8" : "1px solid #cbd5e1",
-                          background: response?.status === status ? "#eff6ff" : "#ffffff",
-                          color: response?.status === status ? "#1d4ed8" : "#334155",
+                          border: draftStatus === status ? "1px solid #1d4ed8" : "1px solid #cbd5e1",
+                          background: draftStatus === status ? "#eff6ff" : "#ffffff",
+                          color: draftStatus === status ? "#1d4ed8" : "#334155",
                           borderRadius: "10px",
                           padding: "10px 14px",
                           fontSize: "13px",
@@ -619,6 +670,22 @@ export function NotificationsPage({
                         {status}
                       </button>
                     ))}
+                    <button
+                      onClick={() => void saveResponse(request.id, responseEmployee.id)}
+                      disabled={!draftStatus || isSaving}
+                      style={{
+                        border: "none",
+                        background: !draftStatus || isSaving ? "#cbd5e1" : "#2563eb",
+                        color: "#ffffff",
+                        borderRadius: "10px",
+                        padding: "10px 14px",
+                        fontSize: "13px",
+                        fontWeight: 800,
+                        cursor: !draftStatus || isSaving ? "not-allowed" : "pointer"
+                      }}
+                    >
+                      {isSaving ? "Saving..." : "Save"}
+                    </button>
                   </div>
                 </div>
               </CardContent>
