@@ -369,6 +369,7 @@ export function PatrolPage({
   colorSettings,
   overtimeBuilderLaunch,
   onConsumeOvertimeBuilderLaunch,
+  onCompleteOvertimeBuilderSave,
   onAuditEvent
 }: {
   employees: Employee[]
@@ -388,6 +389,7 @@ export function PatrolPage({
   }
   overtimeBuilderLaunch?: OvertimeBuilderLaunch | null
   onConsumeOvertimeBuilderLaunch?: () => void
+  onCompleteOvertimeBuilderSave?: () => void
   onAuditEvent?: (action: string, summary: string, details?: string) => void
 }) {
   const today = new Date()
@@ -1138,13 +1140,23 @@ export function PatrolPage({
     const employee = employeeMap.get(overtimeBuilderReasonSelection.employeeId)
     if (!employee) return
 
-    const selectedRows = effectiveScheduleRows.filter(
-      (row) =>
-        overtimeBuilderReasonSelection.selectedRowKeys.includes(getScheduleRowKey(row)) &&
-        row.employee_id === overtimeBuilderReasonSelection.employeeId
+    const scheduleRowsByKey = new Map(
+      effectiveScheduleRows.map((row) => [getScheduleRowKey(row), row] as const)
     )
+    const selectedRows = overtimeBuilderReasonSelection.selectedRowKeys
+      .map((rowKey) => scheduleRowsByKey.get(rowKey) || null)
+      .filter(
+        (row): row is ScheduleRow =>
+          row !== null && row.employee_id === overtimeBuilderReasonSelection.employeeId
+      )
 
-    if (selectedRows.length === 0) return
+    if (selectedRows.length === 0) {
+      setSaving(false)
+      window.setTimeout(() => {
+        alert("Those selected Patrol shifts could not be resolved. Please reselect the boxes and try again.")
+      }, 0)
+      return
+    }
 
     setSaving(true)
 
@@ -1203,12 +1215,18 @@ export function PatrolPage({
     setSaving(false)
     setOvertimeBuilderReasonSelection(null)
     setOvertimeBuilderSelection(null)
+    const firstSavedDate = rowsToApply[0]?.assignment_date
+    if (firstSavedDate) {
+      const firstSavedDateObject = new Date(`${firstSavedDate}T12:00:00`)
+      setBaseDate(new Date(firstSavedDateObject.getFullYear(), firstSavedDateObject.getMonth(), 1))
+    }
 
     onAuditEvent?.(
       "Overtime Builder Time Off Saved",
       `Saved ${overtimeBuilderReasonSelection.reason} for ${employee.firstName} ${employee.lastName}.`,
       rowsToApply.map((row) => `${row.assignment_date} ${row.shift_type} ${positionLabelFromCode(row.position_code)}`).join(" | ")
     )
+    onCompleteOvertimeBuilderSave?.()
 
     void Promise.all([
       supabase

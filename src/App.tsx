@@ -2350,6 +2350,7 @@ export default function App() {
             colorSettings={activeColorSettings}
             overtimeBuilderLaunch={overtimeBuilderPatrolLaunch}
             onConsumeOvertimeBuilderLaunch={() => setOvertimeBuilderPatrolLaunch(null)}
+            onCompleteOvertimeBuilderSave={() => setActiveModule("overtime")}
             onAuditEvent={(action, summary, details) => appendAuditEvent("Patrol", action, summary, details)}
           />
         )}
