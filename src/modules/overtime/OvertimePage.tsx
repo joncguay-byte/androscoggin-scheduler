@@ -924,31 +924,34 @@ export function OvertimePage({
 
     pushUndoSnapshot()
 
+    const baseRow =
+      patrolOverrideRows.find(
+        (row) =>
+          row.assignment_date === request.assignmentDate &&
+          row.shift_type === request.shiftType &&
+          row.position_code === request.positionCode
+      ) ||
+      effectivePatrolRows.find(
+        (row) =>
+          row.assignment_date === request.assignmentDate &&
+          row.shift_type === request.shiftType &&
+          row.position_code === request.positionCode
+      )
+
+    const replacementRow = baseRow
+      ? {
+          ...baseRow,
+          replacement_employee_id: employee.id,
+          replacement_vehicle: employee.defaultVehicle,
+          replacement_hours: assignedHours || baseRow.shift_hours
+        }
+      : null
+
     setPatrolOverrideRows((current) => {
       const next = [...current]
-      const baseRow =
-        next.find(
-          (row) =>
-            row.assignment_date === request.assignmentDate &&
-            row.shift_type === request.shiftType &&
-            row.position_code === request.positionCode
-        ) ||
-        effectivePatrolRows.find(
-          (row) =>
-            row.assignment_date === request.assignmentDate &&
-            row.shift_type === request.shiftType &&
-            row.position_code === request.positionCode
-        )
 
-      if (!baseRow) {
+      if (!replacementRow) {
         return current
-      }
-
-      const replacementRow: PatrolScheduleRow = {
-        ...baseRow,
-        replacement_employee_id: employee.id,
-        replacement_vehicle: employee.defaultVehicle,
-        replacement_hours: assignedHours || baseRow.shift_hours
       }
 
       const existingIndex = next.findIndex(
@@ -989,6 +992,32 @@ export function OvertimePage({
     setOvertimeQueueIds((current) => rotateQueueAfterAssignment(current, employee.id))
     invalidatePatrolScheduleCache()
     onQueueAssignmentNotice(requestId, employeeId)
+
+    if (replacementRow) {
+      void Promise.all([
+        supabase
+          .from("patrol_overrides")
+          .upsert(toPatrolOverridePayload(replacementRow), { onConflict: "assignment_date,shift_type,position_code" }),
+        supabase
+          .from("overtime_shift_requests")
+          .update({
+            assigned_employee_id: employee.id,
+            assigned_hours: assignedHours,
+            auto_assign_reason: reason,
+            status: "Assigned",
+            responses: (
+              request.responses.map((response) =>
+                response.employeeId === employee.id
+                  ? { ...response, status: "Assigned", updatedAt: new Date().toISOString() }
+                  : response
+              )
+            )
+          })
+          .eq("id", requestId)
+      ]).catch((error) => {
+        console.error("Failed to persist overtime assignment replacement row:", error)
+      })
+    }
     return true
   }
 
@@ -1143,18 +1172,16 @@ export function OvertimePage({
       return
     }
 
-    setPatrolOverrideRows((current) => {
-      const next = [...current]
-
-      for (const request of pendingRequests) {
+    const replacementRows = pendingRequests
+      .map((request) => {
         const update = assignmentUpdates.get(request.id)
-        if (!update) continue
+        if (!update) return null
 
         const employee = employeeMap.get(update.employeeId)
-        if (!employee) continue
+        if (!employee) return null
 
         const baseRow =
-          next.find(
+          patrolOverrideRows.find(
             (row) =>
               row.assignment_date === request.assignmentDate &&
               row.shift_type === request.shiftType &&
@@ -1167,15 +1194,21 @@ export function OvertimePage({
               row.position_code === request.positionCode
           )
 
-        if (!baseRow) continue
+        if (!baseRow) return null
 
-        const replacementRow: PatrolScheduleRow = {
+        return {
           ...baseRow,
           replacement_employee_id: employee.id,
           replacement_vehicle: employee.defaultVehicle,
           replacement_hours: employee.defaultShiftHours || request.offHours || baseRow.shift_hours
         }
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null)
 
+    setPatrolOverrideRows((current) => {
+      const next = [...current]
+
+      for (const replacementRow of replacementRows) {
         const existingIndex = next.findIndex(
           (row) =>
             row.assignment_date === replacementRow.assignment_date &&
@@ -1214,6 +1247,49 @@ export function OvertimePage({
 
     setOvertimeQueueIds(queueOrder)
     invalidatePatrolScheduleCache()
+
+    if (replacementRows.length > 0) {
+      const requestUpdates = pendingRequests
+        .map((request) => {
+          const update = assignmentUpdates.get(request.id)
+          if (!update) return null
+
+          return {
+            id: request.id,
+            assigned_employee_id: update.employeeId,
+            auto_assign_reason: update.reason,
+            status: "Assigned",
+            responses: request.responses.map((response) =>
+              response.employeeId === update.employeeId
+                ? { ...response, status: "Assigned", updatedAt: new Date().toISOString() }
+                : response
+            )
+          }
+        })
+        .filter((entry): entry is { id: string; assigned_employee_id: string; auto_assign_reason: NonNullable<OvertimeShiftRequest["autoAssignReason"]>; status: "Assigned"; responses: OvertimeShiftRequest["responses"] } => Boolean(entry))
+
+      void Promise.all([
+        supabase
+          .from("patrol_overrides")
+          .upsert(
+            replacementRows.map((row) => toPatrolOverridePayload(row)),
+            { onConflict: "assignment_date,shift_type,position_code" }
+          ),
+        ...requestUpdates.map((update) =>
+          supabase
+            .from("overtime_shift_requests")
+            .update({
+              assigned_employee_id: update.assigned_employee_id,
+              auto_assign_reason: update.auto_assign_reason,
+              status: update.status,
+              responses: update.responses
+            })
+            .eq("id", update.id)
+        )
+      ]).catch((error) => {
+        console.error("Failed to persist auto-assigned overtime replacement rows:", error)
+      })
+    }
 
     const summary = pendingRequests
       .map((request) => {
