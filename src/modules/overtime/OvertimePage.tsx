@@ -1645,6 +1645,25 @@ export function OvertimePage({
                       fontWeight: 700
                     }}
                   />
+                  <select
+                    value={builderReason}
+                    onChange={(event) => setBuilderReason(event.target.value)}
+                    style={{
+                      width: "180px",
+                      padding: "10px 12px",
+                      borderRadius: "10px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#0f172a",
+                      fontWeight: 700
+                    }}
+                  >
+                    {TIME_OFF_REASON_OPTIONS.map((reason) => (
+                      <option key={`single-builder-reason-${reason}`} value={reason}>
+                        {reason}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     onClick={() => void saveBuilderTimeOffSelection()}
                     disabled={builderSelectedRows.length === 0}
