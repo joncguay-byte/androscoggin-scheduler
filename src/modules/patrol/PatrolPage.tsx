@@ -73,6 +73,7 @@ type MultiDatePickerSelection = {
 type OvertimeBuilderSelection = {
   employeeId: string
   selectedRowKeys: string[]
+  selectedRows: ScheduleRow[]
 }
 
 type OvertimeBuilderReasonSelection = {
@@ -451,7 +452,8 @@ export function PatrolPage({
     setOvertimeBuilderReasonSelection(null)
     setOvertimeBuilderSelection({
       employeeId: overtimeBuilderLaunch.employeeId,
-      selectedRowKeys: []
+      selectedRowKeys: [],
+      selectedRows: []
     })
     onConsumeOvertimeBuilderLaunch?.()
   }, [onConsumeOvertimeBuilderLaunch, overtimeBuilderLaunch])
@@ -965,7 +967,10 @@ export function PatrolPage({
         ...current,
         selectedRowKeys: exists
           ? current.selectedRowKeys.filter((key) => key !== rowKey)
-          : [...current.selectedRowKeys, rowKey]
+          : [...current.selectedRowKeys, rowKey],
+        selectedRows: exists
+          ? current.selectedRows.filter((entry) => getScheduleRowKey(entry) !== rowKey)
+          : [...current.selectedRows.filter((entry) => getScheduleRowKey(entry) !== rowKey), row]
       }
     })
   }
@@ -2519,10 +2524,10 @@ const next = ranking[0]
             flexWrap: "wrap"
           }}
         >
-          <div style={{ display: "grid", gap: "2px" }}>
+            <div style={{ display: "grid", gap: "2px" }}>
             <div style={{ fontWeight: 800, fontSize: "14px" }}>Overtime Builder Patrol Picker</div>
             <div style={{ fontSize: "12px", color: "#cbd5e1" }}>
-              Click the selected employee's Patrol boxes. Selected: {overtimeBuilderSelection.selectedRowKeys.length}
+              Click the selected employee's Patrol boxes. Selected: {overtimeBuilderSelection.selectedRows.length}
             </div>
           </div>
 
@@ -2586,16 +2591,12 @@ const next = ranking[0]
 
             <button
               onClick={() => {
-                if (overtimeBuilderSelection.selectedRowKeys.length === 0) return
+                if (overtimeBuilderSelection.selectedRows.length === 0) return
 
                 setOvertimeBuilderReasonSelection({
                   employeeId: overtimeBuilderSelection.employeeId,
                   selectedRowKeys: overtimeBuilderSelection.selectedRowKeys,
-                  selectedRows: effectiveScheduleRows.filter(
-                    (row) =>
-                      overtimeBuilderSelection.selectedRowKeys.includes(getScheduleRowKey(row)) &&
-                      row.employee_id === overtimeBuilderSelection.employeeId
-                  ),
+                  selectedRows: overtimeBuilderSelection.selectedRows,
                   reason: "Vacation"
                 })
               }}
