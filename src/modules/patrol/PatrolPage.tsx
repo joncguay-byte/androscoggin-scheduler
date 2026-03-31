@@ -78,6 +78,7 @@ type OvertimeBuilderSelection = {
 type OvertimeBuilderReasonSelection = {
   employeeId: string
   selectedRowKeys: string[]
+  selectedRows: ScheduleRow[]
   reason: string
 }
 
@@ -1140,15 +1141,14 @@ export function PatrolPage({
     const employee = employeeMap.get(overtimeBuilderReasonSelection.employeeId)
     if (!employee) return
 
-    const scheduleRowsByKey = new Map(
-      effectiveScheduleRows.map((row) => [getScheduleRowKey(row), row] as const)
-    )
-    const selectedRows = overtimeBuilderReasonSelection.selectedRowKeys
-      .map((rowKey) => scheduleRowsByKey.get(rowKey) || null)
-      .filter(
-        (row): row is ScheduleRow =>
-          row !== null && row.employee_id === overtimeBuilderReasonSelection.employeeId
-      )
+    const selectedRows =
+      overtimeBuilderReasonSelection.selectedRows.length > 0
+        ? overtimeBuilderReasonSelection.selectedRows
+        : effectiveScheduleRows.filter(
+            (row) =>
+              overtimeBuilderReasonSelection.selectedRowKeys.includes(getScheduleRowKey(row)) &&
+              row.employee_id === overtimeBuilderReasonSelection.employeeId
+          )
 
     if (selectedRows.length === 0) {
       setSaving(false)
@@ -2591,6 +2591,11 @@ const next = ranking[0]
                 setOvertimeBuilderReasonSelection({
                   employeeId: overtimeBuilderSelection.employeeId,
                   selectedRowKeys: overtimeBuilderSelection.selectedRowKeys,
+                  selectedRows: effectiveScheduleRows.filter(
+                    (row) =>
+                      overtimeBuilderSelection.selectedRowKeys.includes(getScheduleRowKey(row)) &&
+                      row.employee_id === overtimeBuilderSelection.employeeId
+                  ),
                   reason: "Vacation"
                 })
               }}
