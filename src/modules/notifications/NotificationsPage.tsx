@@ -95,6 +95,10 @@ export function NotificationsPage({
 }: NotificationsPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
   const providerConfigSaveTimeoutRef = useRef<number | null>(null)
+  const [fetchedResponseDelivery, setFetchedResponseDelivery] = useState<NotificationDelivery | null>(null)
+  const [fetchedResponseShifts, setFetchedResponseShifts] = useState<OvertimeShiftRequest[]>([])
+  const [isResponseLookupLoading, setIsResponseLookupLoading] = useState(false)
+  const [responseLookupError, setResponseLookupError] = useState("")
   const [providerConfigDraft, setProviderConfigDraft] = useState<NotificationProviderConfig>(() => {
     if (typeof window === "undefined") return notificationProviderConfig
 
@@ -132,6 +136,124 @@ export function NotificationsPage({
   const employeeMap = useMemo(() => new Map(activeEmployees.map((employee) => [employee.id, employee])), [activeEmployees])
   const preferenceMap = useMemo(() => new Map(notificationPreferences.map((entry) => [entry.employeeId, entry])), [notificationPreferences])
   const requestMap = useMemo(() => new Map(overtimeShiftRequests.map((request) => [request.id, request])), [overtimeShiftRequests])
+
+  useEffect(() => {
+    if (!responseToken) {
+      setFetchedResponseDelivery(null)
+      setFetchedResponseShifts([])
+      setIsResponseLookupLoading(false)
+      setResponseLookupError("")
+      return
+    }
+
+    const inMemoryDelivery = notificationDeliveries.find((delivery) => delivery.responseToken === responseToken) || null
+    if (inMemoryDelivery) {
+      setFetchedResponseDelivery(null)
+      setFetchedResponseShifts([])
+      setIsResponseLookupLoading(false)
+      setResponseLookupError("")
+      return
+    }
+
+    let active = true
+    setIsResponseLookupLoading(true)
+    setResponseLookupError("")
+
+    void (async () => {
+      const { data: deliveryRow, error: deliveryError } = await supabase
+        .from("notification_deliveries")
+        .select("*")
+        .eq("response_token", responseToken)
+        .limit(1)
+        .maybeSingle()
+
+      if (!active) return
+
+      if (deliveryError) {
+        setFetchedResponseDelivery(null)
+        setFetchedResponseShifts([])
+        setResponseLookupError(deliveryError.message)
+        setIsResponseLookupLoading(false)
+        return
+      }
+
+      if (!deliveryRow) {
+        setFetchedResponseDelivery(null)
+        setFetchedResponseShifts([])
+        setResponseLookupError("No overtime response delivery was found for this link.")
+        setIsResponseLookupLoading(false)
+        return
+      }
+
+      const normalizedDelivery: NotificationDelivery = {
+        id: deliveryRow.id,
+        campaignId: deliveryRow.campaign_id,
+        employeeId: deliveryRow.employee_id,
+        channel: deliveryRow.channel,
+        destination: deliveryRow.destination,
+        shiftRequestIds: Array.isArray(deliveryRow.shift_request_ids) ? deliveryRow.shift_request_ids : [],
+        responseToken: deliveryRow.response_token || null,
+        subject: deliveryRow.subject,
+        body: deliveryRow.body,
+        status: deliveryRow.status,
+        providerMode: deliveryRow.provider_mode,
+        createdAt: deliveryRow.created_at,
+        updatedAt: deliveryRow.updated_at,
+        sentAt: deliveryRow.sent_at || null,
+        errorMessage: deliveryRow.error_message || null
+      }
+
+      let normalizedShifts: OvertimeShiftRequest[] = []
+      if (normalizedDelivery.shiftRequestIds.length > 0) {
+        const { data: shiftRows, error: shiftError } = await supabase
+          .from("overtime_shift_requests")
+          .select("*")
+          .in("id", normalizedDelivery.shiftRequestIds)
+
+        if (!active) return
+
+        if (shiftError) {
+          setFetchedResponseDelivery(normalizedDelivery)
+          setFetchedResponseShifts([])
+          setResponseLookupError(shiftError.message)
+          setIsResponseLookupLoading(false)
+          return
+        }
+
+        normalizedShifts = (shiftRows || []).map((row) => ({
+          id: row.id,
+          source: row.source,
+          batchId: row.batch_id || null,
+          batchName: row.batch_name || null,
+          assignmentDate: row.assignment_date,
+          shiftType: row.shift_type,
+          positionCode: row.position_code,
+          description: row.description,
+          offEmployeeId: row.off_employee_id || null,
+          offEmployeeLastName: row.off_employee_last_name || null,
+          offHours: row.off_hours || null,
+          offReason: row.off_reason || null,
+          assignedHours: row.assigned_hours || null,
+          selectionActive: row.selection_active ?? undefined,
+          manuallyQueued: row.manually_queued ?? undefined,
+          autoAssignReason: row.auto_assign_reason || null,
+          workflowStatus: row.workflow_status || undefined,
+          status: row.status,
+          assignedEmployeeId: row.assigned_employee_id || null,
+          createdAt: row.created_at,
+          responses: Array.isArray(row.responses) ? row.responses : []
+        }))
+      }
+
+      setFetchedResponseDelivery(normalizedDelivery)
+      setFetchedResponseShifts(normalizedShifts)
+      setIsResponseLookupLoading(false)
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [notificationDeliveries, responseToken])
 
   const [campaignTitle, setCampaignTitle] = useState("Overtime Availability")
   const [campaignChannel, setCampaignChannel] = useState<NotificationChannel>("email")
@@ -247,14 +369,14 @@ export function NotificationsPage({
     ? overtimeShiftRequests.find((request) => request.id === selectedCampaign.shiftRequestIds[0]) || null
     : openShiftRequests[0] || null
   const activeResponseDelivery = responseToken
-    ? notificationDeliveries.find((delivery) => delivery.responseToken === responseToken) || null
+    ? notificationDeliveries.find((delivery) => delivery.responseToken === responseToken) || fetchedResponseDelivery
     : null
   const responseEmployee = activeResponseDelivery
     ? employeeMap.get(activeResponseDelivery.employeeId) || null
     : null
   const responseShifts = activeResponseDelivery
     ? activeResponseDelivery.shiftRequestIds
-      .map((shiftId) => requestMap.get(shiftId) || null)
+      .map((shiftId) => requestMap.get(shiftId) || fetchedResponseShifts.find((request) => request.id === shiftId) || null)
       .filter((request): request is OvertimeShiftRequest => !!request)
     : []
 
@@ -433,9 +555,14 @@ export function NotificationsPage({
             <CardTitle>Overtime Response</CardTitle>
           </CardHeader>
           <CardContent>
-            {!activeResponseDelivery && (
+            {!activeResponseDelivery && !responseLookupError && (
               <div style={{ color: "#64748b", fontSize: "14px" }}>
-                Loading overtime request...
+                {isResponseLookupLoading ? "Loading overtime request..." : "Loading overtime request..."}
+              </div>
+            )}
+            {!activeResponseDelivery && responseLookupError && (
+              <div style={{ color: "#991b1b", fontSize: "14px" }}>
+                {responseLookupError}
               </div>
             )}
             {activeResponseDelivery && !responseEmployee && (
