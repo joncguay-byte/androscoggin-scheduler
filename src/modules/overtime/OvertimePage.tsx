@@ -110,6 +110,33 @@ function toPatrolOverridePayload(row: PatrolScheduleRow) {
   }
 }
 
+async function persistPatrolReplacementRow(row: PatrolScheduleRow) {
+  const payload = {
+    assignment_date: row.assignment_date,
+    shift_type: row.shift_type,
+    position_code: row.position_code,
+    employee_id: row.employee_id,
+    vehicle: row.vehicle,
+    shift_hours: row.shift_hours,
+    status: row.status,
+    replacement_employee_id: row.replacement_employee_id,
+    replacement_vehicle: row.replacement_vehicle,
+    replacement_hours: row.replacement_hours,
+    updated_at: new Date().toISOString()
+  }
+
+  if (row.id) {
+    return supabase
+      .from("patrol_schedule")
+      .update(payload)
+      .eq("id", row.id)
+  }
+
+  return supabase
+    .from("patrol_schedule")
+    .upsert(payload)
+}
+
 function formatShortDate(isoDate: string) {
   return new Date(`${isoDate}T12:00:00`).toLocaleDateString(undefined, {
     month: "numeric",
@@ -995,6 +1022,7 @@ export function OvertimePage({
 
     if (replacementRow) {
       void Promise.all([
+        persistPatrolReplacementRow(replacementRow),
         supabase
           .from("patrol_overrides")
           .upsert(toPatrolOverridePayload(replacementRow), { onConflict: "assignment_date,shift_type,position_code" }),
@@ -1269,6 +1297,7 @@ export function OvertimePage({
         .filter((entry): entry is { id: string; assigned_employee_id: string; auto_assign_reason: NonNullable<OvertimeShiftRequest["autoAssignReason"]>; status: "Assigned"; responses: OvertimeShiftRequest["responses"] } => Boolean(entry))
 
       void Promise.all([
+        ...replacementRows.map((row) => persistPatrolReplacementRow(row)),
         supabase
           .from("patrol_overrides")
           .upsert(
