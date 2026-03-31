@@ -1567,7 +1567,7 @@ export function OvertimePage({
       </CardHeader>
       <CardContent>
         <div style={{ display: "grid", gap: "12px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1.2fr) minmax(160px, 1fr)", gap: "10px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr)", gap: "10px" }}>
             <select
               value={builderEmployeeId}
               onChange={(event) => resetBuilderSelection(event.target.value)}
@@ -1587,27 +1587,9 @@ export function OvertimePage({
                 </option>
               ))}
             </select>
-            <select
-              value={builderReason}
-              onChange={(event) => setBuilderReason(event.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1",
-                background: "#ffffff",
-                fontSize: "12px"
-              }}
-            >
-              {TIME_OFF_REASON_OPTIONS.map((reason) => (
-                <option key={reason} value={reason}>
-                  {reason}
-                </option>
-              ))}
-            </select>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
             <div style={{ display: "grid", gap: "8px" }}>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {(["single", "multiple", "month"] as BuilderSelectionMode[]).map((mode) => (
@@ -1696,56 +1678,6 @@ export function OvertimePage({
                   </button>
                 </div>
               )}
-            </div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-              <button
-                onClick={() => shiftBuilderMonth(-1)}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#e2e8f0",
-                  color: "#0f172a",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: "12px"
-                }}
-              >
-                Prev
-              </button>
-              <div style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a", minWidth: "130px", textAlign: "center" }}>
-                {builderMonthAnchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-              </div>
-              <button
-                onClick={() => setBuilderMonthAnchor(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#f1f5f9",
-                  color: "#0f172a",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: "12px"
-                }}
-              >
-                Today
-              </button>
-              <button
-                onClick={() => shiftBuilderMonth(1)}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#e2e8f0",
-                  color: "#0f172a",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: "12px"
-                }}
-              >
-                Next
-              </button>
             </div>
           </div>
 
