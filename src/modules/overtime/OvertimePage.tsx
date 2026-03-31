@@ -2696,6 +2696,43 @@ export function OvertimePage({
                       <button
                         onClick={(event) => {
                           event.stopPropagation()
+                          void deletePatrolTimeOffFeedItem(request)
+                        }}
+                        style={{
+                          padding: "4px 8px",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: "#dc2626",
+                          color: "#ffffff",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          fontSize: "11px"
+                        }}
+                      >
+                        Delete From Queue
+                      </button>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          undoLastQueueAction()
+                        }}
+                        disabled={undoStack.length === 0}
+                        style={{
+                          padding: "4px 8px",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: undoStack.length === 0 ? "#cbd5e1" : "#e2e8f0",
+                          color: "#0f172a",
+                          fontWeight: 700,
+                          cursor: undoStack.length === 0 ? "not-allowed" : "pointer",
+                          fontSize: "11px"
+                        }}
+                      >
+                        Undo
+                      </button>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation()
                         if (manualAssignRequestId === request.id) {
                           setManualAssignRequestId(null)
                           setManualAssignEmployeeId("")
