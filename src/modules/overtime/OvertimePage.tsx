@@ -1081,6 +1081,7 @@ export function OvertimePage({
       {
         employeeId: string
         employeeName: string
+        assignedHours: string | null
         reason: NonNullable<OvertimeShiftRequest["autoAssignReason"]>
       }
     >()
@@ -1188,6 +1189,7 @@ export function OvertimePage({
       assignmentUpdates.set(selectedContext.request.id, {
         employeeId: chosenResponder.employee.id,
         employeeName: `${chosenResponder.employee.firstName} ${chosenResponder.employee.lastName}`,
+        assignedHours: chosenResponder.employee.defaultShiftHours || selectedContext.request.offHours || null,
         reason: assignmentReason
       })
       reservedAssignmentsByDate.add(`${selectedContext.request.assignmentDate}-${chosenResponder.employee.id}`)
@@ -1262,6 +1264,7 @@ export function OvertimePage({
         return {
           ...request,
           assignedEmployeeId: update.employeeId,
+          assignedHours: update.assignedHours,
           autoAssignReason: update.reason,
           status: "Assigned",
           responses: request.responses.map((response) =>
@@ -1285,6 +1288,7 @@ export function OvertimePage({
           return {
             id: request.id,
             assigned_employee_id: update.employeeId,
+            assigned_hours: update.assignedHours,
             auto_assign_reason: update.reason,
             status: "Assigned",
             responses: request.responses.map((response) =>
@@ -1294,7 +1298,7 @@ export function OvertimePage({
             )
           }
         })
-        .filter((entry): entry is { id: string; assigned_employee_id: string; auto_assign_reason: NonNullable<OvertimeShiftRequest["autoAssignReason"]>; status: "Assigned"; responses: OvertimeShiftRequest["responses"] } => Boolean(entry))
+        .filter((entry): entry is { id: string; assigned_employee_id: string; assigned_hours: string | null; auto_assign_reason: NonNullable<OvertimeShiftRequest["autoAssignReason"]>; status: "Assigned"; responses: OvertimeShiftRequest["responses"] } => Boolean(entry))
 
       void Promise.all([
         ...replacementRows.map((row) => persistPatrolReplacementRow(row)),
@@ -1309,6 +1313,7 @@ export function OvertimePage({
             .from("overtime_shift_requests")
             .update({
               assigned_employee_id: update.assigned_employee_id,
+              assigned_hours: update.assigned_hours,
               auto_assign_reason: update.auto_assign_reason,
               status: update.status,
               responses: update.responses

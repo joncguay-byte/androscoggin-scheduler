@@ -1337,7 +1337,6 @@ export function PatrolPage({
     }
 
     const employee = employees.find((e) => e.id === row.employee_id)
-    const replacement = employees.find((e) => e.id === row.replacement_employee_id)
     const matchingPatrolTimeOffRequest = patrolTimeOffRequests.find(
       (request) =>
         request.assignmentDate === row.assignment_date &&
@@ -1349,6 +1348,23 @@ export function PatrolPage({
         ) &&
         request.status !== "Closed"
     )
+    const replacementEmployeeId =
+      row.replacement_employee_id ||
+      matchingPatrolTimeOffRequest?.assignedEmployeeId ||
+      null
+    const replacement = replacementEmployeeId
+      ? employees.find((e) => e.id === replacementEmployeeId) || null
+      : null
+    const replacementVehicle =
+      row.replacement_vehicle ||
+      replacement?.defaultVehicle ||
+      ""
+    const replacementHours =
+      row.replacement_hours ||
+      matchingPatrolTimeOffRequest?.assignedHours ||
+      matchingPatrolTimeOffRequest?.offHours ||
+      replacement?.defaultShiftHours ||
+      ""
     const leave = isProblemStatus(row.status) || !!matchingPatrolTimeOffRequest
     const forcedPatrolTimeOffHighlight = !!matchingPatrolTimeOffRequest
     const leaveLabel = matchingPatrolTimeOffRequest?.offReason
@@ -1572,13 +1588,13 @@ export function PatrolPage({
             {replacement ? (
               <>
                 <span style={{ textAlign: "left", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-                  {(row.replacement_vehicle || "").trim()}
+                  {replacementVehicle.trim()}
                 </span>
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {replacement.lastName}
                 </span>
                 <span style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                  {row.replacement_hours || ""}
+                  {replacementHours}
                 </span>
               </>
             ) : ""}
