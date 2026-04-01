@@ -61,6 +61,7 @@ type SettingsPageProps = {
   onRestoreOvertimeSafetySnapshot?: () => void
   onDownloadOvertimeBackup?: () => void
   onImportOvertimeBackup?: (file: File) => void
+  onImportPatrolWorkbook?: (file: File) => void
   onAuditEvent?: (action: string, summary: string, details?: string) => void
 }
 
@@ -121,10 +122,12 @@ export function SettingsPage({
   onRestoreOvertimeSafetySnapshot,
   onDownloadOvertimeBackup,
   onImportOvertimeBackup,
+  onImportPatrolWorkbook,
   onAuditEvent
 }: SettingsPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
   const overtimeBackupInputRef = useRef<HTMLInputElement | null>(null)
+  const patrolWorkbookInputRef = useRef<HTMLInputElement | null>(null)
   const [drafts, setDrafts] = useState<Record<keyof ReferenceSettings, string>>({
     vehicles: "",
     shiftTemplates: "",
@@ -600,7 +603,7 @@ export function SettingsPage({
           )}
 
           {canEdit && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", gap: "12px" }}>
               <button
                 onClick={() => onRepairOvertimeFromPatrol?.()}
                 style={{
@@ -734,6 +737,25 @@ export function SettingsPage({
                 </div>
               </button>
 
+              <button
+                onClick={() => patrolWorkbookInputRef.current?.click()}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "12px",
+                  background: "#ffffff",
+                  padding: "14px",
+                  textAlign: "left",
+                  cursor: "pointer"
+                }}
+              >
+                <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
+                  Import Patrol Excel
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.35 }}>
+                  Imports the legacy Patrol workbook into the live Patrol schedule, future time off, and replacement rows.
+                </div>
+              </button>
+
               <input
                 ref={overtimeBackupInputRef}
                 type="file"
@@ -743,6 +765,20 @@ export function SettingsPage({
                   const file = event.target.files?.[0]
                   if (file) {
                     onImportOvertimeBackup?.(file)
+                  }
+                  event.currentTarget.value = ""
+                }}
+              />
+
+              <input
+                ref={patrolWorkbookInputRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) {
+                    onImportPatrolWorkbook?.(file)
                   }
                   event.currentTarget.value = ""
                 }}
