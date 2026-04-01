@@ -37,6 +37,7 @@ export default function EmployeesPage({
   onEmployeeUpdated,
   onEmployeeDeleted
 }: EmployeesPageProps) {
+  const [lastAddedEmployeeId, setLastAddedEmployeeId] = useState("")
   const [newEmployee, setNewEmployee] = useState<NewEmployeeForm>({
     firstName: "",
     lastName: "",
@@ -73,9 +74,10 @@ export default function EmployeesPage({
     }
 
     setEmployees((currentEmployees) => [
-      ...currentEmployees,
-      createdEmployee
+      createdEmployee,
+      ...currentEmployees
     ])
+    setLastAddedEmployeeId(createdEmployee.id)
     onEmployeeAdded?.(createdEmployee)
 
     setNewEmployee({
@@ -180,8 +182,10 @@ export default function EmployeesPage({
                 gridTemplateColumns: "repeat(9,1fr)",
                 padding: "8px",
                 borderBottom: "1px solid #eee",
-                gap: "6px"
+                gap: "6px",
+                background: employee.id === lastAddedEmployeeId ? "#fff7cc" : "#ffffff"
               }}
+              aria-label={employee.id === lastAddedEmployeeId ? "new-employee-row" : undefined}
             >
               <Input
                 value={employee.firstName}
