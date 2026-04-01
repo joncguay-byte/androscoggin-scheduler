@@ -411,6 +411,13 @@ function mergePatrolSummaryRows<T extends {
   assignment_date: string
   shift_type: "Days" | "Nights"
   position_code: "SUP1" | "SUP2" | "DEP1" | "DEP2" | "POL"
+  employee_id?: string | null
+  vehicle?: string | null
+  shift_hours?: string | null
+  status?: string | null
+  replacement_employee_id?: string | null
+  replacement_vehicle?: string | null
+  replacement_hours?: string | null
 }>(baseRows: T[], overrideRows: T[]) {
   const merged = new Map<string, T>()
 
@@ -419,7 +426,38 @@ function mergePatrolSummaryRows<T extends {
   }
 
   for (const row of overrideRows) {
-    merged.set(getPatrolSummaryRowKey(row), row)
+    const rowKey = getPatrolSummaryRowKey(row)
+    const baseRow = merged.get(rowKey)
+
+    if (!baseRow) {
+      merged.set(rowKey, row)
+      continue
+    }
+
+    const isBlankScheduledOverride =
+      !row.employee_id &&
+      !row.replacement_employee_id &&
+      (!row.status || row.status === "Scheduled" || row.status === "Open Shift")
+
+    merged.set(
+      rowKey,
+      isBlankScheduledOverride
+        ? {
+            ...baseRow,
+            ...row,
+            employee_id: baseRow.employee_id ?? row.employee_id ?? null,
+            vehicle: baseRow.vehicle ?? row.vehicle ?? null,
+            shift_hours: baseRow.shift_hours ?? row.shift_hours ?? null,
+            replacement_employee_id: row.replacement_employee_id ?? null,
+            replacement_vehicle: row.replacement_vehicle ?? null,
+            replacement_hours:
+              row.replacement_hours ?? baseRow.replacement_hours ?? baseRow.shift_hours ?? row.shift_hours ?? null
+          }
+        : {
+            ...baseRow,
+            ...row
+          }
+    )
   }
 
   return [...merged.values()].sort((a, b) => {
