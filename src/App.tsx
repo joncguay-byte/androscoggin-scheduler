@@ -1160,11 +1160,11 @@ export default function App() {
     appendAuditEvent(
       "Settings",
       "Imported Patrol Excel Workbook",
-      `Imported ${parsed.scheduleRows.length} patrol rows and ${parsed.overrideRows.length} live overrides from ${fileName}.${parsed.unmatchedNames.length > 0 ? ` Unmatched names: ${parsed.unmatchedNames.join(", ")}` : ""}`
+      `Imported ${parsed.scheduleRows.length} patrol rows and ${parsed.overrideRows.length} live overrides from ${fileName}.`
     )
 
     window.alert(
-      `Imported Patrol workbook successfully.${parsed.unmatchedNames.length > 0 ? ` Unmatched names: ${parsed.unmatchedNames.join(", ")}` : ""}`
+      "Imported Patrol workbook successfully."
     )
   }
 
