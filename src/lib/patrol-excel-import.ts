@@ -55,6 +55,13 @@ function normalizeCellValue(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim()
 }
 
+function normalizeImportedName(value: unknown) {
+  return normalizeCellValue(value)
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 function buildRowKey(row: Pick<PatrolScheduleRow, "assignment_date" | "shift_type" | "position_code">) {
   return `${row.assignment_date}-${row.shift_type}-${row.position_code}`
 }
@@ -134,7 +141,7 @@ function parseStatusOrHours(token: string, shiftType: ShiftType) {
 }
 
 function findEmployeeByLastName(employeesByLastName: Map<string, Employee>, lastName: string) {
-  return employeesByLastName.get(normalizeCellValue(lastName).toLowerCase()) || null
+  return employeesByLastName.get(normalizeImportedName(lastName).toLowerCase()) || null
 }
 
 function isActiveOverrideStatus(status: string | null | undefined) {
@@ -192,7 +199,7 @@ export async function parsePatrolWorkbook(
           const replacementRow = rows[rowIndex + definition.offset + 1] || []
 
           const vehicle = normalizeCellValue(workingRow[colStart])
-          const lastName = normalizeCellValue(workingRow[colStart + 1])
+          const lastName = normalizeImportedName(workingRow[colStart + 1])
           const hoursOrStatus = normalizeCellValue(workingRow[colStart + 2])
 
           if (!vehicle && !lastName && !hoursOrStatus) continue
@@ -203,7 +210,7 @@ export async function parsePatrolWorkbook(
           const resolved = parseStatusOrHours(hoursOrStatus, definition.shiftType)
 
           const replacementVehicle = normalizeCellValue(replacementRow[colStart])
-          const replacementLastName = normalizeCellValue(replacementRow[colStart + 1])
+          const replacementLastName = normalizeImportedName(replacementRow[colStart + 1])
           const replacementHoursToken = normalizeCellValue(replacementRow[colStart + 2])
           const matchedReplacement = findEmployeeByLastName(employeesByLastName, replacementLastName)
           if (replacementLastName && !matchedReplacement) unmatchedNames.add(replacementLastName)
