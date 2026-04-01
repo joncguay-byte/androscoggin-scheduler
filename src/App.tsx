@@ -2677,11 +2677,12 @@ export default function App() {
           />
         )}
 
-        {activeModule === "settings" && (
-          <SettingsPage
-            currentUserRole={currentUserRole}
-            settings={settings}
-            setSettings={setSettings}
+          {activeModule === "settings" && (
+            <SettingsPage
+              currentUserRole={currentUserRole}
+              employees={employees}
+              settings={settings}
+              setSettings={setSettings}
             referenceSettings={referenceSettings}
             setReferenceSettings={setReferenceSettings}
             cidRotationStartDate={cidRotationStartDate}

@@ -13,7 +13,7 @@ import {
 } from "../../components/ui/simple-ui"
 import { supabase } from "../../lib/supabase"
 import type { ParsedPatrolImport } from "../../lib/patrol-excel-import"
-import type { AppLayoutVariant, AppRole, ReportType, ScheduleView } from "../../types"
+import type { AppLayoutVariant, AppRole, Employee, PatrolScheduleRow, ReportType, ScheduleView } from "../../types"
 
 type ModuleOption = {
   key: string
@@ -48,6 +48,7 @@ export type ReferenceSettings = {
 
 type SettingsPageProps = {
   currentUserRole: AppRole
+  employees: Employee[]
   settings: AppSettings
   setSettings: Dispatch<SetStateAction<AppSettings>>
   referenceSettings: ReferenceSettings
@@ -78,6 +79,36 @@ type UserProfile = {
   full_name: string | null
   role: AppRole
   created_at?: string
+}
+
+const patrolPreviewDayRows: Array<{ code: PatrolScheduleRow["position_code"]; label: string }> = [
+  { code: "SUP1", label: "Supervisor" },
+  { code: "SUP2", label: "Days" },
+  { code: "DEP1", label: "Days" },
+  { code: "DEP2", label: "Days" },
+  { code: "POL", label: "Poland Days" }
+]
+
+const patrolPreviewNightRows: Array<{ code: PatrolScheduleRow["position_code"]; label: string }> = [
+  { code: "POL", label: "Poland Nights" },
+  { code: "SUP1", label: "Supervisor" },
+  { code: "SUP2", label: "Nights" },
+  { code: "DEP1", label: "Nights" },
+  { code: "DEP2", label: "Nights" }
+]
+
+function formatPreviewDate(isoDate: string) {
+  const date = new Date(`${isoDate}T12:00:00`)
+  return date.toLocaleDateString(undefined, { month: "numeric", day: "numeric" })
+}
+
+function buildPreviewWeek(startIso: string) {
+  const start = new Date(`${startIso}T12:00:00`)
+  return Array.from({ length: 7 }, (_, index) => {
+    const next = new Date(start)
+    next.setDate(start.getDate() + index)
+    return next.toISOString().slice(0, 10)
+  })
 }
 
 const layoutOptions: { value: AppLayoutVariant, label: string }[] = [
@@ -115,6 +146,7 @@ const referenceLabels: Record<keyof ReferenceSettings, string> = {
 
 export function SettingsPage({
   currentUserRole,
+  employees,
   settings,
   setSettings,
   referenceSettings,
@@ -138,6 +170,7 @@ export function SettingsPage({
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
   const overtimeBackupInputRef = useRef<HTMLInputElement | null>(null)
   const patrolWorkbookInputRef = useRef<HTMLInputElement | null>(null)
+  const employeeMap = new Map(employees.map((employee) => [employee.id, employee]))
   const [drafts, setDrafts] = useState<Record<keyof ReferenceSettings, string>>({
     vehicles: "",
     shiftTemplates: "",
@@ -841,7 +874,7 @@ export function SettingsPage({
                 ))}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "14px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "14px" }}>
                 <div
                   style={{
                     border: "1px solid #e2e8f0",
@@ -850,27 +883,102 @@ export function SettingsPage({
                     background: "#ffffff"
                   }}
                 >
-                  <div style={{ fontWeight: 800, marginBottom: "8px" }}>Sample Imported Patrol Rows</div>
-                  <div style={{ display: "grid", gap: "8px" }}>
-                    {patrolImportPreview.parsed.scheduleRows.slice(0, 8).map((row) => (
-                      <div
-                        key={`${row.assignment_date}-${row.shift_type}-${row.position_code}`}
-                        style={{
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "10px",
-                          padding: "10px",
-                          background: "#f8fafc"
-                        }}
-                      >
-                        <div style={{ fontSize: "13px", fontWeight: 700 }}>
-                          {row.assignment_date} | {row.shift_type} | {row.position_code}
-                        </div>
-                        <div style={{ marginTop: "4px", fontSize: "12px", color: "#475569" }}>
-                          {row.vehicle || "No Vehicle"} | {row.status || "Scheduled"} | {row.shift_hours || "No Hours"}
-                        </div>
-                      </div>
-                    ))}
+                  <div style={{ fontWeight: 800, marginBottom: "8px" }}>Patrol Calendar Preview</div>
+                  <div style={{ fontSize: "12px", color: "#475569", marginBottom: "10px" }}>
+                    This shows the first imported week in a Patrol-style calendar view before anything is committed.
                   </div>
+                  {(() => {
+                    const previewStart = patrolImportPreview.parsed.importedDateRange?.start
+                    if (!previewStart) {
+                      return <div style={{ fontSize: "13px", color: "#64748b" }}>No imported date range found.</div>
+                    }
+
+                    const previewWeek = buildPreviewWeek(previewStart)
+                    const rowMap = new Map(
+                      patrolImportPreview.parsed.scheduleRows.map((row) => [
+                        `${row.assignment_date}-${row.shift_type}-${row.position_code}`,
+                        row
+                      ] as const)
+                    )
+
+                    const renderRow = (
+                      shiftType: PatrolScheduleRow["shift_type"],
+                      positionCode: PatrolScheduleRow["position_code"],
+                      rowLabel: string
+                    ) => (
+                      <div
+                        key={`${shiftType}-${positionCode}-${rowLabel}`}
+                        style={{ display: "grid", gridTemplateColumns: "120px repeat(7, minmax(0, 1fr))", borderTop: "1px solid #e2e8f0" }}
+                      >
+                        <div style={{ padding: "8px 10px", borderRight: "1px solid #e2e8f0", background: "#f8fafc", fontWeight: 700, fontSize: "12px" }}>
+                          {rowLabel}
+                        </div>
+                        {previewWeek.map((isoDate) => {
+                          const row = rowMap.get(`${isoDate}-${shiftType}-${positionCode}`) || null
+                          const employee = row?.employee_id ? employeeMap.get(row.employee_id) || null : null
+                          const replacement = row?.replacement_employee_id ? employeeMap.get(row.replacement_employee_id) || null : null
+                          const isOff = Boolean(row?.status) && row?.status !== "Scheduled" && row?.status !== "Open Shift"
+
+                          return (
+                            <div
+                              key={`${isoDate}-${shiftType}-${positionCode}`}
+                              style={{
+                                padding: "6px",
+                                borderRight: "1px solid #e2e8f0",
+                                background: isOff ? "#fde68a" : "#ffffff",
+                                minHeight: "68px",
+                                display: "grid",
+                                gap: "2px",
+                                alignContent: "start"
+                              }}
+                            >
+                              <div style={{ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) 34px", gap: "4px", border: "1px solid #d1d5db", borderRadius: "4px", padding: "2px 4px", background: isOff ? "#fde68a" : "#f8fafc", fontSize: "11px", fontWeight: 700 }}>
+                                <span>{row?.vehicle || ""}</span>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {employee?.lastName || ""}
+                                </span>
+                                <span style={{ textAlign: "center" }}>
+                                  {isOff ? row?.status || "" : row?.shift_hours || ""}
+                                </span>
+                              </div>
+                              {replacement && (
+                                <div style={{ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) 34px", gap: "4px", border: "1px solid #d1d5db", borderRadius: "4px", padding: "2px 4px", background: "#eff6ff", color: "#2563eb", fontSize: "10px" }}>
+                                  <span>{row?.replacement_vehicle || replacement.defaultVehicle || ""}</span>
+                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {replacement.lastName}
+                                  </span>
+                                  <span style={{ textAlign: "center" }}>
+                                    {row?.replacement_hours || replacement.defaultShiftHours || ""}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+
+                    return (
+                      <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden", background: "#ffffff" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "120px repeat(7, minmax(0, 1fr))", background: "#eff6ff", borderBottom: "1px solid #dbeafe" }}>
+                          <div style={{ padding: "8px 10px", borderRight: "1px solid #dbeafe", fontWeight: 800, fontSize: "12px" }}>Position</div>
+                          {previewWeek.map((isoDate) => (
+                            <div key={isoDate} style={{ padding: "8px 6px", borderRight: "1px solid #dbeafe", textAlign: "center", fontWeight: 800, fontSize: "12px" }}>
+                              {formatPreviewDate(isoDate)}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ padding: "6px 10px", background: "#f8fafc", fontWeight: 800, fontSize: "12px", borderBottom: "1px solid #e2e8f0" }}>
+                          Days
+                        </div>
+                        {patrolPreviewDayRows.map((row) => renderRow("Days", row.code, row.label))}
+                        <div style={{ padding: "6px 10px", background: "#f8fafc", fontWeight: 800, fontSize: "12px", borderTop: "1px solid #e2e8f0", borderBottom: "1px solid #e2e8f0" }}>
+                          Nights
+                        </div>
+                        {patrolPreviewNightRows.map((row) => renderRow("Nights", row.code, row.label))}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 <div
