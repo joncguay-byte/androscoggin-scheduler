@@ -33,6 +33,7 @@ import {
   saveSupabaseOvertimeNotificationsState
 } from "./lib/overtime-notifications-sync"
 import { parsePatrolWorkbook } from "./lib/patrol-excel-import"
+import type { ParsedPatrolImport } from "./lib/patrol-excel-import"
 import { buildNotificationDeliveries } from "./lib/notifications"
 import { notificationProviderConfigSchema, overtimeBackupSchema } from "./lib/schemas"
 import { useUiStore } from "./stores/ui-store"
@@ -90,6 +91,11 @@ type ModuleKey =
 type OvertimeBuilderPatrolLaunch = {
   employeeId: string
 }
+
+type PatrolImportPreviewState = {
+  fileName: string
+  parsed: ParsedPatrolImport
+} | null
 
 
 const moduleOrder: ModuleDefinition[] = [
@@ -750,6 +756,7 @@ export default function App() {
   const [forceHistoryRows, setForceHistoryRows] = useState<ForceHistoryRow[]>([])
   const [responseTokenFromQuery, setResponseTokenFromQuery] = useState("")
   const [overtimeBuilderPatrolLaunch, setOvertimeBuilderPatrolLaunch] = useState<OvertimeBuilderPatrolLaunch | null>(null)
+  const [patrolImportPreview, setPatrolImportPreview] = useState<PatrolImportPreviewState>(null)
   const [isMobileLayout, setIsMobileLayout] = useState(false)
   const [deployedBuildId, setDeployedBuildId] = useState("")
   const [buildSyncStatus, setBuildSyncStatus] = useState<"checking" | "current" | "update_available" | "error">("checking")
@@ -1045,121 +1052,120 @@ export default function App() {
         window.alert("No Patrol schedule rows were found in that workbook.")
         return
       }
-
-      const unmatchedSummary =
-        parsed.unmatchedNames.length > 0
-          ? `\n\nUnmatched names: ${parsed.unmatchedNames.slice(0, 10).join(", ")}${parsed.unmatchedNames.length > 10 ? "..." : ""}`
-          : ""
-
-      const shouldImport = window.confirm(
-        `Import ${parsed.scheduleRows.length} Patrol schedule rows and ${parsed.overrideRows.length} live override rows from ${file.name}?${unmatchedSummary}`
-      )
-
-      if (!shouldImport) return
-
-      const schedulePayload = parsed.scheduleRows.map((row) => ({
-        assignment_date: row.assignment_date,
-        shift_type: row.shift_type,
-        position_code: row.position_code,
-        employee_id: row.employee_id,
-        vehicle: row.vehicle,
-        shift_hours: row.shift_hours,
-        status: row.status,
-        replacement_employee_id: row.replacement_employee_id,
-        replacement_vehicle: row.replacement_vehicle,
-        replacement_hours: row.replacement_hours
-      }))
-
-      const { error: scheduleError } = await supabase
-        .from("patrol_schedule")
-        .upsert(schedulePayload, { onConflict: "assignment_date,shift_type,position_code" })
-
-      if (scheduleError) {
-        window.alert(`Could not import the Patrol workbook into patrol_schedule: ${scheduleError.message}`)
-        return
-      }
-
-      if (parsed.importedDateRange) {
-        const { error: deleteOverridesError } = await supabase
-          .from("patrol_overrides")
-          .delete()
-          .gte("assignment_date", parsed.importedDateRange.start)
-          .lte("assignment_date", parsed.importedDateRange.end)
-
-        if (deleteOverridesError) {
-          window.alert(`Patrol schedule imported, but old live overrides could not be cleared: ${deleteOverridesError.message}`)
-          return
-        }
-      }
-
-      if (parsed.overrideRows.length > 0) {
-        const { error: overrideError } = await supabase
-          .from("patrol_overrides")
-          .upsert(
-            parsed.overrideRows.map((row) => ({
-              assignment_date: row.assignment_date,
-              shift_type: row.shift_type,
-              position_code: row.position_code,
-              employee_id: row.employee_id,
-              vehicle: row.vehicle,
-              shift_hours: row.shift_hours,
-              status: row.status,
-              replacement_employee_id: row.replacement_employee_id,
-              replacement_vehicle: row.replacement_vehicle,
-              replacement_hours: row.replacement_hours,
-              updated_at: new Date().toISOString()
-            })),
-            { onConflict: "assignment_date,shift_type,position_code" }
-          )
-
-        if (overrideError) {
-          window.alert(`Patrol schedule imported, but live Patrol overrides could not be saved: ${overrideError.message}`)
-          return
-        }
-      }
-
-      const nextPatrolRows = replacePatrolRowsInRange(
-        patrolSummaryRows,
-        parsed.scheduleRows,
-        parsed.importedDateRange
-      )
-      const nextOverrideRows = replacePatrolRowsInRange(
-        localPatrolOverrideRows,
-        parsed.overrideRows,
-        parsed.importedDateRange
-      )
-      const nextOvertimeRequests = reconcilePatrolGeneratedOvertimeRequests(
-        overtimeShiftRequests,
-        nextOverrideRows,
-        employees
-      )
-
-      setPatrolSummaryRows(nextPatrolRows)
-      setLocalPatrolOverrideRows(nextOverrideRows)
-      setOvertimeShiftRequests(nextOvertimeRequests)
-
-      invalidatePatrolScheduleCache()
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ["supabase", "patrol-summary", patrolSummaryRange.start, patrolSummaryRange.end]
-        }),
-        queryClient.invalidateQueries({ queryKey: patrolOverridesQueryKey }),
-        queryClient.invalidateQueries({ queryKey: overtimeNotificationsQueryKey })
-      ])
-
-      appendAuditEvent(
-        "Settings",
-        "Imported Patrol Excel Workbook",
-        `Imported ${parsed.scheduleRows.length} patrol rows and ${parsed.overrideRows.length} live overrides from ${file.name}.${parsed.unmatchedNames.length > 0 ? ` Unmatched names: ${parsed.unmatchedNames.join(", ")}` : ""}`
-      )
-
-      window.alert(
-        `Imported Patrol workbook successfully.${parsed.unmatchedNames.length > 0 ? ` Unmatched names: ${parsed.unmatchedNames.join(", ")}` : ""}`
-      )
+      setPatrolImportPreview({
+        fileName: file.name,
+        parsed
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown import error"
       window.alert(`That Patrol workbook could not be imported: ${message}`)
     }
+  }
+
+  async function commitPatrolImportPreview() {
+    if (!patrolImportPreview) return
+
+    const { fileName, parsed } = patrolImportPreview
+    const schedulePayload = parsed.scheduleRows.map((row) => ({
+      assignment_date: row.assignment_date,
+      shift_type: row.shift_type,
+      position_code: row.position_code,
+      employee_id: row.employee_id,
+      vehicle: row.vehicle,
+      shift_hours: row.shift_hours,
+      status: row.status,
+      replacement_employee_id: row.replacement_employee_id,
+      replacement_vehicle: row.replacement_vehicle,
+      replacement_hours: row.replacement_hours
+    }))
+
+    const { error: scheduleError } = await supabase
+      .from("patrol_schedule")
+      .upsert(schedulePayload, { onConflict: "assignment_date,shift_type,position_code" })
+
+    if (scheduleError) {
+      window.alert(`Could not import the Patrol workbook into patrol_schedule: ${scheduleError.message}`)
+      return
+    }
+
+    if (parsed.importedDateRange) {
+      const { error: deleteOverridesError } = await supabase
+        .from("patrol_overrides")
+        .delete()
+        .gte("assignment_date", parsed.importedDateRange.start)
+        .lte("assignment_date", parsed.importedDateRange.end)
+
+      if (deleteOverridesError) {
+        window.alert(`Patrol schedule imported, but old live overrides could not be cleared: ${deleteOverridesError.message}`)
+        return
+      }
+    }
+
+    if (parsed.overrideRows.length > 0) {
+      const { error: overrideError } = await supabase
+        .from("patrol_overrides")
+        .upsert(
+          parsed.overrideRows.map((row) => ({
+            assignment_date: row.assignment_date,
+            shift_type: row.shift_type,
+            position_code: row.position_code,
+            employee_id: row.employee_id,
+            vehicle: row.vehicle,
+            shift_hours: row.shift_hours,
+            status: row.status,
+            replacement_employee_id: row.replacement_employee_id,
+            replacement_vehicle: row.replacement_vehicle,
+            replacement_hours: row.replacement_hours,
+            updated_at: new Date().toISOString()
+          })),
+          { onConflict: "assignment_date,shift_type,position_code" }
+        )
+
+      if (overrideError) {
+        window.alert(`Patrol schedule imported, but live Patrol overrides could not be saved: ${overrideError.message}`)
+        return
+      }
+    }
+
+    const nextPatrolRows = replacePatrolRowsInRange(
+      patrolSummaryRows,
+      parsed.scheduleRows,
+      parsed.importedDateRange
+    )
+    const nextOverrideRows = replacePatrolRowsInRange(
+      localPatrolOverrideRows,
+      parsed.overrideRows,
+      parsed.importedDateRange
+    )
+    const nextOvertimeRequests = reconcilePatrolGeneratedOvertimeRequests(
+      overtimeShiftRequests,
+      nextOverrideRows,
+      employees
+    )
+
+    setPatrolSummaryRows(nextPatrolRows)
+    setLocalPatrolOverrideRows(nextOverrideRows)
+    setOvertimeShiftRequests(nextOvertimeRequests)
+    setPatrolImportPreview(null)
+
+    invalidatePatrolScheduleCache()
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["supabase", "patrol-summary", patrolSummaryRange.start, patrolSummaryRange.end]
+      }),
+      queryClient.invalidateQueries({ queryKey: patrolOverridesQueryKey }),
+      queryClient.invalidateQueries({ queryKey: overtimeNotificationsQueryKey })
+    ])
+
+    appendAuditEvent(
+      "Settings",
+      "Imported Patrol Excel Workbook",
+      `Imported ${parsed.scheduleRows.length} patrol rows and ${parsed.overrideRows.length} live overrides from ${fileName}.${parsed.unmatchedNames.length > 0 ? ` Unmatched names: ${parsed.unmatchedNames.join(", ")}` : ""}`
+    )
+
+    window.alert(
+      `Imported Patrol workbook successfully.${parsed.unmatchedNames.length > 0 ? ` Unmatched names: ${parsed.unmatchedNames.join(", ")}` : ""}`
+    )
   }
 
   function applyOvertimeNotificationsSyncData(data: Awaited<ReturnType<typeof loadSupabaseOvertimeNotificationsState>>["data"]) {
@@ -2688,6 +2694,9 @@ export default function App() {
               onDownloadOvertimeBackup={downloadOvertimeBackup}
               onImportOvertimeBackup={importOvertimeBackup}
               onImportPatrolWorkbook={importPatrolWorkbook}
+              patrolImportPreview={patrolImportPreview}
+              onCommitPatrolImportPreview={() => void commitPatrolImportPreview()}
+              onClearPatrolImportPreview={() => setPatrolImportPreview(null)}
               onAuditEvent={(action, summary, details) => appendAuditEvent("Settings", action, summary, details)}
               moduleOptions={moduleOrder.map((module) => ({
                 key: module.key,

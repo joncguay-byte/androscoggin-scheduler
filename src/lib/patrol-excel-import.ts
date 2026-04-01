@@ -261,3 +261,5 @@ export async function parsePatrolWorkbook(
         : null
   }
 }
+
+export type { ParsedPatrolImport }

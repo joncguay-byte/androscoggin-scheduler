@@ -12,6 +12,7 @@ import {
   SelectItem
 } from "../../components/ui/simple-ui"
 import { supabase } from "../../lib/supabase"
+import type { ParsedPatrolImport } from "../../lib/patrol-excel-import"
 import type { AppLayoutVariant, AppRole, ReportType, ScheduleView } from "../../types"
 
 type ModuleOption = {
@@ -62,6 +63,12 @@ type SettingsPageProps = {
   onDownloadOvertimeBackup?: () => void
   onImportOvertimeBackup?: (file: File) => void
   onImportPatrolWorkbook?: (file: File) => void
+  patrolImportPreview?: {
+    fileName: string
+    parsed: ParsedPatrolImport
+  } | null
+  onCommitPatrolImportPreview?: () => void
+  onClearPatrolImportPreview?: () => void
   onAuditEvent?: (action: string, summary: string, details?: string) => void
 }
 
@@ -123,6 +130,9 @@ export function SettingsPage({
   onDownloadOvertimeBackup,
   onImportOvertimeBackup,
   onImportPatrolWorkbook,
+  patrolImportPreview,
+  onCommitPatrolImportPreview,
+  onClearPatrolImportPreview,
   onAuditEvent
 }: SettingsPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
@@ -787,6 +797,130 @@ export function SettingsPage({
           )}
         </CardContent>
       </Card>
+
+      {canEdit && patrolImportPreview && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Patrol Import Preview</CardTitle>
+          </CardHeader>
+
+          <CardContent>
+            <div style={{ display: "grid", gap: "14px" }}>
+              <div style={{ fontSize: "13px", color: "#475569" }}>
+                Review this workbook preview before committing it into the live Patrol schedule.
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" }}>
+                {[
+                  { label: "Workbook", value: patrolImportPreview.fileName },
+                  { label: "Schedule Rows", value: String(patrolImportPreview.parsed.scheduleRows.length) },
+                  { label: "Live Overrides", value: String(patrolImportPreview.parsed.overrideRows.length) },
+                  {
+                    label: "Date Range",
+                    value: patrolImportPreview.parsed.importedDateRange
+                      ? `${patrolImportPreview.parsed.importedDateRange.start} to ${patrolImportPreview.parsed.importedDateRange.end}`
+                      : "Unknown"
+                  }
+                ].map((entry) => (
+                  <div
+                    key={entry.label}
+                    style={{
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      padding: "12px",
+                      background: "#ffffff"
+                    }}
+                  >
+                    <div style={{ fontSize: "11px", textTransform: "uppercase", color: "#64748b", fontWeight: 700 }}>
+                      {entry.label}
+                    </div>
+                    <div style={{ marginTop: "6px", fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                      {entry.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "14px" }}>
+                <div
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "12px",
+                    padding: "12px",
+                    background: "#ffffff"
+                  }}
+                >
+                  <div style={{ fontWeight: 800, marginBottom: "8px" }}>Sample Imported Patrol Rows</div>
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    {patrolImportPreview.parsed.scheduleRows.slice(0, 8).map((row) => (
+                      <div
+                        key={`${row.assignment_date}-${row.shift_type}-${row.position_code}`}
+                        style={{
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "10px",
+                          padding: "10px",
+                          background: "#f8fafc"
+                        }}
+                      >
+                        <div style={{ fontSize: "13px", fontWeight: 700 }}>
+                          {row.assignment_date} | {row.shift_type} | {row.position_code}
+                        </div>
+                        <div style={{ marginTop: "4px", fontSize: "12px", color: "#475569" }}>
+                          {row.vehicle || "No Vehicle"} | {row.status || "Scheduled"} | {row.shift_hours || "No Hours"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "12px",
+                    padding: "12px",
+                    background: "#ffffff"
+                  }}
+                >
+                  <div style={{ fontWeight: 800, marginBottom: "8px" }}>Unmatched Names</div>
+                  {patrolImportPreview.parsed.unmatchedNames.length === 0 ? (
+                    <div style={{ fontSize: "13px", color: "#166534" }}>
+                      No unmatched names were found in this workbook.
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                      {patrolImportPreview.parsed.unmatchedNames.map((name) => (
+                        <div
+                          key={name}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: "999px",
+                            border: "1px solid #f5c2c7",
+                            background: "#fff7f7",
+                            color: "#991b1b",
+                            fontSize: "12px",
+                            fontWeight: 700
+                          }}
+                        >
+                          {name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <Button onClick={() => onClearPatrolImportPreview?.()}>
+                  Cancel Preview
+                </Button>
+                <Button onClick={() => onCommitPatrolImportPreview?.()}>
+                  Commit Patrol Import
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
