@@ -102,13 +102,30 @@ function formatPreviewDate(isoDate: string) {
   return date.toLocaleDateString(undefined, { month: "numeric", day: "numeric" })
 }
 
-function buildPreviewWeek(startIso: string) {
-  const start = new Date(`${startIso}T12:00:00`)
-  return Array.from({ length: 7 }, (_, index) => {
-    const next = new Date(start)
-    next.setDate(start.getDate() + index)
-    return next.toISOString().slice(0, 10)
-  })
+function buildPreviewMonthDates(baseDate: Date) {
+  const year = baseDate.getFullYear()
+  const month = baseDate.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const gridStart = new Date(firstDay)
+  gridStart.setDate(firstDay.getDate() - firstDay.getDay())
+  const gridEnd = new Date(lastDay)
+  gridEnd.setDate(lastDay.getDate() + (6 - lastDay.getDay()))
+
+  const dates: string[] = []
+  for (let cursor = new Date(gridStart); cursor <= gridEnd; cursor.setDate(cursor.getDate() + 1)) {
+    dates.push(cursor.toISOString().slice(0, 10))
+  }
+
+  return dates
+}
+
+function chunkPreviewDates(dates: string[], size: number) {
+  const chunks: string[][] = []
+  for (let index = 0; index < dates.length; index += size) {
+    chunks.push(dates.slice(index, index + size))
+  }
+  return chunks
 }
 
 const layoutOptions: { value: AppLayoutVariant, label: string }[] = [
@@ -182,6 +199,7 @@ export function SettingsPage({
   const [profilesLoading, setProfilesLoading] = useState(true)
   const [profilesError, setProfilesError] = useState("")
   const [savingProfileId, setSavingProfileId] = useState("")
+  const [previewMonthStart, setPreviewMonthStart] = useState<Date | null>(null)
 
   useEffect(() => {
     let active = true
@@ -217,6 +235,16 @@ export function SettingsPage({
       active = false
     }
   }, [canEdit])
+
+  useEffect(() => {
+    if (!patrolImportPreview?.parsed.importedDateRange?.start) {
+      setPreviewMonthStart(null)
+      return
+    }
+
+    const startDate = new Date(`${patrolImportPreview.parsed.importedDateRange.start}T12:00:00`)
+    setPreviewMonthStart(new Date(startDate.getFullYear(), startDate.getMonth(), 1))
+  }, [patrolImportPreview])
 
   function updateSettings<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     const previousValue = settings[key]
@@ -885,39 +913,52 @@ export function SettingsPage({
                 >
                   <div style={{ fontWeight: 800, marginBottom: "8px" }}>Patrol Calendar Preview</div>
                   <div style={{ fontSize: "12px", color: "#475569", marginBottom: "10px" }}>
-                    This shows the first imported week in a Patrol-style calendar view before anything is committed.
+                    This shows the imported Patrol calendar month view before anything is committed.
                   </div>
                   {(() => {
-                    const previewStart = patrolImportPreview.parsed.importedDateRange?.start
-                    if (!previewStart) {
+                    const importedRange = patrolImportPreview.parsed.importedDateRange
+                    if (!importedRange || !previewMonthStart) {
                       return <div style={{ fontSize: "13px", color: "#64748b" }}>No imported date range found.</div>
                     }
 
-                    const previewWeek = buildPreviewWeek(previewStart)
+                    const previewDates = buildPreviewMonthDates(previewMonthStart)
+                    const previewWeeks = chunkPreviewDates(previewDates, 7)
                     const rowMap = new Map(
                       patrolImportPreview.parsed.scheduleRows.map((row) => [
                         `${row.assignment_date}-${row.shift_type}-${row.position_code}`,
                         row
                       ] as const)
                     )
+                    const importedMonthKeys = Array.from(
+                      new Set(
+                        patrolImportPreview.parsed.scheduleRows.map((row) => row.assignment_date.slice(0, 7))
+                      )
+                    ).sort()
+                    const currentMonthKey = `${previewMonthStart.getFullYear()}-${String(previewMonthStart.getMonth() + 1).padStart(2, "0")}`
+                    const currentMonthIndex = importedMonthKeys.indexOf(currentMonthKey)
+                    const canGoPrev = currentMonthIndex > 0
+                    const canGoNext = currentMonthIndex >= 0 && currentMonthIndex < importedMonthKeys.length - 1
+                    const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
                     const renderRow = (
                       shiftType: PatrolScheduleRow["shift_type"],
                       positionCode: PatrolScheduleRow["position_code"],
-                      rowLabel: string
+                      rowLabel: string,
+                      weekDates: string[]
                     ) => (
                       <div
-                        key={`${shiftType}-${positionCode}-${rowLabel}`}
+                        key={`${shiftType}-${positionCode}-${rowLabel}-${weekDates[0]}`}
                         style={{ display: "grid", gridTemplateColumns: "120px repeat(7, minmax(0, 1fr))", borderTop: "1px solid #e2e8f0" }}
                       >
                         <div style={{ padding: "8px 10px", borderRight: "1px solid #e2e8f0", background: "#f8fafc", fontWeight: 700, fontSize: "12px" }}>
                           {rowLabel}
                         </div>
-                        {previewWeek.map((isoDate) => {
+                        {weekDates.map((isoDate) => {
                           const row = rowMap.get(`${isoDate}-${shiftType}-${positionCode}`) || null
                           const employee = row?.employee_id ? employeeMap.get(row.employee_id) || null : null
                           const replacement = row?.replacement_employee_id ? employeeMap.get(row.replacement_employee_id) || null : null
                           const isOff = Boolean(row?.status) && row?.status !== "Scheduled" && row?.status !== "Open Shift"
+                          const inCurrentMonth = isoDate.slice(0, 7) === currentMonthKey
 
                           return (
                             <div
@@ -925,11 +966,12 @@ export function SettingsPage({
                               style={{
                                 padding: "6px",
                                 borderRight: "1px solid #e2e8f0",
-                                background: isOff ? "#fde68a" : "#ffffff",
+                                background: isOff ? "#fde68a" : inCurrentMonth ? "#ffffff" : "#f8fafc",
                                 minHeight: "68px",
                                 display: "grid",
                                 gap: "2px",
-                                alignContent: "start"
+                                alignContent: "start",
+                                opacity: inCurrentMonth ? 1 : 0.72
                               }}
                             >
                               <div style={{ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) 34px", gap: "4px", border: "1px solid #d1d5db", borderRadius: "4px", padding: "2px 4px", background: isOff ? "#fde68a" : "#f8fafc", fontSize: "11px", fontWeight: 700 }}>
@@ -959,23 +1001,59 @@ export function SettingsPage({
                     )
 
                     return (
-                      <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden", background: "#ffffff" }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "120px repeat(7, minmax(0, 1fr))", background: "#eff6ff", borderBottom: "1px solid #dbeafe" }}>
-                          <div style={{ padding: "8px 10px", borderRight: "1px solid #dbeafe", fontWeight: 800, fontSize: "12px" }}>Position</div>
-                          {previewWeek.map((isoDate) => (
-                            <div key={isoDate} style={{ padding: "8px 6px", borderRight: "1px solid #dbeafe", textAlign: "center", fontWeight: 800, fontSize: "12px" }}>
-                              {formatPreviewDate(isoDate)}
+                      <div style={{ display: "grid", gap: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                          <div style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a" }}>
+                            {previewMonthStart.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                          </div>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <Button
+                              onClick={() => {
+                                if (!canGoPrev || currentMonthIndex < 1) return
+                                const [year, month] = importedMonthKeys[currentMonthIndex - 1].split("-").map(Number)
+                                setPreviewMonthStart(new Date(year, month - 1, 1))
+                              }}
+                              disabled={!canGoPrev}
+                            >
+                              Prev Month
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                if (!canGoNext || currentMonthIndex < 0) return
+                                const [year, month] = importedMonthKeys[currentMonthIndex + 1].split("-").map(Number)
+                                setPreviewMonthStart(new Date(year, month - 1, 1))
+                              }}
+                              disabled={!canGoNext}
+                            >
+                              Next Month
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div style={{ maxHeight: "860px", overflow: "auto", border: "1px solid #e2e8f0", borderRadius: "12px", background: "#ffffff" }}>
+                          {previewWeeks.map((weekDates) => (
+                            <div key={weekDates[0]} style={{ borderBottom: "8px solid #f8fafc" }}>
+                              <div style={{ display: "grid", gridTemplateColumns: "120px repeat(7, minmax(0, 1fr))", background: "#eff6ff", borderBottom: "1px solid #dbeafe" }}>
+                                <div style={{ padding: "8px 10px", borderRight: "1px solid #dbeafe", fontWeight: 800, fontSize: "12px" }}>Position</div>
+                                {weekDates.map((isoDate, index) => (
+                                  <div key={isoDate} style={{ padding: "8px 6px", borderRight: "1px solid #dbeafe", textAlign: "center", fontWeight: 800, fontSize: "12px", opacity: isoDate.slice(0, 7) === currentMonthKey ? 1 : 0.72 }}>
+                                    <div style={{ fontSize: "10px", color: "#475569" }}>{weekdayLabels[index]}</div>
+                                    <div>{formatPreviewDate(isoDate)}</div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div style={{ padding: "6px 10px", background: "#f8fafc", fontWeight: 800, fontSize: "12px", borderBottom: "1px solid #e2e8f0" }}>
+                                Days
+                              </div>
+                              {patrolPreviewDayRows.map((row) => renderRow("Days", row.code, row.label, weekDates))}
+                              <div style={{ padding: "6px 10px", background: "#f8fafc", fontWeight: 800, fontSize: "12px", borderTop: "1px solid #e2e8f0", borderBottom: "1px solid #e2e8f0" }}>
+                                Nights
+                              </div>
+                              {patrolPreviewNightRows.map((row) => renderRow("Nights", row.code, row.label, weekDates))}
                             </div>
                           ))}
                         </div>
-                        <div style={{ padding: "6px 10px", background: "#f8fafc", fontWeight: 800, fontSize: "12px", borderBottom: "1px solid #e2e8f0" }}>
-                          Days
-                        </div>
-                        {patrolPreviewDayRows.map((row) => renderRow("Days", row.code, row.label))}
-                        <div style={{ padding: "6px 10px", background: "#f8fafc", fontWeight: 800, fontSize: "12px", borderTop: "1px solid #e2e8f0", borderBottom: "1px solid #e2e8f0" }}>
-                          Nights
-                        </div>
-                        {patrolPreviewNightRows.map((row) => renderRow("Nights", row.code, row.label))}
                       </div>
                     )
                   })()}
