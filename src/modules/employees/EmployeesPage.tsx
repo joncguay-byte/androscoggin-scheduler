@@ -49,21 +49,31 @@ export default function EmployeesPage({
   })
 
   function addEmployee() {
+    if (!newEmployee.firstName.trim() || !newEmployee.lastName.trim()) {
+      window.alert("Enter a first and last name before adding a new employee.")
+      return
+    }
+
+    if (!newEmployee.hireDate) {
+      window.alert("Enter a hire date before adding a new employee.")
+      return
+    }
+
     const id = crypto.randomUUID()
     const createdEmployee: Employee = {
       id,
-      firstName: newEmployee.firstName,
-      lastName: newEmployee.lastName,
+      firstName: newEmployee.firstName.trim(),
+      lastName: newEmployee.lastName.trim(),
       rank: newEmployee.rank,
       team: newEmployee.team,
-      defaultVehicle: newEmployee.vehicle,
+      defaultVehicle: newEmployee.vehicle.trim(),
       defaultShiftHours: newEmployee.hours,
       hireDate: newEmployee.hireDate,
       status: newEmployee.status
     }
 
-    setEmployees([
-      ...employees,
+    setEmployees((currentEmployees) => [
+      ...currentEmployees,
       createdEmployee
     ])
     onEmployeeAdded?.(createdEmployee)
@@ -127,9 +137,33 @@ export default function EmployeesPage({
           />
 
           <Input
+            placeholder="Rank"
+            value={newEmployee.rank}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, rank: e.target.value as Rank })}
+          />
+
+          <Input
+            placeholder="Team"
+            value={newEmployee.team}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, team: e.target.value as Team })}
+          />
+
+          <Input
+            placeholder="Hours"
+            value={newEmployee.hours}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, hours: e.target.value })}
+          />
+
+          <Input
             type="date"
             value={newEmployee.hireDate}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, hireDate: e.target.value })}
+          />
+
+          <Input
+            placeholder="Status"
+            value={newEmployee.status}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setNewEmployee({ ...newEmployee, status: e.target.value as Employee["status"] })}
           />
 
           <Button onClick={addEmployee}>
