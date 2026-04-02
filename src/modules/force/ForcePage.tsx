@@ -79,26 +79,84 @@ export function ForcePage({
   }
 
   async function syncEntireForceHistory(nextRows: ForceHistoryRow[]) {
-    await supabase
-      .from("force_history")
-      .delete()
-      .not("employee_id", "is", null)
+    const currentRows = forceHistory
 
-    if (nextRows.length === 0) {
-      return []
+    if (currentRows.some((row) => !row.id) || nextRows.some((row) => !row.id)) {
+      await supabase
+        .from("force_history")
+        .delete()
+        .not("employee_id", "is", null)
+
+      if (nextRows.length === 0) {
+        return []
+      }
+
+      const { data } = await supabase
+        .from("force_history")
+        .insert(
+          nextRows.map((row) => ({
+            employee_id: row.employee_id,
+            forced_date: row.forced_date
+          }))
+        )
+        .select("*")
+
+      return (data || []) as ForceHistoryRow[]
     }
 
-    const { data } = await supabase
-      .from("force_history")
-      .insert(
-        nextRows.map((row) => ({
-          employee_id: row.employee_id,
-          forced_date: row.forced_date
-        }))
-      )
-      .select("*")
+    const currentIds = new Set(currentRows.map((row) => row.id!))
+    const nextIds = new Set(nextRows.map((row) => row.id!).filter(Boolean))
+    const rowsToDelete = currentRows.filter((row) => row.id && !nextIds.has(row.id))
+    const rowsToUpdate = nextRows.filter((row) => row.id && currentIds.has(row.id))
+    const rowsToInsert = nextRows.filter((row) => !row.id)
 
-    return (data || []) as ForceHistoryRow[]
+    if (rowsToDelete.length > 0) {
+      await supabase
+        .from("force_history")
+        .delete()
+        .in("id", rowsToDelete.map((row) => row.id!))
+    }
+
+    for (const row of rowsToUpdate) {
+      const existing = currentRows.find((candidate) => candidate.id === row.id)
+      if (!existing || existing.forced_date === row.forced_date) continue
+
+      await supabase
+        .from("force_history")
+        .update({ forced_date: row.forced_date })
+        .eq("id", row.id!)
+    }
+
+    let insertedRows: ForceHistoryRow[] = []
+    if (rowsToInsert.length > 0) {
+      const { data } = await supabase
+        .from("force_history")
+        .insert(
+          rowsToInsert.map((row) => ({
+            employee_id: row.employee_id,
+            forced_date: row.forced_date
+          }))
+        )
+        .select("*")
+
+      insertedRows = (data || []) as ForceHistoryRow[]
+    }
+
+    const insertedBuckets = new Map<string, ForceHistoryRow[]>()
+    insertedRows.forEach((row) => {
+      const key = `${row.employee_id}-${row.forced_date}`
+      insertedBuckets.set(key, [...(insertedBuckets.get(key) || []), row])
+    })
+
+    return nextRows.map((row) => {
+      if (row.id) return row
+      const key = `${row.employee_id}-${row.forced_date}`
+      const matches = insertedBuckets.get(key)
+      if (!matches || matches.length === 0) return row
+      const nextMatch = matches.shift()!
+      insertedBuckets.set(key, matches)
+      return nextMatch
+    })
   }
 
   function buildForceList(): ForceListRow[] {

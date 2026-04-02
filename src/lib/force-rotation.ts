@@ -29,24 +29,18 @@ export function buildForceRotationOrder(employees: Employee[], forceHistory: For
     .sort((a, b) => {
       const aDates = getEmployeeForceDates(forceHistory, a.id)
       const bDates = getEmployeeForceDates(forceHistory, b.id)
-      const aTotal = aDates.length
-      const bTotal = bDates.length
       const aLast = aDates[0] || ""
       const bLast = bDates[0] || ""
 
-      if (aTotal === 0 && bTotal === 0) {
+      if (!aLast && !bLast) {
         if (a.hireDate !== b.hireDate) {
           return a.hireDate.localeCompare(b.hireDate)
         }
         return `${a.lastName},${a.firstName}`.localeCompare(`${b.lastName},${b.firstName}`)
       }
 
-      if (aTotal === 0) return -1
-      if (bTotal === 0) return 1
-
-      if (aTotal !== bTotal) {
-        return aTotal - bTotal
-      }
+      if (!aLast) return -1
+      if (!bLast) return 1
 
       if (aLast !== bLast) {
         return aLast.localeCompare(bLast)
