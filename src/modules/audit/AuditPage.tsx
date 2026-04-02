@@ -90,16 +90,50 @@ export function AuditPage({ currentUserRole, auditEvents }: AuditPageProps) {
   return (
     <div id="audit-print-section" style={{ display: "grid", gap: "18px" }}>
       <Card>
-        <CardHeader>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-            <CardTitle>Audit Log</CardTitle>
-            <Button data-no-print="true" onClick={() => printElementById("audit-print-section", "Audit Log")}>
-              Print Audit
-            </Button>
-          </div>
-        </CardHeader>
-
         <CardContent>
+          <div
+            style={{
+              display: "grid",
+              gap: "14px",
+              padding: "18px",
+              marginBottom: "18px",
+              background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
+              borderRadius: "16px",
+              border: "1px solid #dbeafe"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div style={{ display: "grid", gap: "4px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1d4ed8" }}>
+                  Audit Center
+                </div>
+                <div style={{ fontSize: "28px", fontWeight: 800, lineHeight: 1.05, color: "#0f172a" }}>
+                  Audit Log
+                </div>
+                <div style={{ fontSize: "13px", color: "#475569" }}>
+                  Review change history, filter by module, and print a cleaner operational audit trail.
+                </div>
+              </div>
+              <Button data-no-print="true" onClick={() => printElementById("audit-print-section", "Audit Log")}>
+                Print Audit
+              </Button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
+              {[
+                { label: "Visible Events", value: String(filteredEvents.length), tone: "#1d4ed8", bg: "#eff6ff" },
+                { label: "Tracked Modules", value: String(moduleCounts.length), tone: "#166534", bg: "#ecfdf5" },
+                { label: "Search", value: search.trim() || "All", tone: "#7c3aed", bg: "#f5f3ff" },
+                { label: "Rows", value: limit, tone: "#92400e", bg: "#fffbeb" }
+              ].map((card) => (
+                <div key={card.label} style={{ border: "1px solid rgba(148, 163, 184, 0.22)", borderRadius: "12px", padding: "12px 14px", background: card.bg, display: "grid", gap: "3px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>{card.label}</div>
+                  <div style={{ fontSize: card.label === "Search" ? "18px" : "26px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>{card.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 180px", gap: "12px" }}>
             <label>
               <div style={{ fontWeight: 700, marginBottom: "4px" }}>Module</div>

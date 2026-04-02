@@ -14,8 +14,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Select,
   SelectItem
 } from "../../components/ui/simple-ui"
@@ -111,6 +109,7 @@ export function CIDPage({
         : getDisplayedCidDetectiveForDate(selectedDate, employees, rotationStartDate),
     [selectedDate, selectedDateIso, employees, rotationStartDate, dailyOverrides]
   )
+  const overrideCount = Object.keys(dailyOverrides).length
 
   function prevMonth() {
     setBaseDate((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))
@@ -171,27 +170,53 @@ export function CIDPage({
 
   return (
     <Card>
-      <CardHeader>
+      <CardContent>
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
-            flexWrap: "wrap"
+            display: "grid",
+            gap: "14px",
+            padding: "18px",
+            marginBottom: "18px",
+            background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
+            borderRadius: "16px",
+            border: "1px solid #dbeafe"
           }}
         >
-          <CardTitle>CID Rotation</CardTitle>
-          <Button
-            data-no-print="true"
-            onClick={() => printElementById("cid-print-section", "CID Rotation")}
-          >
-            Print CID
-          </Button>
-        </div>
-      </CardHeader>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ display: "grid", gap: "4px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1d4ed8" }}>
+                CID Operations
+              </div>
+              <div style={{ fontSize: "28px", fontWeight: 800, lineHeight: 1.05, color: "#0f172a" }}>
+                CID Rotation
+              </div>
+              <div style={{ fontSize: "13px", color: "#475569" }}>
+                Weekly on-call visibility, detective rotation, and same-day override control in one view.
+              </div>
+            </div>
+            <Button
+              data-no-print="true"
+              onClick={() => printElementById("cid-print-section", "CID Rotation")}
+            >
+              Print CID
+            </Button>
+          </div>
 
-      <CardContent>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
+            {[
+              { label: "CID Roster", value: String(cidRoster.length), tone: "#1d4ed8", bg: "#eff6ff" },
+              { label: "Selected Date", value: formatShortCellDate(selectedDate), tone: "#0f172a", bg: "#ffffff" },
+              { label: "On-Call", value: selectedEffectiveOnCall?.lastName || "None", tone: "#166534", bg: "#ecfdf5" },
+              { label: "Overrides", value: String(overrideCount), tone: "#92400e", bg: "#fffbeb" }
+            ].map((card) => (
+              <div key={card.label} style={{ border: "1px solid rgba(148, 163, 184, 0.22)", borderRadius: "12px", padding: "12px 14px", background: card.bg, display: "grid", gap: "3px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>{card.label}</div>
+                <div style={{ fontSize: card.label === "On-Call" ? "18px" : "26px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>{card.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div id="cid-print-section">
         <div
           style={{
