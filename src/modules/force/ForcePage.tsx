@@ -249,6 +249,9 @@ export function ForcePage({
   const forceHistoryList = forceHistory
     .map((row, originalIndex) => ({ row, originalIndex }))
     .sort((a, b) => b.row.forced_date.localeCompare(a.row.forced_date) || a.row.employee_id.localeCompare(b.row.employee_id))
+  const allVisibleHistoryRowIds = forceHistoryList.map(({ originalIndex }) => String(originalIndex))
+  const allVisibleSelected =
+    forceHistoryList.length > 0 && allVisibleHistoryRowIds.every((id) => selectedHistoryRows.includes(id))
 
   return (
     <div id="force-print-section" style={{ padding: "20px" }}>
@@ -312,7 +315,15 @@ export function ForcePage({
             </div>
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                <button
+                  onClick={() =>
+                    setSelectedHistoryRows((current) => (allVisibleSelected ? current.filter((id) => !allVisibleHistoryRowIds.includes(id)) : [...new Set([...current, ...allVisibleHistoryRowIds])]))
+                  }
+                  disabled={forceHistoryList.length === 0}
+                >
+                  {allVisibleSelected ? "Clear All" : "Select All"}
+                </button>
                 <button
                   onClick={() => void deleteSelectedForceHistoryEntries()}
                   disabled={selectedHistoryRows.length === 0}
