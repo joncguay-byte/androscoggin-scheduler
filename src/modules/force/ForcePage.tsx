@@ -17,6 +17,14 @@ function getForceHistoryRowKey(row: ForceHistoryRow, fallbackIndex: number) {
   return row.id || `${row.employee_id}-${row.forced_date}-${fallbackIndex}`
 }
 
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+  return chunks
+}
+
 export function ForcePage({
   employees,
   overtimeEntries,
@@ -113,11 +121,33 @@ export function ForcePage({
     }
 
     if (nextRows.length === 0) {
-      const { error: deleteError } = await supabase
+      const { data: liveRows, error: liveRowsError } = await supabase
         .from("force_history")
-        .delete()
-        .not("employee_id", "is", null)
-      if (deleteError) throw deleteError
+        .select("*")
+        .order("forced_date", { ascending: false })
+      if (liveRowsError) throw liveRowsError
+
+      const liveForceRows = (liveRows || []) as ForceHistoryRow[]
+      const liveIds = liveForceRows.map((row) => row.id).filter(Boolean) as string[]
+
+      for (const idChunk of chunkArray(liveIds, 100)) {
+        if (idChunk.length === 0) continue
+        const { error: deleteChunkError } = await supabase
+          .from("force_history")
+          .delete()
+          .in("id", idChunk)
+        if (deleteChunkError) throw deleteChunkError
+      }
+
+      const idlessRows = liveForceRows.filter((row) => !row.id)
+      for (const row of idlessRows) {
+        const { error: deleteRowError } = await supabase
+          .from("force_history")
+          .delete()
+          .eq("employee_id", row.employee_id)
+          .eq("forced_date", row.forced_date)
+        if (deleteRowError) throw deleteRowError
+      }
 
       const { data: reloadedRows, error: reloadError } = await supabase
         .from("force_history")
