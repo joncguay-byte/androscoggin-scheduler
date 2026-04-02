@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { printElementById } from "../../lib/print"
 import { buildForceRotationOrder, getEmployeeForceSummary } from "../../lib/force-rotation"
+import { pushAppToast } from "../../stores/ui-store"
 import type { DetailRecord, Employee, ForceHistoryRow, OvertimeEntry } from "../../types"
 
 type ForceListRow = Employee & {
@@ -296,7 +297,11 @@ export function ForcePage({
       const syncedRows = await syncEntireForceHistory(nextRows)
       setForceHistory(syncedRows)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Failed to save force history.")
+      pushAppToast({
+        tone: "error",
+        title: "Force history save failed",
+        message: error instanceof Error ? error.message : "Failed to save force history."
+      })
       return
     }
 
@@ -340,7 +345,11 @@ export function ForcePage({
       const syncedRows = await syncEntireForceHistory(nextRows)
       setForceHistory(syncedRows)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Failed to save force dates.")
+      pushAppToast({
+        tone: "error",
+        title: "Force dates save failed",
+        message: error instanceof Error ? error.message : "Failed to save force dates."
+      })
       return
     }
 
@@ -362,7 +371,11 @@ export function ForcePage({
       const syncedRows = await syncEntireForceHistory(previous.rows)
       setForceHistory(syncedRows)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Failed to undo the force change.")
+      pushAppToast({
+        tone: "error",
+        title: "Force undo failed",
+        message: error instanceof Error ? error.message : "Failed to undo the force change."
+      })
       return
     }
 
@@ -394,7 +407,11 @@ export function ForcePage({
       const syncedRows = await syncEntireForceHistory(nextRows)
       setForceHistory(syncedRows)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Failed to edit force history.")
+      pushAppToast({
+        tone: "error",
+        title: "Force history edit failed",
+        message: error instanceof Error ? error.message : "Failed to edit force history."
+      })
       return
     }
 
@@ -421,7 +438,11 @@ export function ForcePage({
       const syncedRows = await syncEntireForceHistory(nextRows)
       setForceHistory(syncedRows)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Failed to delete force history.")
+      pushAppToast({
+        tone: "error",
+        title: "Force history delete failed",
+        message: error instanceof Error ? error.message : "Failed to delete force history."
+      })
       return
     }
 

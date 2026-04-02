@@ -27,7 +27,7 @@ type OptionProps = {
 }
 
 export const Card = ({ children, className }: CardProps) => (
-  <div className={className} style={{ border: "1px solid #e2e8f0", borderRadius: 16, background: "white" }}>
+  <div className={className} style={{ border: "1px solid #e2e8f0", borderRadius: 16, background: "white", boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)" }}>
     {children}
   </div>
 );
@@ -56,6 +56,7 @@ export const Button = ({ children, className, style, ...props }: ButtonProps) =>
       borderRadius: 8,
       background: "#f8fafc",
       cursor: "pointer",
+      transition: "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease",
       ...style
     }}
   >

@@ -71,7 +71,9 @@ export default function Header({
         padding: compact ? "12px 14px" : "12px 18px",
         boxSizing: "border-box",
         background: style.background,
-        borderColor: colorSettings?.border || undefined
+        borderColor: colorSettings?.border || undefined,
+        boxShadow: compact ? "0 10px 24px rgba(15, 23, 42, 0.12)" : "0 14px 34px rgba(15, 23, 42, 0.12)",
+        transition: "box-shadow 180ms ease, transform 180ms ease"
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: compact ? "10px" : "14px", width: compact ? "100%" : undefined }}>
@@ -167,7 +169,8 @@ export default function Header({
               background: "rgba(255,255,255,0.12)",
               color: style.userColor,
               cursor: "pointer",
-              fontWeight: 700
+              fontWeight: 700,
+              transition: "transform 150ms ease, background 150ms ease, box-shadow 150ms ease"
             }}
           >
             Sign Out

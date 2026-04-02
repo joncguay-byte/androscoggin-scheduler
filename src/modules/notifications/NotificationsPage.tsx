@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { buildDeliveryLink, buildEmailHtmlPreview, buildNotificationDeliveries, canSendDeliveryLive, formatNotificationShiftSummary, sendNotificationDelivery } from "../../lib/notifications"
 import { supabase } from "../../lib/supabase"
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, SelectItem } from "../../components/ui/simple-ui"
+import { pushAppToast } from "../../stores/ui-store"
 import type {
   AppRole,
   Employee,
@@ -545,7 +546,11 @@ export function NotificationsPage({
   async function saveResponse(requestId: string, employeeId: string) {
     const status = responseDrafts[requestId]
     if (!status) {
-      window.alert("Choose Interested or Declined first.")
+      pushAppToast({
+        tone: "warning",
+        title: "Choose a response first",
+        message: "Pick Interested or Declined before saving this overtime response."
+      })
       return
     }
 
@@ -555,7 +560,11 @@ export function NotificationsPage({
       null
 
     if (!sourceRequest) {
-      window.alert("That overtime shift could not be found. Refresh and try again.")
+      pushAppToast({
+        tone: "error",
+        title: "Overtime shift not found",
+        message: "Refresh and try again."
+      })
       return
     }
 
@@ -579,9 +588,19 @@ export function NotificationsPage({
     setSavingResponseIds((current) => current.filter((entry) => entry !== requestId))
 
     if (error) {
-      window.alert(`Failed to save overtime response: ${error.message}`)
+      pushAppToast({
+        tone: "error",
+        title: "Overtime response save failed",
+        message: error.message
+      })
       return
     }
+
+    pushAppToast({
+      tone: "success",
+      title: "Overtime response saved",
+      message: status === "Interested" ? "Your interest was recorded for this shift." : "Your decline was recorded for this shift."
+    })
 
     setOvertimeShiftRequests((current) =>
       current.map((request) => {

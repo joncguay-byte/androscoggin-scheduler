@@ -15,6 +15,7 @@ import { printElementById } from "../../lib/print"
 import { isForceRequired, isShiftCovered } from "../../lib/staffing-engine"
 import { supabase } from "../../lib/supabase"
 import { ensureMonthSchedule } from "../../lib/schedule-generator"
+import { pushAppToast } from "../../stores/ui-store"
 type ScheduleRow = {
   id?: string
   assignment_date: string
@@ -887,12 +888,20 @@ export function PatrolPage({
         )
         setSaving(false)
         setEditingRow(null)
-        alert("Shift saved locally because Supabase did not respond. It will stay visible in the scheduler.")
+        pushAppToast({
+          tone: "warning",
+          title: "Shift saved locally",
+          message: "Supabase did not respond, but the shift remains visible in the scheduler."
+        })
         return
       }
 
       console.error("Failed to save patrol row:", error)
-      alert(`Failed to save shift: ${error.message}`)
+      pushAppToast({
+        tone: "error",
+        title: "Patrol shift save failed",
+        message: error.message
+      })
       setSaving(false)
       return
     }
@@ -990,7 +999,11 @@ export function PatrolPage({
           })
 
     if (validDates.length === 0) {
-      alert("No scheduled dates for that employee were included in the range.")
+      pushAppToast({
+        tone: "warning",
+        title: "No scheduled dates found",
+        message: "No scheduled dates for that employee were included in the selected range."
+      })
       return
     }
 
@@ -1135,7 +1148,11 @@ export function PatrolPage({
     ]).catch((error) => {
       console.error("Failed to batch save patrol time off selection:", error)
       window.setTimeout(() => {
-        alert("Time off saved locally, but the cloud update was delayed. Refresh in a moment if needed.")
+        pushAppToast({
+          tone: "warning",
+          title: "Time off saved locally",
+          message: "The cloud update was delayed. Refresh in a moment if needed."
+        })
       }, 0)
     })
   }
@@ -1158,7 +1175,11 @@ export function PatrolPage({
     if (selectedRows.length === 0) {
       setSaving(false)
       window.setTimeout(() => {
-        alert("Those selected Patrol shifts could not be resolved. Please reselect the boxes and try again.")
+        pushAppToast({
+          tone: "error",
+          title: "Selected patrol shifts could not be resolved",
+          message: "Please reselect the boxes and try again."
+        })
       }, 0)
       return
     }
@@ -1268,7 +1289,11 @@ export function PatrolPage({
     ]).catch((error) => {
       console.error("Failed to batch save overtime builder selection:", error)
       window.setTimeout(() => {
-        alert("Time off saved locally, but the cloud update was delayed. Refresh in a moment if needed.")
+        pushAppToast({
+          tone: "warning",
+          title: "Time off saved locally",
+          message: "The cloud update was delayed. Refresh in a moment if needed."
+        })
       }, 0)
     })
   }
@@ -1289,7 +1314,11 @@ export function PatrolPage({
 
     if (error) {
       console.error("Failed to delete patrol row:", error)
-      alert("Failed to delete shift.")
+      pushAppToast({
+        tone: "error",
+        title: "Patrol shift delete failed",
+        message: "Failed to delete shift."
+      })
       setSaving(false)
       return
     }

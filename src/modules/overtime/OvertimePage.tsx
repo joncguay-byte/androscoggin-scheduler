@@ -7,6 +7,7 @@ import { fetchPatrolScheduleRange, invalidatePatrolScheduleCache } from "../../l
 import { printElementById } from "../../lib/print"
 import { ensureMonthSchedule } from "../../lib/schedule-generator"
 import { supabase } from "../../lib/supabase"
+import { pushAppToast } from "../../stores/ui-store"
 import type {
   AppRole,
   DetailRecord,
@@ -574,7 +575,11 @@ export function OvertimePage({
 
     if (matchingRows.length === 0) {
       setBuilderSelectedShiftKeys([])
-      window.alert("That employee is not scheduled for a Patrol shift on that date.")
+      pushAppToast({
+        tone: "warning",
+        title: "No patrol shift on that date",
+        message: "That employee is not scheduled for a Patrol shift on the selected date."
+      })
       return
     }
 
@@ -629,7 +634,11 @@ export function OvertimePage({
 
   async function saveBuilderTimeOffSelection() {
     if (!builderEmployee || builderSelectedRows.length === 0) {
-      window.alert("Choose an employee and at least one scheduled shift first.")
+      pushAppToast({
+        tone: "warning",
+        title: "No shift selected",
+        message: "Choose an employee and at least one scheduled Patrol shift first."
+      })
       return
     }
 
@@ -733,7 +742,11 @@ export function OvertimePage({
     ]).catch((error) => {
       console.error("Failed to save overtime builder time off selection:", error)
       window.setTimeout(() => {
-        alert("Time off saved locally, but the cloud update was delayed. Refresh in a moment if needed.")
+        pushAppToast({
+          tone: "warning",
+          title: "Saved locally, cloud update delayed",
+          message: "Time off is visible now, but the Supabase update took longer than expected."
+        })
       }, 0)
     })
   }
@@ -756,7 +769,11 @@ export function OvertimePage({
   async function undoLastQueueAction() {
     const snapshot = undoStack[undoStack.length - 1]
     if (!snapshot) {
-      window.alert("No overtime queue action is available to undo.")
+      pushAppToast({
+        tone: "warning",
+        title: "Nothing to undo",
+        message: "No overtime queue action is available to undo."
+      })
       return
     }
 
@@ -1157,7 +1174,11 @@ export function OvertimePage({
       .filter((request) => !targetRequestIds || targetRequestIds.includes(request.id))
 
     if (pendingRequests.length === 0) {
-      window.alert("No open queue shifts are available to auto assign.")
+      pushAppToast({
+        tone: "warning",
+        title: "No open queue shifts",
+        message: "There are no open queue shifts available to auto assign."
+      })
       return
     }
 
@@ -1287,7 +1308,11 @@ export function OvertimePage({
     }
 
     if (assignmentUpdates.size === 0) {
-      window.alert("No eligible interested responders were available for the selected queue shifts.")
+      pushAppToast({
+        tone: "warning",
+        title: "No eligible responders",
+        message: "No eligible interested responders were available for the selected queue shifts."
+      })
       return
     }
 
@@ -1440,7 +1465,11 @@ export function OvertimePage({
 
   function saveManualAssignment(requestId: string) {
     if (!manualAssignEmployeeId) {
-      window.alert("Choose an employee first.")
+      pushAppToast({
+        tone: "warning",
+        title: "Choose an employee first",
+        message: "Select an employee before saving this assignment."
+      })
       return
     }
 
@@ -1448,7 +1477,11 @@ export function OvertimePage({
       assignedHours: manualAssignSplitHours ? manualAssignHours : null
     })
     if (!didAssign) {
-      window.alert("That employee cannot be assigned under the normal rules. Use Manual Assign if you want to override them.")
+      pushAppToast({
+        tone: "warning",
+        title: "Assignment blocked by rules",
+        message: "That employee cannot be assigned under the normal rules. Use Force Assignment to override them."
+      })
       return
     }
 
@@ -1470,7 +1503,11 @@ export function OvertimePage({
 
   function forceManualAssignment(requestId: string) {
     if (!manualAssignEmployeeId) {
-      window.alert("Choose an employee first.")
+      pushAppToast({
+        tone: "warning",
+        title: "Choose an employee first",
+        message: "Select an employee before forcing the assignment."
+      })
       return
     }
 
@@ -1482,7 +1519,11 @@ export function OvertimePage({
       assignedHours: manualAssignSplitHours ? manualAssignHours : null
     })
     if (!didAssign) {
-      window.alert("That shift could not be manually assigned.")
+      pushAppToast({
+        tone: "error",
+        title: "Manual assignment failed",
+        message: "That shift could not be manually assigned."
+      })
       return
     }
 
@@ -1706,7 +1747,11 @@ export function OvertimePage({
 
   function sendSelectedQueueShiftsToNotifications() {
     if (selectedQueueShiftIds.length === 0) {
-      window.alert("Select one or more queue shifts first.")
+      pushAppToast({
+        tone: "warning",
+        title: "No queue shifts selected",
+        message: "Select one or more queue shifts first."
+      })
       return
     }
 
@@ -1720,12 +1765,20 @@ export function OvertimePage({
 
   function confirmSendSelectedQueueShiftsToNotificationsWithRecipients(recipientIds: string[]) {
     if (selectedQueueShiftIds.length === 0) {
-      window.alert("Select one or more queue shifts first.")
+      pushAppToast({
+        tone: "warning",
+        title: "No queue shifts selected",
+        message: "Select one or more queue shifts first."
+      })
       return
     }
 
     if (recipientIds.length === 0) {
-      window.alert("Choose at least one employee to notify.")
+      pushAppToast({
+        tone: "warning",
+        title: "No recipients selected",
+        message: "Choose at least one employee to notify."
+      })
       return
     }
 
@@ -3678,7 +3731,11 @@ export function OvertimePage({
                   <button
                     onClick={() => {
                       if (!recommendedCandidate) {
-                        window.alert("No eligible employee is available to be forced for this shift.")
+                        pushAppToast({
+                          tone: "warning",
+                          title: "No eligible employee available",
+                          message: "No eligible employee is available to be forced for this shift."
+                        })
                         return
                       }
                       void applyForceAssignment(request.id, recommendedCandidate.employee.id)
@@ -3699,7 +3756,11 @@ export function OvertimePage({
                   <button
                     onClick={() => {
                       if (!forceAssignEmployeeId) {
-                        window.alert("Choose an employee first.")
+                        pushAppToast({
+                          tone: "warning",
+                          title: "Choose an employee first",
+                          message: "Select an employee before forcing the shift."
+                        })
                         return
                       }
                       void applyForceAssignment(request.id, forceAssignEmployeeId)

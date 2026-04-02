@@ -9,6 +9,7 @@ import {
   Button,
   Input
 } from "../../components/ui/simple-ui"
+import { pushAppToast } from "../../stores/ui-store"
 import type { Employee, Rank, Team } from "../../types"
 
 type NewEmployeeForm = {
@@ -51,12 +52,20 @@ export default function EmployeesPage({
 
   function addEmployee() {
     if (!newEmployee.firstName.trim() || !newEmployee.lastName.trim()) {
-      window.alert("Enter a first and last name before adding a new employee.")
+      pushAppToast({
+        tone: "warning",
+        title: "Employee name missing",
+        message: "Enter a first and last name before adding a new employee."
+      })
       return
     }
 
     if (!newEmployee.hireDate) {
-      window.alert("Enter a hire date before adding a new employee.")
+      pushAppToast({
+        tone: "warning",
+        title: "Hire date missing",
+        message: "Enter a hire date before adding a new employee."
+      })
       return
     }
 
@@ -78,6 +87,11 @@ export default function EmployeesPage({
       ...currentEmployees
     ])
     setLastAddedEmployeeId(createdEmployee.id)
+    pushAppToast({
+      tone: "success",
+      title: "Employee added",
+      message: `${createdEmployee.firstName} ${createdEmployee.lastName} was added to the staff list.`
+    })
     onEmployeeAdded?.(createdEmployee)
 
     setNewEmployee({

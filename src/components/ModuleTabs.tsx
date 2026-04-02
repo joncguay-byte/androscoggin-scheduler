@@ -106,7 +106,10 @@ export default function ModuleTabs({
               fontWeight: "700",
               fontSize: compact ? "12px" : undefined,
               whiteSpace: "nowrap",
-              flexShrink: 0
+              flexShrink: 0,
+              boxShadow: isActive ? "0 8px 18px rgba(15, 23, 42, 0.14)" : "none",
+              transform: isActive ? "translateY(-1px)" : "translateY(0)",
+              transition: "transform 140ms ease, box-shadow 140ms ease, background 140ms ease, color 140ms ease"
             }}
           >
 

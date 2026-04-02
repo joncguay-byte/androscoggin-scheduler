@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Header from "./components/Header"
 import SummaryCards from "./components/SummaryCards"
 import ModuleTabs from "./components/ModuleTabs"
+import CommandStatusStrip from "./components/CommandStatusStrip"
+import AppToastViewport from "./components/AppToastViewport"
 import LoginPage from "./modules/auth/LoginPage"
 
 import { PatrolPage } from "./modules/patrol/PatrolPage"
@@ -36,7 +38,7 @@ import { parsePatrolWorkbook } from "./lib/patrol-excel-import"
 import type { ParsedPatrolImport } from "./lib/patrol-excel-import"
 import { buildNotificationDeliveries } from "./lib/notifications"
 import { notificationProviderConfigSchema, overtimeBackupSchema } from "./lib/schemas"
-import { useUiStore } from "./stores/ui-store"
+import { pushAppToast, useUiStore } from "./stores/ui-store"
 import type { UiStore } from "./stores/ui-store"
 import { getCurrentProfileRole, getLocalAccessUser, resolveAppRole, resolveDisplayName, signOut } from "./lib/auth"
 import { isForceRequired, isShiftCovered } from "./lib/staffing-engine"
@@ -891,7 +893,11 @@ export default function App() {
       ? await supabase.from("overtime_queue").upsert(queuePayload, { onConflict: "employee_id" })
       : { error: null }
     if (queueResult.error) {
-      window.alert(`Failed to push overtime queue: ${queueResult.error.message}`)
+      pushAppToast({
+        tone: "error",
+        title: "Overtime queue push failed",
+        message: queueResult.error.message
+      })
       appendAuditEvent(
         "Settings",
         "Push Local Overtime Failed",
@@ -905,7 +911,11 @@ export default function App() {
       ? await supabase.from("overtime_shift_requests").upsert(requestsPayload, { onConflict: "id" })
       : { error: null }
     if (requestsResult.error) {
-      window.alert(`Failed to push overtime shifts: ${requestsResult.error.message}`)
+      pushAppToast({
+        tone: "error",
+        title: "Overtime shifts push failed",
+        message: requestsResult.error.message
+      })
       appendAuditEvent(
         "Settings",
         "Push Local Overtime Failed",
@@ -919,7 +929,11 @@ export default function App() {
       ? await supabase.from("overtime_entries").upsert(entriesPayload, { onConflict: "id" })
       : { error: null }
     if (entriesResult.error) {
-      window.alert(`Failed to push overtime entries: ${entriesResult.error.message}`)
+      pushAppToast({
+        tone: "error",
+        title: "Overtime entries push failed",
+        message: entriesResult.error.message
+      })
       appendAuditEvent(
         "Settings",
         "Push Local Overtime Failed",
@@ -929,7 +943,11 @@ export default function App() {
       return
     }
 
-    window.alert("Local overtime queue and shifts were pushed to Supabase successfully.")
+    pushAppToast({
+      tone: "success",
+      title: "Local overtime pushed to Supabase",
+      message: "Queue, shifts, and overtime entries are now live in the shared scheduler."
+    })
     appendAuditEvent(
       "Settings",
       "Pushed Local Overtime To Supabase",
@@ -940,7 +958,11 @@ export default function App() {
   function restoreOvertimeSafetySnapshot() {
     const snapshot = readOvertimeNotificationsSafetySnapshot() as PersistedSchedulerState | null
     if (!snapshot) {
-      window.alert("No overtime safety snapshot is available on this device yet.")
+      pushAppToast({
+        tone: "warning",
+        title: "No safety snapshot on this device",
+        message: "Download a live overtime backup once the module looks right so you always have a recovery point."
+      })
       return
     }
 
@@ -954,7 +976,11 @@ export default function App() {
       setNotificationProviderConfig(snapshot.notificationProviderConfig)
     }
 
-    window.alert("Restored overtime and notification data from the local safety snapshot.")
+    pushAppToast({
+      tone: "success",
+      title: "Safety snapshot restored",
+      message: "Overtime, notifications, and provider settings were restored from this device."
+    })
     appendAuditEvent(
       "Settings",
       "Restored Overtime Safety Snapshot",
@@ -1001,7 +1027,11 @@ export default function App() {
         const raw = typeof reader.result === "string" ? reader.result : ""
         const parsedResult = overtimeBackupSchema.safeParse(JSON.parse(raw))
         if (!parsedResult.success) {
-          window.alert("That backup file is missing required scheduler data or has the wrong format.")
+          pushAppToast({
+            tone: "error",
+            title: "Backup import rejected",
+            message: "That backup file is missing required scheduler data or has the wrong format."
+          })
           return
         }
         const parsed = parsedResult.data
@@ -1026,19 +1056,31 @@ export default function App() {
           notificationProviderConfig: parsed.notificationProviderConfig || buildDefaultNotificationProviderConfig()
         })
 
-        window.alert("Imported overtime backup file successfully.")
+        pushAppToast({
+          tone: "success",
+          title: "Overtime backup imported",
+          message: `Imported ${file.name} successfully.`
+        })
         appendAuditEvent(
           "Settings",
           "Imported Overtime Backup",
           `Imported overtime backup from ${file.name}.`
         )
       } catch {
-        window.alert("That backup file could not be read.")
+        pushAppToast({
+          tone: "error",
+          title: "Backup import failed",
+          message: "That backup file could not be read."
+        })
       }
     }
 
     reader.onerror = () => {
-      window.alert("That backup file could not be read.")
+      pushAppToast({
+        tone: "error",
+        title: "Backup import failed",
+        message: "That backup file could not be read."
+      })
     }
 
       reader.readAsText(file)
@@ -1049,7 +1091,11 @@ export default function App() {
       const parsed = await parsePatrolWorkbook(file, employees, toIsoDate(new Date()))
 
       if (parsed.scheduleRows.length === 0) {
-        window.alert("No Patrol schedule rows were found in that workbook.")
+        pushAppToast({
+          tone: "warning",
+          title: "No patrol rows found",
+          message: "That workbook did not contain any patrol schedule rows to import."
+        })
         return
       }
       setPatrolImportPreview({
@@ -1058,7 +1104,11 @@ export default function App() {
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown import error"
-      window.alert(`That Patrol workbook could not be imported: ${message}`)
+      pushAppToast({
+        tone: "error",
+        title: "Patrol workbook import failed",
+        message
+      })
     }
   }
 
@@ -1084,7 +1134,11 @@ export default function App() {
       .upsert(schedulePayload, { onConflict: "assignment_date,shift_type,position_code" })
 
     if (scheduleError) {
-      window.alert(`Could not import the Patrol workbook into patrol_schedule: ${scheduleError.message}`)
+      pushAppToast({
+        tone: "error",
+        title: "Patrol schedule import failed",
+        message: scheduleError.message
+      })
       return
     }
 
@@ -1096,7 +1150,11 @@ export default function App() {
         .lte("assignment_date", parsed.importedDateRange.end)
 
       if (deleteOverridesError) {
-        window.alert(`Patrol schedule imported, but old live overrides could not be cleared: ${deleteOverridesError.message}`)
+        pushAppToast({
+          tone: "error",
+          title: "Patrol overrides cleanup failed",
+          message: deleteOverridesError.message
+        })
         return
       }
     }
@@ -1122,7 +1180,11 @@ export default function App() {
         )
 
       if (overrideError) {
-        window.alert(`Patrol schedule imported, but live Patrol overrides could not be saved: ${overrideError.message}`)
+        pushAppToast({
+          tone: "error",
+          title: "Patrol overrides import failed",
+          message: overrideError.message
+        })
         return
       }
     }
@@ -1163,9 +1225,11 @@ export default function App() {
       `Imported ${parsed.scheduleRows.length} patrol rows and ${parsed.overrideRows.length} live overrides from ${fileName}.`
     )
 
-    window.alert(
-      "Imported Patrol workbook successfully."
-    )
+    pushAppToast({
+      tone: "success",
+      title: "Patrol workbook imported",
+      message: `${parsed.scheduleRows.length} schedule rows and ${parsed.overrideRows.length} live override rows were loaded.`
+    })
   }
 
   function applyOvertimeNotificationsSyncData(data: Awaited<ReturnType<typeof loadSupabaseOvertimeNotificationsState>>["data"]) {
@@ -2329,6 +2393,16 @@ export default function App() {
           padding: isMobileLayout ? "12px" : "18px"
         }}
       >
+        <style>{`
+          @keyframes toast-slide-in {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes module-fade-in {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
         <Header
           variant={layoutVariant}
           title={settings.departmentTitle}
@@ -2353,46 +2427,18 @@ export default function App() {
           }
         />
 
-        {buildSyncStatus === "update_available" && (
-          <div
-            style={{
-              marginTop: "12px",
-              marginBottom: "14px",
-              borderRadius: "12px",
-              padding: isMobileLayout ? "12px" : "12px 14px",
-              border: "1px solid #f59e0b",
-              background: "#fffbeb",
-              color: "#92400e",
-              display: "flex",
-              flexDirection: isMobileLayout ? "column" : "row",
-              alignItems: isMobileLayout ? "stretch" : "center",
-              justifyContent: "space-between",
-              gap: "10px",
-              fontSize: "13px",
-              fontWeight: 700
-            }}
-          >
-            <div>
-              A newer scheduler update is ready
-              {deployedBuildId ? ` (${deployedBuildId.replace("T", " ").slice(0, 16)})` : ""}.
-              Reload this page to use the latest build.
-            </div>
-
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                border: "none",
-                borderRadius: "999px",
-                padding: "8px 14px",
-                background: "#b45309",
-                color: "#ffffff",
-                fontWeight: 700,
-                cursor: "pointer",
-                minWidth: isMobileLayout ? undefined : "120px"
-              }}
-            >
-              Reload Now
-            </button>
+        {!isMobileLayout && (
+          <div style={{ marginTop: "14px" }}>
+            <CommandStatusStrip
+              buildSyncStatus={buildSyncStatus}
+              deployedBuildId={deployedBuildId}
+              appStateSyncStatus={appStateSyncStatus}
+              currentUserRole={currentUserRole}
+              patrolOverridesSyncReady={patrolOverridesSyncReady}
+              overtimeNotificationsSyncReady={overtimeNotificationsSyncReady}
+              auditEvents={auditEvents}
+              onReload={() => window.location.reload()}
+            />
           </div>
         )}
 
@@ -2426,21 +2472,6 @@ export default function App() {
                 : undefined
             }
           />
-        </div>}
-
-        {!isMobileLayout && <div
-          style={{
-            marginBottom: "14px",
-            borderRadius: "12px",
-            padding: "10px 12px",
-            border: appStateSyncStatus.mode === "connected" ? "1px solid #bfdbfe" : "1px solid #fcd34d",
-            background: appStateSyncStatus.mode === "connected" ? "#eff6ff" : "#fffbeb",
-            color: appStateSyncStatus.mode === "connected" ? "#1d4ed8" : "#92400e",
-            fontSize: "13px",
-            fontWeight: 600
-          }}
-        >
-          {appStateSyncStatus.message}
         </div>}
 
         {!isMobileLayout && activeSummaryCard === "staffing_alerts" && (
@@ -2510,6 +2541,12 @@ export default function App() {
           }
         />
 
+        <div
+          style={{
+            animation: "module-fade-in 180ms ease-out",
+            transformOrigin: "top center"
+          }}
+        >
         {activeModule === "command" && (
           <CommandPage
             currentUserRole={currentUserRole}
@@ -2705,7 +2742,9 @@ export default function App() {
             }))}
           />
         )}
+        </div>
       </div>
+      <AppToastViewport />
     </div>
 
   )
