@@ -474,8 +474,8 @@ export function ForcePage({
       <div
         style={{
           display: "grid",
-          gap: "14px",
-          padding: "18px",
+          gap: "8px",
+          padding: "10px 12px",
           background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
           borderRadius: "16px",
           border: "1px solid #dbeafe"
@@ -490,14 +490,14 @@ export function ForcePage({
             flexWrap: "wrap"
           }}
         >
-          <div style={{ display: "grid", gap: "4px" }}>
-            <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1d4ed8" }}>
+          <div style={{ display: "grid", gap: "2px" }}>
+            <div style={{ fontSize: "9px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "#1d4ed8" }}>
               Force Operations
             </div>
-            <div style={{ fontSize: "28px", lineHeight: 1.05, fontWeight: 800, color: "#0f172a" }}>
+            <div style={{ fontSize: "18px", lineHeight: 1.05, fontWeight: 800, color: "#0f172a" }}>
               Force Rotation
             </div>
-            <div style={{ fontSize: "13px", color: "#475569" }}>
+            <div style={{ fontSize: "11px", color: "#475569", lineHeight: 1.3 }}>
               Track the live force queue, keep history clean, and manage overrides without losing the rotation.
             </div>
           </div>
@@ -545,14 +545,14 @@ export function ForcePage({
                 gap: "3px"
               }}
             >
-              <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>
-                {card.label}
-              </div>
-              <div style={{ fontSize: card.label === "Next Candidate" || card.label === "Recent Force" ? "17px" : "26px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>
-                {card.value}
-              </div>
-            </div>
-          ))}
+                  <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>
+                    {card.label}
+                  </div>
+                  <div style={{ fontSize: card.label === "Next Candidate" || card.label === "Recent Force" ? "13px" : "18px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>
+                    {card.value}
+                  </div>
+                </div>
+              ))}
         </div>
       </div>
 

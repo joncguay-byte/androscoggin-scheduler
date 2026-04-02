@@ -347,22 +347,22 @@ export function DetailPage({
             <div
               style={{
                 display: "grid",
-                gap: "14px",
-                padding: "18px",
+                gap: "8px",
+                padding: "10px 12px",
                 background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
                 borderRadius: "16px",
                 border: "1px solid #dbeafe"
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
-                <div style={{ display: "grid", gap: "4px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1d4ed8" }}>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <div style={{ fontSize: "9px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "#1d4ed8" }}>
                     Detail Operations
                   </div>
-                  <div style={{ fontSize: "28px", lineHeight: 1.05, fontWeight: 800, color: "#0f172a" }}>
+                  <div style={{ fontSize: "18px", lineHeight: 1.05, fontWeight: 800, color: "#0f172a" }}>
                     Detail Rotation Board
                   </div>
-                  <div style={{ fontSize: "13px", color: "#475569" }}>
+                  <div style={{ fontSize: "11px", color: "#475569", lineHeight: 1.3 }}>
                     Assign fairly, keep the queue moving, and track detail outcomes in one board.
                   </div>
                 </div>
@@ -396,7 +396,7 @@ export function DetailPage({
                     <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>
                       {card.label}
                     </div>
-                    <div style={{ fontSize: card.label === "Next Up" ? "17px" : "26px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>
+                    <div style={{ fontSize: card.label === "Next Up" ? "13px" : "18px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>
                       {card.value}
                     </div>
                   </div>
