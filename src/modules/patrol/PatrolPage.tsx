@@ -1744,6 +1744,36 @@ const next = ranking[0]
   const weekdayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
   const labelColumnWidth = view === "day" ? "84px" : "90px"
   const stickyWeekHeaderTop = multiDatePickerSelection || overtimeBuilderSelection ? "108px" : "8px"
+  const visiblePatrolCells = dates.flatMap((date) =>
+    (["Days", "Nights"] as const).flatMap((shiftType) =>
+      patrolPositions
+        .map((position) => cellFor(date, position.code, shiftType))
+        .filter((row): row is ScheduleRow => Boolean(row))
+    )
+  )
+  const openShiftCount = visiblePatrolCells.filter(
+    (row) => row.status === "Open Shift" || !row.employee_id
+  ).length
+  const timeOffCount = visiblePatrolCells.filter((row) => isProblemStatus(row.status)).length
+  const replacementCount = visiblePatrolCells.filter((row) => !!row.replacement_employee_id).length
+  const forceRiskCount = visiblePatrolCells.filter((row) => {
+    const rowDate = new Date(`${row.assignment_date}T12:00:00`)
+    const shiftRows = patrolPositions
+      .map((position) => cellFor(rowDate, position.code, row.shift_type))
+      .filter((shiftRow): shiftRow is ScheduleRow => Boolean(shiftRow))
+
+    return isForceRequired(row, shiftRows) && !isShiftCovered(row) && row.status !== "Open Shift"
+  }).length
+  const supervisorAlertCount = visiblePatrolCells.filter((row) => {
+    if (!row.position_code.startsWith("SUP")) return false
+
+    const rowDate = new Date(`${row.assignment_date}T12:00:00`)
+    const shiftRows = patrolPositions
+      .map((position) => cellFor(rowDate, position.code, row.shift_type))
+      .filter((shiftRow): shiftRow is ScheduleRow => Boolean(shiftRow))
+
+    return isForceRequired(row, shiftRows) && !isShiftCovered(row)
+  }).length
 
   return (
     <>
@@ -1752,22 +1782,122 @@ const next = ranking[0]
         style={{
           width: "100%",
           background: colorSettings?.cardBackground || "#fff",
-          borderRadius: "10px"
+          borderRadius: "16px",
+          border: `1px solid ${colorSettings?.border || "#dbeafe"}`,
+          boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)",
+          overflow: "hidden"
         }}
       >
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "8px",
-            gap: "12px",
-            flexWrap: "wrap"
+            display: "grid",
+            gap: "14px",
+            padding: "18px 18px 14px",
+            background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
+            borderBottom: `1px solid ${colorSettings?.border || "#dbeafe"}`
           }}
         >
-          <h2 style={{ margin: 0 }}>Patrol Schedule</h2>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: "12px",
+              flexWrap: "wrap"
+            }}
+          >
+            <div style={{ display: "grid", gap: "4px" }}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: "#1d4ed8"
+                }}
+              >
+                Patrol Operations
+              </div>
+              <h2 style={{ margin: 0, fontSize: "28px", lineHeight: 1.05 }}>Patrol Schedule</h2>
+              <div style={{ fontSize: "13px", color: "#475569" }}>
+                Live roster, open coverage, and replacement visibility in one board.
+              </div>
+            </div>
 
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              <button data-no-print="true" onClick={prevMonth} style={{ minWidth: "40px" }}>
+                ←
+              </button>
+              <button data-no-print="true" onClick={goToday}>
+                Today
+              </button>
+              <button data-no-print="true" onClick={nextMonth} style={{ minWidth: "40px" }}>
+                →
+              </button>
+              <button
+                data-no-print="true"
+                onClick={() => printElementById("patrol-print-section", "Patrol Schedule")}
+              >
+                Print Patrol
+              </button>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gap: "10px"
+            }}
+          >
+            {[
+              { label: "Open Shifts", value: openShiftCount, tone: "#b91c1c", bg: "#fef2f2" },
+              { label: "Time Off", value: timeOffCount, tone: "#92400e", bg: "#fffbeb" },
+              { label: "Replacements", value: replacementCount, tone: "#1d4ed8", bg: "#eff6ff" },
+              { label: "Force Risk", value: forceRiskCount, tone: "#7c3aed", bg: "#f5f3ff" },
+              { label: "Supervisor Alerts", value: supervisorAlertCount, tone: "#be123c", bg: "#fff1f2" }
+            ].map((card) => (
+              <div
+                key={card.label}
+                style={{
+                  border: "1px solid rgba(148, 163, 184, 0.22)",
+                  borderRadius: "12px",
+                  padding: "12px 14px",
+                  background: card.bg,
+                  display: "grid",
+                  gap: "3px"
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 800,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: "#64748b"
+                  }}
+                >
+                  {card.label}
+                </div>
+                <div style={{ fontSize: "26px", lineHeight: 1, fontWeight: 800, color: card.tone }}>
+                  {card.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              flexWrap: "wrap",
+              alignItems: "center",
+              padding: "10px 12px",
+              borderRadius: "12px",
+              background: "rgba(255,255,255,0.8)",
+              border: "1px solid rgba(148, 163, 184, 0.2)"
+            }}
+          >
             <Select
               value={String(baseDate.getMonth())}
               onValueChange={(value) => setMonth(Number(value))}
@@ -1809,16 +1939,10 @@ const next = ranking[0]
               style={{
                 padding: "6px 8px",
                 border: "1px solid #cbd5e1",
-                borderRadius: "6px"
+                borderRadius: "8px",
+                background: "#ffffff"
               }}
             />
-
-            <button
-              data-no-print="true"
-              onClick={() => printElementById("patrol-print-section", "Patrol Schedule")}
-            >
-              Print Patrol
-            </button>
 
           </div>
 
@@ -1833,11 +1957,13 @@ const next = ranking[0]
           style={{
             textAlign: "center",
             fontWeight: 700,
-            background: "#e2e8f0",
+            background: "#0f172a",
+            color: "#f8fafc",
             border: `1px solid ${colorSettings?.border || "#e2e8f0"}`,
-            padding: "10px",
-            borderRadius: "6px",
-            marginBottom: "6px"
+            padding: "12px",
+            borderRadius: "0",
+            marginBottom: "10px",
+            letterSpacing: "0.02em"
           }}
         >
           {rangeTitle}
