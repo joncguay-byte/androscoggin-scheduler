@@ -468,35 +468,35 @@ export function ReportsPage({
           <div
             style={{
               display: "grid",
-              gap: "14px",
-              padding: "18px",
+              gap: "8px",
+              padding: "10px 12px",
               background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
               borderRadius: "16px",
               border: "1px solid #dbeafe"
             }}
           >
-            <div style={{ display: "grid", gap: "4px" }}>
-              <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1d4ed8" }}>
+            <div style={{ display: "grid", gap: "2px" }}>
+              <div style={{ fontSize: "9px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "#1d4ed8" }}>
                 Reports Center
               </div>
-              <div style={{ fontSize: "28px", fontWeight: 800, lineHeight: 1.05, color: "#0f172a" }}>
+              <div style={{ fontSize: "18px", fontWeight: 800, lineHeight: 1.05, color: "#0f172a" }}>
                 Reports And Analytics
               </div>
-              <div style={{ fontSize: "13px", color: "#475569" }}>
+              <div style={{ fontSize: "11px", color: "#475569", lineHeight: 1.3 }}>
                 Review overtime, force history, and staffing data with cleaner filters and live totals.
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(115px, 1fr))", gap: "6px" }}>
               {[
                 { label: "Report Type", value: reportType, tone: "#1d4ed8", bg: "#eff6ff" },
                 { label: "Filtered Hours", value: totals.totalHours.toFixed(1), tone: "#166534", bg: "#ecfdf5" },
                 { label: "Employees", value: String(totals.employeeCount), tone: "#7c3aed", bg: "#f5f3ff" },
                 { label: "CID On-Call", value: cidOnCallName || "None", tone: "#92400e", bg: "#fffbeb" }
               ].map((card) => (
-                <div key={card.label} style={{ border: "1px solid rgba(148, 163, 184, 0.22)", borderRadius: "12px", padding: "12px 14px", background: card.bg, display: "grid", gap: "3px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>{card.label}</div>
-                  <div style={{ fontSize: card.label === "CID On-Call" || card.label === "Report Type" ? "18px" : "26px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>{card.value}</div>
+                <div key={card.label} style={{ border: "1px solid rgba(148, 163, 184, 0.22)", borderRadius: "10px", padding: "7px 9px", background: card.bg, display: "grid", gap: "2px" }}>
+                  <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b" }}>{card.label}</div>
+                  <div style={{ fontSize: card.label === "CID On-Call" || card.label === "Report Type" ? "13px" : "18px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>{card.value}</div>
                 </div>
               ))}
             </div>
