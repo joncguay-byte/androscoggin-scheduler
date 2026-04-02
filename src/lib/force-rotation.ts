@@ -13,8 +13,6 @@ function isExcludedFromForceRotation(employee: Employee) {
 function isEligibleForForceRotation(employee: Employee) {
   if (employee.status !== "Active") return false
   if (isExcludedFromForceRotation(employee)) return false
-  if (employee.team === "CID" || employee.team === "SRO" || employee.team === "None") return false
-  if (employee.rank === "Detective") return false
   return true
 }
 
