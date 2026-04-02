@@ -127,6 +127,12 @@ export function DetailPage({
   onAuditEvent
 }: DetailPageProps) {
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
+  const [undoStack, setUndoStack] = useState<Array<{
+    detailRecords: DetailRecord[]
+    detailQueueEvents: DetailQueueEvent[]
+    detailQueueIds: string[]
+    message: string
+  }>>([])
   const [draft, setDraft] = useState<DetailDraft>({
     date: "",
     description: "",
@@ -174,6 +180,18 @@ export function DetailPage({
     setDetailQueueEvents((current) => [event, ...current])
   }
 
+  function pushUndoSnapshot() {
+    setUndoStack((current) => [
+      {
+        detailRecords: detailRecords.map((record) => ({ ...record })),
+        detailQueueEvents: detailQueueEvents.map((event) => ({ ...event })),
+        detailQueueIds: [...detailQueueIds],
+        message
+      },
+      ...current
+    ].slice(0, 20))
+  }
+
   function assignNextDetail() {
     const hours = Number(draft.hours)
 
@@ -186,6 +204,8 @@ export function DetailPage({
       setMessage("No eligible employee is available for that detail date.")
       return
     }
+
+    pushUndoSnapshot()
 
     const detail: DetailRecord = {
       id: crypto.randomUUID(),
@@ -231,6 +251,8 @@ export function DetailPage({
       return
     }
 
+    pushUndoSnapshot()
+
     pushQueueEvent(
       buildEvent(
         "Skipped",
@@ -250,6 +272,8 @@ export function DetailPage({
   function updateDetailStatus(detailId: string, status: DetailRecordStatus) {
     const detail = detailRecords.find((record) => record.id === detailId)
     if (!detail) return
+
+    pushUndoSnapshot()
 
     setDetailRecords((current) =>
       current.map((record) =>
@@ -279,6 +303,8 @@ export function DetailPage({
     const detail = detailRecords.find((record) => record.id === detailId)
     if (!detail) return
 
+    pushUndoSnapshot()
+
     setDetailRecords((current) => current.filter((record) => record.id !== detailId))
     pushQueueEvent(
       buildEvent("Deleted", detail.employeeId, detail.date, detail.description, detail.id)
@@ -288,6 +314,22 @@ export function DetailPage({
       "Detail Deleted",
       `Deleted detail for ${employee ? `${employee.firstName} ${employee.lastName}` : "Unknown employee"}.`,
       `${detail.date} | ${detail.description}`
+    )
+  }
+
+  function undoLastDetailAction() {
+    const previous = undoStack[0]
+    if (!previous) return
+
+    setUndoStack((current) => current.slice(1))
+    setDetailRecords(previous.detailRecords)
+    setDetailQueueEvents(previous.detailQueueEvents)
+    setDetailQueueIds(previous.detailQueueIds)
+    setMessage(previous.message)
+
+    onAuditEvent?.(
+      "Detail Undo",
+      "Undid the previous detail action."
     )
   }
 
@@ -533,6 +575,9 @@ export function DetailPage({
                 <div style={{ display: "grid", gap: "8px" }}>
                   <Button onClick={assignNextDetail}>
                     Assign Next Detail
+                  </Button>
+                  <Button onClick={undoLastDetailAction} disabled={undoStack.length === 0}>
+                    Undo
                   </Button>
                   <Button onClick={skipNextForDate}>
                     Log Skip And Keep Position
