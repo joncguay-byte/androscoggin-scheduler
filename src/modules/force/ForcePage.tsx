@@ -81,7 +81,7 @@ export function ForcePage({
   async function syncEntireForceHistory(nextRows: ForceHistoryRow[]) {
     const currentRows = forceHistory
 
-    if (currentRows.some((row) => !row.id) || nextRows.some((row) => !row.id)) {
+    if (currentRows.some((row) => !row.id)) {
       const { error: resetError } = await supabase
         .from("force_history")
         .delete()
