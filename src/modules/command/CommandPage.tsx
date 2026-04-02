@@ -226,6 +226,35 @@ export function CommandPage({
     () => auditEvents.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6),
     [auditEvents]
   )
+  const commandPulse = useMemo(
+    () => [
+      {
+        label: "Coverage Pressure",
+        value: upcomingOpenShifts.length + staffingAlerts.length,
+        tone: upcomingOpenShifts.length + staffingAlerts.length > 0 ? "#b91c1c" : "#166534",
+        background: upcomingOpenShifts.length + staffingAlerts.length > 0 ? "#fff1f2" : "#f0fdf4"
+      },
+      {
+        label: "Force Queue Depth",
+        value: forceSnapshot.length,
+        tone: "#7c3aed",
+        background: "#f5f3ff"
+      },
+      {
+        label: "Recent Queue Moves",
+        value: recentDetailActivity.length,
+        tone: "#1d4ed8",
+        background: "#eff6ff"
+      },
+      {
+        label: "Audit Activity",
+        value: recentChanges.length,
+        tone: "#92400e",
+        background: "#fffbeb"
+      }
+    ],
+    [forceSnapshot.length, recentChanges.length, recentDetailActivity.length, staffingAlerts.length, upcomingOpenShifts.length]
+  )
 
   const employeeMap = useMemo(() => new Map(employees.map((employee) => [employee.id, employee])), [employees])
 
@@ -367,6 +396,34 @@ export function CommandPage({
             </div>
           </div>
         </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "12px"
+        }}
+      >
+        {commandPulse.map((item) => (
+          <div
+            key={item.label}
+            style={{
+              border: "1px solid #dbe3ee",
+              borderRadius: "16px",
+              background: item.background,
+              padding: "14px 16px",
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)"
+            }}
+          >
+            <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>
+              {item.label}
+            </div>
+            <div style={{ marginTop: "8px", fontSize: "28px", fontWeight: 900, lineHeight: 1, color: item.tone }}>
+              {item.value}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.95fr", gap: "18px" }}>
