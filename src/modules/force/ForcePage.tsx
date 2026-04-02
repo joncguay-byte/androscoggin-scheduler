@@ -110,10 +110,13 @@ export function ForcePage({
     }
 
     if (nextRows.length === 0) {
-      await supabase
-        .from("force_history")
-        .delete()
-        .not("id", "is", null)
+      const currentIds = currentRows.map((row) => row.id).filter(Boolean) as string[]
+      if (currentIds.length > 0) {
+        await supabase
+          .from("force_history")
+          .delete()
+          .in("id", currentIds)
+      }
 
       return []
     }
