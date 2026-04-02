@@ -27,36 +27,45 @@ export function buildForceRotationOrder(employees: Employee[], forceHistory: For
   return employees
     .filter(isEligibleForForceRotation)
     .sort((a, b) => {
-    const aDates = getEmployeeForceDates(forceHistory, a.id)
-    const bDates = getEmployeeForceDates(forceHistory, b.id)
-    const aLast = aDates[0] || ""
-    const bLast = bDates[0] || ""
+      const aDates = getEmployeeForceDates(forceHistory, a.id)
+      const bDates = getEmployeeForceDates(forceHistory, b.id)
+      const aTotal = aDates.length
+      const bTotal = bDates.length
+      const aLast = aDates[0] || ""
+      const bLast = bDates[0] || ""
 
-    if (a.hireDate !== b.hireDate) {
-      return a.hireDate.localeCompare(b.hireDate)
-    }
+      if (aTotal === 0 && bTotal === 0) {
+        if (a.hireDate !== b.hireDate) {
+          return a.hireDate.localeCompare(b.hireDate)
+        }
+        return `${a.lastName},${a.firstName}`.localeCompare(`${b.lastName},${b.firstName}`)
+      }
 
-    if (!aLast && !bLast) {
+      if (aTotal === 0) return -1
+      if (bTotal === 0) return 1
+
+      if (aTotal !== bTotal) {
+        return aTotal - bTotal
+      }
+
+      if (aLast !== bLast) {
+        return aLast.localeCompare(bLast)
+      }
+
+      const aPrevious = aDates[1] || ""
+      const bPrevious = bDates[1] || ""
+      if (aPrevious !== bPrevious) {
+        if (!aPrevious) return -1
+        if (!bPrevious) return 1
+        return aPrevious.localeCompare(bPrevious)
+      }
+
+      if (a.hireDate !== b.hireDate) {
+        return a.hireDate.localeCompare(b.hireDate)
+      }
+
       return `${a.lastName},${a.firstName}`.localeCompare(`${b.lastName},${b.firstName}`)
-    }
-
-    if (!aLast) return -1
-    if (!bLast) return 1
-
-    if (aLast !== bLast) {
-      return aLast.localeCompare(bLast)
-    }
-
-    const aPrevious = aDates[1] || ""
-    const bPrevious = bDates[1] || ""
-    if (aPrevious !== bPrevious) {
-      if (!aPrevious) return -1
-      if (!bPrevious) return 1
-      return aPrevious.localeCompare(bPrevious)
-    }
-
-    return `${a.lastName},${a.firstName}`.localeCompare(`${b.lastName},${b.firstName}`)
-  })
+    })
 }
 
 export function getEmployeeForceSummary(forceHistory: ForceHistoryRow[], employeeId: string) {
