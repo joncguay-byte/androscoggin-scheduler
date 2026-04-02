@@ -1791,8 +1791,8 @@ const next = ranking[0]
         <div
           style={{
             display: "grid",
-            gap: "14px",
-            padding: "18px 18px 14px",
+            gap: "8px",
+            padding: "10px 12px 8px",
             background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
             borderBottom: `1px solid ${colorSettings?.border || "#dbeafe"}`
           }}
@@ -1806,37 +1806,38 @@ const next = ranking[0]
               flexWrap: "wrap"
             }}
           >
-            <div style={{ display: "grid", gap: "4px" }}>
+            <div style={{ display: "grid", gap: "2px" }}>
               <div
                 style={{
-                  fontSize: "11px",
+                  fontSize: "9px",
                   fontWeight: 800,
-                  letterSpacing: "0.14em",
+                  letterSpacing: "0.12em",
                   textTransform: "uppercase",
                   color: "#1d4ed8"
                 }}
               >
                 Patrol Operations
               </div>
-              <h2 style={{ margin: 0, fontSize: "28px", lineHeight: 1.05 }}>Patrol Schedule</h2>
-              <div style={{ fontSize: "13px", color: "#475569" }}>
+              <h2 style={{ margin: 0, fontSize: "18px", lineHeight: 1.05 }}>Patrol Schedule</h2>
+              <div style={{ fontSize: "11px", color: "#475569" }}>
                 Live roster, open coverage, and replacement visibility in one board.
               </div>
             </div>
 
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-              <button data-no-print="true" onClick={prevMonth} style={{ minWidth: "40px" }}>
+              <button data-no-print="true" onClick={prevMonth} style={{ minWidth: "34px", padding: "5px 8px" }}>
                 ←
               </button>
-              <button data-no-print="true" onClick={goToday}>
+              <button data-no-print="true" onClick={goToday} style={{ padding: "5px 8px" }}>
                 Today
               </button>
-              <button data-no-print="true" onClick={nextMonth} style={{ minWidth: "40px" }}>
+              <button data-no-print="true" onClick={nextMonth} style={{ minWidth: "34px", padding: "5px 8px" }}>
                 →
               </button>
               <button
                 data-no-print="true"
                 onClick={() => printElementById("patrol-print-section", "Patrol Schedule")}
+                style={{ padding: "5px 8px" }}
               >
                 Print Patrol
               </button>
@@ -1846,8 +1847,8 @@ const next = ranking[0]
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: "10px"
+              gridTemplateColumns: "repeat(auto-fit, minmax(115px, 1fr))",
+              gap: "6px"
             }}
           >
             {[
@@ -1861,25 +1862,25 @@ const next = ranking[0]
                 key={card.label}
                 style={{
                   border: "1px solid rgba(148, 163, 184, 0.22)",
-                  borderRadius: "12px",
-                  padding: "12px 14px",
+                  borderRadius: "10px",
+                  padding: "7px 9px",
                   background: card.bg,
                   display: "grid",
-                  gap: "3px"
+                  gap: "2px"
                 }}
               >
                 <div
                   style={{
-                    fontSize: "11px",
+                    fontSize: "9px",
                     fontWeight: 800,
                     textTransform: "uppercase",
-                    letterSpacing: "0.08em",
+                    letterSpacing: "0.06em",
                     color: "#64748b"
                   }}
                 >
                   {card.label}
                 </div>
-                <div style={{ fontSize: "26px", lineHeight: 1, fontWeight: 800, color: card.tone }}>
+                <div style={{ fontSize: "18px", lineHeight: 1, fontWeight: 800, color: card.tone }}>
                   {card.value}
                 </div>
               </div>
@@ -1889,11 +1890,11 @@ const next = ranking[0]
           <div
             style={{
               display: "flex",
-              gap: "8px",
+              gap: "6px",
               flexWrap: "wrap",
               alignItems: "center",
-              padding: "10px 12px",
-              borderRadius: "12px",
+              padding: "6px 8px",
+              borderRadius: "10px",
               background: "rgba(255,255,255,0.8)",
               border: "1px solid rgba(148, 163, 184, 0.2)"
             }}
