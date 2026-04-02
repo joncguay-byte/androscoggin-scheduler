@@ -1,5 +1,15 @@
 import type { Employee, ForceHistoryRow } from "../types"
 
+const EXCLUDED_FORCE_ROTATION_NAMES = new Set([
+  "delbert mason",
+  "jason chaloux",
+  "robert murphy"
+])
+
+function isExcludedFromForceRotation(employee: Employee) {
+  return EXCLUDED_FORCE_ROTATION_NAMES.has(`${employee.firstName} ${employee.lastName}`.trim().toLowerCase())
+}
+
 function getEmployeeForceDates(forceHistory: ForceHistoryRow[], employeeId: string) {
   return forceHistory
     .filter((row) => row.employee_id === employeeId)
@@ -8,14 +18,20 @@ function getEmployeeForceDates(forceHistory: ForceHistoryRow[], employeeId: stri
 }
 
 export function buildForceRotationOrder(employees: Employee[], forceHistory: ForceHistoryRow[]) {
-  return [...employees].sort((a, b) => {
+  return employees
+    .filter((employee) => !isExcludedFromForceRotation(employee))
+    .sort((a, b) => {
     const aDates = getEmployeeForceDates(forceHistory, a.id)
     const bDates = getEmployeeForceDates(forceHistory, b.id)
     const aLast = aDates[0] || ""
     const bLast = bDates[0] || ""
 
-    if (!aLast && !bLast) {
+    if (a.hireDate !== b.hireDate) {
       return a.hireDate.localeCompare(b.hireDate)
+    }
+
+    if (!aLast && !bLast) {
+      return `${a.lastName},${a.firstName}`.localeCompare(`${b.lastName},${b.firstName}`)
     }
 
     if (!aLast) return -1
@@ -33,7 +49,7 @@ export function buildForceRotationOrder(employees: Employee[], forceHistory: For
       return aPrevious.localeCompare(bPrevious)
     }
 
-    return a.hireDate.localeCompare(b.hireDate)
+    return `${a.lastName},${a.firstName}`.localeCompare(`${b.lastName},${b.firstName}`)
   })
 }
 
