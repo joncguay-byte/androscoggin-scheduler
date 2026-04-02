@@ -168,6 +168,12 @@ export function DetailPage({
     () => [...detailQueueEvents].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [detailQueueEvents]
   )
+  const assignedCount = detailRecords.filter((detail) => detail.status === "Assigned").length
+  const acceptedCount = detailRecords.filter((detail) => detail.status === "Accepted").length
+  const refusedCount = detailRecords.filter((detail) => detail.status === "Refused").length
+  const totalAcceptedHours = detailRecords
+    .filter((detail) => detail.status === "Accepted")
+    .reduce((total, detail) => total + detail.hours, 0)
 
   function updateDraft<K extends keyof DetailDraft>(key: K, value: DetailDraft[K]) {
     setDraft((current) => ({
@@ -337,6 +343,70 @@ export function DetailPage({
     <div id="detail-print-section" style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr", gap: "18px" }}>
       <div style={{ display: "grid", gap: "18px" }}>
         <Card>
+          <CardContent>
+            <div
+              style={{
+                display: "grid",
+                gap: "14px",
+                padding: "18px",
+                background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
+                borderRadius: "16px",
+                border: "1px solid #dbeafe"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div style={{ display: "grid", gap: "4px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1d4ed8" }}>
+                    Detail Operations
+                  </div>
+                  <div style={{ fontSize: "28px", lineHeight: 1.05, fontWeight: 800, color: "#0f172a" }}>
+                    Detail Rotation Board
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#475569" }}>
+                    Assign fairly, keep the queue moving, and track detail outcomes in one board.
+                  </div>
+                </div>
+                <Button
+                  data-no-print="true"
+                  onClick={() => printElementById("detail-print-section", "Detail Rotation Board")}
+                >
+                  Print Detail
+                </Button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
+                {[
+                  { label: "Next Up", value: nextEligibleEmployee ? `${nextEligibleEmployee.lastName}, ${nextEligibleEmployee.firstName}` : "Waiting", tone: "#1d4ed8", bg: "#eff6ff" },
+                  { label: "Assigned", value: String(assignedCount), tone: "#7c3aed", bg: "#f5f3ff" },
+                  { label: "Accepted", value: String(acceptedCount), tone: "#166534", bg: "#ecfdf5" },
+                  { label: "Refused", value: String(refusedCount), tone: "#be123c", bg: "#fff1f2" },
+                  { label: "Accepted Hours", value: totalAcceptedHours.toFixed(1), tone: "#92400e", bg: "#fffbeb" }
+                ].map((card) => (
+                  <div
+                    key={card.label}
+                    style={{
+                      border: "1px solid rgba(148, 163, 184, 0.22)",
+                      borderRadius: "12px",
+                      padding: "12px 14px",
+                      background: card.bg,
+                      display: "grid",
+                      gap: "4px"
+                    }}
+                  >
+                    <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>
+                      {card.label}
+                    </div>
+                    <div style={{ fontSize: card.label === "Next Up" ? "17px" : "26px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>
+                      {card.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader>
             <div
               style={{
@@ -347,13 +417,7 @@ export function DetailPage({
                 flexWrap: "wrap"
               }}
             >
-              <CardTitle>Detail Rotation Board</CardTitle>
-              <Button
-                data-no-print="true"
-                onClick={() => printElementById("detail-print-section", "Detail Rotation Board")}
-              >
-                Print Detail
-              </Button>
+              <CardTitle>Queue Order</CardTitle>
             </div>
           </CardHeader>
 
@@ -562,7 +626,7 @@ export function DetailPage({
                 }}
               >
                 <div style={{ fontSize: "12px", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>
-                  Next In Line
+                  Next Eligible
                 </div>
                 <div style={{ marginTop: "6px", fontWeight: 800, fontSize: "18px" }}>
                   {nextEligibleEmployee

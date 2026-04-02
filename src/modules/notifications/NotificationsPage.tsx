@@ -323,6 +323,12 @@ export function NotificationsPage({
     () => overtimeShiftRequests.filter((request) => request.assignedEmployeeId).sort((a, b) => b.assignmentDate.localeCompare(a.assignmentDate)),
     [overtimeShiftRequests]
   )
+  const providerReadyCount = [
+    notificationProviderConfig.emailWebhookUrl.trim().length > 0,
+    notificationProviderConfig.textWebhookUrl.trim().length > 0,
+    notificationProviderConfig.senderEmail.trim().length > 0,
+    notificationProviderConfig.authToken.trim().length > 0
+  ].filter(Boolean).length
   const filteredRecipients = useMemo(
     () =>
       notificationPreferences.filter((preference) => {
@@ -735,23 +741,55 @@ export function NotificationsPage({
   return (
     <div style={{ display: "grid", gap: "18px" }}>
       <Card>
-        <CardHeader>
-          <CardTitle>Notifications Control Center</CardTitle>
-        </CardHeader>
         <CardContent>
-          <div style={{ display: "grid", gap: "10px" }}>
-            <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.45 }}>
-              Build overtime email or text campaigns, preview each message before it goes out, track which deliveries are ready or sent, and record employee responses back into the overtime workflow.
+          <div
+            style={{
+              display: "grid",
+              gap: "14px",
+              padding: "18px",
+              background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
+              borderRadius: "16px",
+              border: "1px solid #dbeafe"
+            }}
+          >
+            <div style={{ display: "grid", gap: "4px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1d4ed8" }}>
+                Communications Center
+              </div>
+              <div style={{ fontSize: "28px", lineHeight: 1.05, fontWeight: 800, color: "#0f172a" }}>
+                Notifications Control Center
+              </div>
+              <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.45 }}>
+                Build overtime campaigns, preview every delivery, and track responses back into the coverage workflow.
+              </div>
             </div>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
               {[
                 ["Queued", deliverySummary.queued, "#f8fafc", "#475569"],
                 ["Ready", deliverySummary.ready, "#eff6ff", "#1d4ed8"],
                 ["Sent", deliverySummary.sent, "#ecfdf5", "#166534"],
-                ["Failed", deliverySummary.failed, "#fff1f2", "#be123c"]
+                ["Failed", deliverySummary.failed, "#fff1f2", "#be123c"],
+                ["Assigned Notices", assignmentNotices.length, "#fffbeb", "#92400e"],
+                ["Provider Checks", providerReadyCount, "#f5f3ff", "#7c3aed"]
               ].map(([label, count, background, color]) => (
-                <div key={label as string} style={{ border: "1px solid #dbe3ee", borderRadius: "999px", padding: "6px 12px", background: background as string, color: color as string, fontWeight: 700, fontSize: "12px" }}>
-                  {label}: {count as number}
+                <div
+                  key={label as string}
+                  style={{
+                    border: "1px solid rgba(148, 163, 184, 0.22)",
+                    borderRadius: "12px",
+                    padding: "12px 14px",
+                    background: background as string,
+                    display: "grid",
+                    gap: "3px"
+                  }}
+                >
+                  <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>
+                    {label as string}
+                  </div>
+                  <div style={{ fontSize: "26px", lineHeight: 1, fontWeight: 800, color: color as string }}>
+                    {count as number}
+                  </div>
                 </div>
               ))}
             </div>
@@ -759,15 +797,41 @@ export function NotificationsPage({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Delivery Provider</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div style={{ display: "grid", gap: "12px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: "4px" }}>Mode</div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Delivery Provider</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div style={{ display: "grid", gap: "12px" }}>
+              <div
+                style={{
+                  border: "1px solid #dbeafe",
+                  borderRadius: "12px",
+                  padding: "12px 14px",
+                  background: "linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                  flexWrap: "wrap",
+                  alignItems: "center"
+                }}
+              >
+                <div style={{ display: "grid", gap: "3px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>
+                    Provider Status
+                  </div>
+                  <div style={{ fontSize: "16px", fontWeight: 800, color: providerConfigDraft.mode === "provider_ready" ? "#166534" : "#92400e" }}>
+                    {providerConfigDraft.mode === "provider_ready" ? "Live Webhook Delivery Enabled" : "Draft Only Mode"}
+                  </div>
+                </div>
+                <div style={{ fontSize: "12px", color: "#475569" }}>
+                  {providerReadyCount}/4 key provider checks filled in
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
+                <div>
+                  <div style={{ fontWeight: 700, marginBottom: "4px" }}>Mode</div>
                 <Select value={providerConfigDraft.mode} onValueChange={(value) => updateProviderConfig({ mode: value as NotificationProviderConfig["mode"] })}>
                   <SelectItem value="draft_only">Draft Only</SelectItem>
                   <SelectItem value="provider_ready">Live Webhook Delivery</SelectItem>
