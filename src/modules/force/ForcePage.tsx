@@ -113,20 +113,21 @@ export function ForcePage({
     }
 
     if (nextRows.length === 0) {
-      const currentIds = currentRows.map((row) => row.id).filter(Boolean) as string[]
-      if (currentIds.length > 0) {
-        const { error: deleteError } = await supabase
-          .from("force_history")
-          .delete()
-          .in("id", currentIds)
-        if (deleteError) throw deleteError
-      }
+      const { error: deleteError } = await supabase
+        .from("force_history")
+        .delete()
+        .not("employee_id", "is", null)
+      if (deleteError) throw deleteError
 
       const { data: reloadedRows, error: reloadError } = await supabase
         .from("force_history")
         .select("*")
         .order("forced_date", { ascending: false })
       if (reloadError) throw reloadError
+
+      if ((reloadedRows || []).length > 0) {
+        throw new Error("Force history still contains rows after delete.")
+      }
 
       return (reloadedRows || []) as ForceHistoryRow[]
     }
