@@ -109,6 +109,15 @@ export function ForcePage({
       return (reloadedRows || data || []) as ForceHistoryRow[]
     }
 
+    if (nextRows.length === 0) {
+      await supabase
+        .from("force_history")
+        .delete()
+        .not("id", "is", null)
+
+      return []
+    }
+
     const currentIds = new Set(currentRows.map((row) => row.id!))
     const nextIds = new Set(nextRows.map((row) => row.id!).filter(Boolean))
     const rowsToDelete = currentRows.filter((row) => row.id && !nextIds.has(row.id))
