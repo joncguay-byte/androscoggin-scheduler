@@ -501,6 +501,16 @@ function replacePatrolRowsInRange<T extends {
   return mergePatrolSummaryRows(keptRows, importedRows)
 }
 
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = []
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+
+  return chunks
+}
+
 function getCalendarDayDiff(date: Date, anchor: Date) {
   const utcDate = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
   const utcAnchor = Date.UTC(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())
@@ -1130,67 +1140,78 @@ export default function App() {
       return
     }
 
-    const { error: deleteScheduleError } = await supabase
-      .from("patrol_schedule")
-      .delete()
-      .gte("assignment_date", importedRange.start)
-      .lte("assignment_date", importedRange.end)
+    const uniqueImportDates = Array.from(
+      new Set(parsed.scheduleRows.map((row) => row.assignment_date))
+    ).sort()
+    const overridePayload = parsed.overrideRows.map((row) => ({
+      assignment_date: row.assignment_date,
+      shift_type: row.shift_type,
+      position_code: row.position_code,
+      employee_id: row.employee_id,
+      vehicle: row.vehicle,
+      shift_hours: row.shift_hours,
+      status: row.status,
+      replacement_employee_id: row.replacement_employee_id,
+      replacement_vehicle: row.replacement_vehicle,
+      replacement_hours: row.replacement_hours,
+      updated_at: new Date().toISOString()
+    }))
 
-    if (deleteScheduleError) {
-      pushAppToast({
-        tone: "error",
-        title: "Patrol schedule cleanup failed",
-        message: deleteScheduleError.message
-      })
-      return
+    for (const dateChunk of chunkArray(uniqueImportDates, 14)) {
+      const { error: deleteScheduleError } = await supabase
+        .from("patrol_schedule")
+        .delete()
+        .in("assignment_date", dateChunk)
+
+      if (deleteScheduleError) {
+        pushAppToast({
+          tone: "error",
+          title: "Patrol schedule cleanup failed",
+          message: deleteScheduleError.message
+        })
+        return
+      }
     }
 
-    const { error: scheduleError } = await supabase
-      .from("patrol_schedule")
-      .insert(schedulePayload)
+    for (const rowChunk of chunkArray(schedulePayload, 120)) {
+      const { error: scheduleError } = await supabase
+        .from("patrol_schedule")
+        .insert(rowChunk)
 
-    if (scheduleError) {
-      pushAppToast({
-        tone: "error",
-        title: "Patrol schedule import failed",
-        message: scheduleError.message
-      })
-      return
+      if (scheduleError) {
+        pushAppToast({
+          tone: "error",
+          title: "Patrol schedule import failed",
+          message: scheduleError.message
+        })
+        return
+      }
     }
 
-    const { error: deleteOverridesError } = await supabase
-      .from("patrol_overrides")
-      .delete()
-      .gte("assignment_date", importedRange.start)
-      .lte("assignment_date", importedRange.end)
+    const uniqueOverrideDates = Array.from(
+      new Set(parsed.overrideRows.map((row) => row.assignment_date))
+    ).sort()
 
-    if (deleteOverridesError) {
-      pushAppToast({
-        tone: "error",
-        title: "Patrol overrides cleanup failed",
-        message: deleteOverridesError.message
-      })
-      return
+    for (const dateChunk of chunkArray(uniqueOverrideDates, 14)) {
+      const { error: deleteOverridesError } = await supabase
+        .from("patrol_overrides")
+        .delete()
+        .in("assignment_date", dateChunk)
+
+      if (deleteOverridesError) {
+        pushAppToast({
+          tone: "error",
+          title: "Patrol overrides cleanup failed",
+          message: deleteOverridesError.message
+        })
+        return
+      }
     }
 
-    if (parsed.overrideRows.length > 0) {
+    for (const rowChunk of chunkArray(overridePayload, 120)) {
       const { error: overrideError } = await supabase
         .from("patrol_overrides")
-        .insert(
-          parsed.overrideRows.map((row) => ({
-            assignment_date: row.assignment_date,
-            shift_type: row.shift_type,
-            position_code: row.position_code,
-            employee_id: row.employee_id,
-            vehicle: row.vehicle,
-            shift_hours: row.shift_hours,
-            status: row.status,
-            replacement_employee_id: row.replacement_employee_id,
-            replacement_vehicle: row.replacement_vehicle,
-            replacement_hours: row.replacement_hours,
-            updated_at: new Date().toISOString()
-          }))
-        )
+        .insert(rowChunk)
 
       if (overrideError) {
         pushAppToast({
