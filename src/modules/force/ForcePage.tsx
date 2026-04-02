@@ -65,6 +65,14 @@ export function ForcePage({
     setHistoryDrafts(nextDrafts)
   }, [forceHistory])
 
+  useEffect(() => {
+    setSelectedHistoryRows((current) =>
+      current.filter((selectedKey) =>
+        forceHistory.some((row, index) => getForceHistoryRowKey(row, index) === selectedKey)
+      )
+    )
+  }, [forceHistory])
+
   function pushUndoSnapshot(employeeIds: string[]) {
     const snapshot = forceHistory.map((row) => ({ ...row }))
     setUndoStack((current) => [{ rows: snapshot, employeeIds }, ...current].slice(0, 10))
@@ -385,11 +393,29 @@ export function ForcePage({
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
                 <button
                   onClick={() =>
-                    setSelectedHistoryRows((current) => (allVisibleSelected ? current.filter((id) => !allVisibleHistoryRowIds.includes(id)) : [...new Set([...current, ...allVisibleHistoryRowIds])]))
+                    setSelectedHistoryRows((current) =>
+                      allVisibleSelected
+                        ? current.filter((id) => !allVisibleHistoryRowIds.includes(id))
+                        : [...allVisibleHistoryRowIds]
+                    )
                   }
                   disabled={forceHistoryList.length === 0}
                 >
                   {allVisibleSelected ? "Clear All" : "Select All"}
+                </button>
+                <button
+                  onClick={() => setSelectedHistoryRows([])}
+                  disabled={selectedHistoryRows.length === 0}
+                >
+                  Clear Selection
+                </button>
+                <button
+                  onClick={() =>
+                    setSelectedHistoryRows(forceHistory.map((row, index) => getForceHistoryRowKey(row, index)))
+                  }
+                  disabled={forceHistory.length === 0}
+                >
+                  Select Entire History
                 </button>
                 <button
                   onClick={() => void deleteSelectedForceHistoryEntries()}
