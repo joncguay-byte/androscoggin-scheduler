@@ -101,7 +101,12 @@ export function ForcePage({
         )
         .select("*")
 
-      return (data || []) as ForceHistoryRow[]
+      const { data: reloadedRows } = await supabase
+        .from("force_history")
+        .select("*")
+        .order("forced_date", { ascending: false })
+
+      return (reloadedRows || data || []) as ForceHistoryRow[]
     }
 
     const currentIds = new Set(currentRows.map((row) => row.id!))
@@ -148,7 +153,7 @@ export function ForcePage({
       insertedBuckets.set(key, [...(insertedBuckets.get(key) || []), row])
     })
 
-    return nextRows.map((row) => {
+    const mergedRows = nextRows.map((row) => {
       if (row.id) return row
       const key = `${row.employee_id}-${row.forced_date}`
       const matches = insertedBuckets.get(key)
@@ -157,6 +162,13 @@ export function ForcePage({
       insertedBuckets.set(key, matches)
       return nextMatch
     })
+
+    const { data: reloadedRows } = await supabase
+      .from("force_history")
+      .select("*")
+      .order("forced_date", { ascending: false })
+
+    return (reloadedRows || mergedRows) as ForceHistoryRow[]
   }
 
   function buildForceList(): ForceListRow[] {

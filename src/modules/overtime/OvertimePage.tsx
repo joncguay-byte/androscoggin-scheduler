@@ -804,7 +804,12 @@ export function OvertimePage({
         }
       }
 
-      return nextRows
+      const { data: reloadedRows } = await supabase
+        .from("force_history")
+        .select("*")
+        .order("forced_date", { ascending: false })
+
+      return (reloadedRows || nextRows) as ForceHistoryRow[]
     }
 
     const currentIds = new Set(relevantCurrentRows.map((row) => row.id).filter(Boolean))
@@ -848,7 +853,7 @@ export function OvertimePage({
       insertedBuckets.set(key, [...(insertedBuckets.get(key) || []), row])
     })
 
-    return nextRows.map((row) => {
+    const mergedRows = nextRows.map((row) => {
       if (row.id) return row
       const key = `${row.employee_id}-${row.forced_date}`
       const matches = insertedBuckets.get(key)
@@ -857,6 +862,13 @@ export function OvertimePage({
       insertedBuckets.set(key, matches)
       return nextMatch
     })
+
+    const { data: reloadedRows } = await supabase
+      .from("force_history")
+      .select("*")
+      .order("forced_date", { ascending: false })
+
+    return (reloadedRows || mergedRows) as ForceHistoryRow[]
   }
 
   function employeeCanWorkOvertimeShift(
