@@ -1,5 +1,6 @@
 import { useMemo } from "react"
-import { Button, Card, CardContent, CardHeader, CardTitle } from "../../components/ui/simple-ui"
+
+import { Button, Card, CardContent } from "../../components/ui/simple-ui"
 import { printElementById } from "../../lib/print"
 import { isForceRequired, isShiftCovered } from "../../lib/staffing-engine"
 import type { AppRole, AuditEvent, DetailQueueEvent, DetailRecord, Employee, ForceHistoryRow, OvertimeEntry } from "../../types"
@@ -50,6 +51,15 @@ function formatDate(date: string) {
   })
 }
 
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  })
+}
+
 function resolvePositionLabel(code: PatrolScheduleSummaryRow["position_code"]) {
   const labels: Record<PatrolScheduleSummaryRow["position_code"], string> = {
     SUP1: "Supervisor 1",
@@ -60,6 +70,33 @@ function resolvePositionLabel(code: PatrolScheduleSummaryRow["position_code"]) {
   }
 
   return labels[code]
+}
+
+function formatRelativeActivity(createdAt: string) {
+  const diffMinutes = Math.max(0, Math.round((Date.now() - new Date(createdAt).getTime()) / 60000))
+  if (diffMinutes < 1) return "just now"
+  if (diffMinutes < 60) return `${diffMinutes}m ago`
+  const diffHours = Math.round(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  return `${Math.round(diffHours / 24)}d ago`
+}
+
+const shellCardStyle = {
+  border: "1px solid #dbe3ee",
+  borderRadius: "18px",
+  background: "#ffffff",
+  boxShadow: "0 16px 36px rgba(15, 23, 42, 0.08)"
+} as const
+
+const quickLinkStyle = {
+  border: "1px solid #dbe3ee",
+  borderRadius: "14px",
+  background: "#ffffff",
+  padding: "12px 14px",
+  textAlign: "left" as const,
+  cursor: "pointer",
+  boxShadow: "0 10px 22px rgba(15, 23, 42, 0.05)",
+  transition: "transform 140ms ease, box-shadow 140ms ease"
 }
 
 export function CommandPage({
@@ -180,24 +217,23 @@ export function CommandPage({
       .slice(0, 5)
   }, [detailRecords, employees, forceHistory, overtimeEntries])
 
-  const recentActivity = useMemo(
-    () => detailQueueEvents.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6),
+  const recentDetailActivity = useMemo(
+    () => detailQueueEvents.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5),
     [detailQueueEvents]
   )
 
   const recentChanges = useMemo(
-    () => auditEvents.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8),
+    () => auditEvents.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6),
     [auditEvents]
   )
+
+  const employeeMap = useMemo(() => new Map(employees.map((employee) => [employee.id, employee])), [employees])
 
   if (!canAccess) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Command Dashboard</CardTitle>
-        </CardHeader>
         <CardContent>
-          <div style={{ color: "#475569", fontSize: "14px" }}>
+          <div style={{ padding: "12px 4px", color: "#475569", fontSize: "14px" }}>
             Command is available only to admins and sergeants.
           </div>
         </CardContent>
@@ -207,202 +243,404 @@ export function CommandPage({
 
   return (
     <div id="command-print-section" style={{ display: "grid", gap: "18px" }}>
-      <Card>
-        <CardHeader>
+      <div
+        style={{
+          ...shellCardStyle,
+          padding: "22px 24px",
+          background: "linear-gradient(135deg, #0f274f 0%, #173b72 52%, #f8fbff 52.1%, #ffffff 100%)"
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.2fr 0.9fr",
+            gap: "18px",
+            alignItems: "stretch"
+          }}
+        >
+          <div style={{ display: "grid", gap: "14px" }}>
+            <div>
+              <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.08em", color: "#c9d7f2", fontWeight: 800 }}>
+                Command Center
+              </div>
+              <div style={{ marginTop: "8px", fontSize: "34px", lineHeight: 1.05, fontWeight: 900, color: "#ffffff" }}>
+                Live Operations Board
+              </div>
+              <div style={{ marginTop: "10px", maxWidth: "620px", fontSize: "14px", lineHeight: 1.6, color: "#d6e2f7" }}>
+                Patrol coverage, overtime exposure, force fairness, and detail activity are all visible here so you can make command decisions without bouncing module to module.
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" }}>
+              {[
+                { label: "CID On-Call", value: cidOnCallName, color: "#0f172a", background: "#ffffff", border: "#dbeafe" },
+                { label: "Open Shift Risk", value: String(upcomingOpenShifts.length), color: "#c2410c", background: "#fff7ed", border: "#fdba74" },
+                { label: "Staffing Alerts", value: String(staffingAlerts.length), color: "#b91c1c", background: "#fff1f2", border: "#fda4af" },
+                { label: "Total Overtime", value: `${overtimeSnapshot.totalHours.toFixed(1)} hrs`, color: "#1d4ed8", background: "#eff6ff", border: "#93c5fd" }
+              ].map((metric) => (
+                <div
+                  key={metric.label}
+                  style={{
+                    border: `1px solid ${metric.border}`,
+                    borderRadius: "16px",
+                    background: metric.background,
+                    padding: "14px 15px",
+                    boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)"
+                  }}
+                >
+                  <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b", fontWeight: 800 }}>
+                    {metric.label}
+                  </div>
+                  <div style={{ marginTop: "8px", fontSize: metric.label === "CID On-Call" ? "20px" : "24px", fontWeight: 900, color: metric.color }}>
+                    {metric.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
+              border: "1px solid #dbe3ee",
+              borderRadius: "18px",
+              background: "rgba(255,255,255,0.94)",
+              padding: "16px 18px",
+              display: "grid",
               gap: "12px",
-              flexWrap: "wrap"
+              alignContent: "start",
+              boxShadow: "0 14px 28px rgba(15, 23, 42, 0.09)"
             }}
           >
-            <CardTitle>Command Dashboard</CardTitle>
-            <Button data-no-print="true" onClick={() => printElementById("command-print-section", "Command Dashboard")}>
-              Print Command
-            </Button>
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" }}>
-            <div style={{ border: "1px solid #dbeafe", borderRadius: "14px", padding: "14px", background: "#f8fbff" }}>
-              <div style={{ fontSize: "11px", textTransform: "uppercase", color: "#64748b", fontWeight: 700 }}>CID On-Call</div>
-              <div style={{ marginTop: "6px", fontSize: "20px", fontWeight: 800 }}>{cidOnCallName}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>
+                  Quick Jump
+                </div>
+                <div style={{ marginTop: "5px", fontSize: "18px", fontWeight: 900, color: "#0f172a" }}>
+                  Command Shortcuts
+                </div>
+              </div>
+              <Button data-no-print="true" onClick={() => printElementById("command-print-section", "Command Dashboard")}>
+                Print Command
+              </Button>
             </div>
-            <button
-              onClick={() => onOpenModule("patrol")}
-              style={{ border: "1px solid #fed7aa", borderRadius: "14px", padding: "14px", background: "#fff7ed", textAlign: "left", cursor: "pointer" }}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              {[
+                { label: "Open Patrol", detail: "Staffing, overrides, replacements", module: "patrol" as const },
+                { label: "Open Overtime", detail: "Queue, responses, assignments", module: "overtime" as const },
+                { label: "Open Force", detail: "Rotation and history", module: "force" as const },
+                { label: "Open Detail", detail: "Queue and accepted coverage", module: "detail" as const }
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  onClick={() => onOpenModule(item.module)}
+                  style={quickLinkStyle}
+                >
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a" }}>
+                    {item.label}
+                  </div>
+                  <div style={{ marginTop: "4px", fontSize: "12px", color: "#64748b" }}>
+                    {item.detail}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div
+              style={{
+                border: "1px solid #dbeafe",
+                borderRadius: "14px",
+                background: "#f8fbff",
+                padding: "12px 14px"
+              }}
             >
-              <div style={{ fontSize: "11px", textTransform: "uppercase", color: "#9a3412", fontWeight: 700 }}>Open Shifts</div>
-              <div style={{ marginTop: "6px", fontSize: "20px", fontWeight: 800, color: "#ea580c" }}>{upcomingOpenShifts.length}</div>
-            </button>
-            <button
-              onClick={() => onOpenModule("patrol")}
-              style={{ border: "1px solid #fecaca", borderRadius: "14px", padding: "14px", background: "#fff7f7", textAlign: "left", cursor: "pointer" }}
-            >
-              <div style={{ fontSize: "11px", textTransform: "uppercase", color: "#991b1b", fontWeight: 700 }}>Staffing Alerts</div>
-              <div style={{ marginTop: "6px", fontSize: "20px", fontWeight: 800, color: "#dc2626" }}>{staffingAlerts.length}</div>
-            </button>
-            <button
-              onClick={() => onOpenModule("detail")}
-              style={{ border: "1px solid #d8c79d", borderRadius: "14px", padding: "14px", background: "#fffdf7", textAlign: "left", cursor: "pointer" }}
-            >
-              <div style={{ fontSize: "11px", textTransform: "uppercase", color: "#7a6640", fontWeight: 700 }}>Total Overtime</div>
-              <div style={{ marginTop: "6px", fontSize: "20px", fontWeight: 800, color: "#1e3a8a" }}>{overtimeSnapshot.totalHours.toFixed(1)} hrs</div>
-            </button>
+              <div style={{ fontSize: "12px", fontWeight: 800, color: "#1d4ed8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Next Detail Position
+              </div>
+              <div style={{ marginTop: "6px", fontSize: "18px", fontWeight: 900, color: "#0f172a" }}>
+                {nextEligibleDetailEmployee ? `${nextEligibleDetailEmployee.firstName} ${nextEligibleDetailEmployee.lastName}` : "None"}
+              </div>
+              <div style={{ marginTop: "6px", fontSize: "12px", color: "#475569" }}>
+                Assigned details: {detailSnapshot.assigned} | Accepted hours: {detailSnapshot.acceptedHours.toFixed(1)}
+              </div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "18px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.95fr", gap: "18px" }}>
         <Card>
-          <CardHeader>
-            <CardTitle>Staffing Watch</CardTitle>
-          </CardHeader>
-
           <CardContent>
-            <div style={{ display: "grid", gap: "10px" }}>
-              {staffingAlerts.length === 0 && upcomingOpenShifts.length === 0 && (
-                <div style={{ color: "#475569", fontSize: "13px" }}>
+            <div style={{ padding: "4px 4px 2px 4px", display: "grid", gap: "14px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>
+                    Staffing Watch
+                  </div>
+                  <div style={{ marginTop: "4px", fontSize: "22px", fontWeight: 900, color: "#0f172a" }}>
+                    Next 14 Days
+                  </div>
+                </div>
+                <Button onClick={() => onOpenModule("patrol")}>Open Patrol</Button>
+              </div>
+
+              {staffingAlerts.length === 0 && upcomingOpenShifts.length === 0 ? (
+                <div
+                  style={{
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "14px",
+                    background: "#f0fdf4",
+                    padding: "14px 16px",
+                    color: "#166534",
+                    fontWeight: 700
+                  }}
+                >
                   No staffing issues are showing in the next two weeks.
                 </div>
+              ) : (
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {staffingAlerts.map((alert) => (
+                    <button
+                      key={alert.key}
+                      onClick={() => onOpenModule("patrol")}
+                      style={{
+                        border: "1px solid #fecaca",
+                        borderRadius: "14px",
+                        padding: "14px 16px",
+                        background: "#fff7f7",
+                        textAlign: "left",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+                        <div style={{ fontWeight: 900, color: "#0f172a" }}>
+                          {formatDate(alert.assignmentDate)} | {alert.shiftType}
+                        </div>
+                        <div style={{ fontSize: "11px", fontWeight: 900, textTransform: "uppercase", color: "#b91c1c" }}>
+                          Alert
+                        </div>
+                      </div>
+                      <div style={{ marginTop: "8px", fontSize: "13px", color: "#7f1d1d", lineHeight: 1.45 }}>
+                        {alert.reasons.join(" | ")}
+                      </div>
+                    </button>
+                  ))}
+
+                  {upcomingOpenShifts.slice(0, 6).map((row) => (
+                    <button
+                      key={`${row.assignment_date}-${row.shift_type}-${row.position_code}`}
+                      onClick={() => onOpenModule("patrol")}
+                      style={{
+                        border: "1px solid #fed7aa",
+                        borderRadius: "14px",
+                        padding: "14px 16px",
+                        background: "#fff7ed",
+                        textAlign: "left",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <div style={{ fontWeight: 900, color: "#0f172a" }}>
+                        {formatDate(row.assignment_date)} | {row.shift_type} | {resolvePositionLabel(row.position_code)}
+                      </div>
+                      <div style={{ marginTop: "8px", fontSize: "13px", color: "#9a3412", lineHeight: 1.45 }}>
+                        {row.status || "Open Shift"} needs coverage
+                      </div>
+                    </button>
+                  ))}
+                </div>
               )}
-
-              {staffingAlerts.map((alert) => (
-                <button
-                  key={alert.key}
-                  onClick={() => onOpenModule("patrol")}
-                  style={{ border: "1px solid #fecaca", borderRadius: "12px", padding: "12px", background: "#fff7f7", textAlign: "left", cursor: "pointer" }}
-                >
-                  <div style={{ fontWeight: 700 }}>{formatDate(alert.assignmentDate)} | {alert.shiftType}</div>
-                  <div style={{ marginTop: "6px", color: "#7f1d1d", fontSize: "13px" }}>{alert.reasons.join(" | ")}</div>
-                </button>
-              ))}
-
-              {upcomingOpenShifts.slice(0, 6).map((row) => (
-                <button
-                  key={`${row.assignment_date}-${row.shift_type}-${row.position_code}`}
-                  onClick={() => onOpenModule("patrol")}
-                  style={{ border: "1px solid #fed7aa", borderRadius: "12px", padding: "12px", background: "#fff7ed", textAlign: "left", cursor: "pointer" }}
-                >
-                  <div style={{ fontWeight: 700 }}>{formatDate(row.assignment_date)} | {row.shift_type} | {resolvePositionLabel(row.position_code)}</div>
-                  <div style={{ marginTop: "6px", color: "#9a3412", fontSize: "13px" }}>{row.status || "Open Shift"} needs coverage</div>
-                </button>
-              ))}
             </div>
           </CardContent>
         </Card>
 
         <div style={{ display: "grid", gap: "18px" }}>
           <Card>
-            <CardHeader>
-              <CardTitle>Detail Queue</CardTitle>
-            </CardHeader>
             <CardContent>
-              <div style={{ display: "grid", gap: "8px" }}>
-                <div style={{ fontSize: "13px", color: "#475569" }}>Assigned details: <strong>{detailSnapshot.assigned}</strong></div>
-                <div style={{ fontSize: "13px", color: "#475569" }}>Accepted detail hours: <strong>{detailSnapshot.acceptedHours.toFixed(1)}</strong></div>
-                <div style={{ fontSize: "13px", color: "#475569" }}>
-                  Next in queue: <strong>{nextEligibleDetailEmployee ? `${nextEligibleDetailEmployee.firstName} ${nextEligibleDetailEmployee.lastName}` : "None"}</strong>
+              <div style={{ padding: "4px", display: "grid", gap: "12px" }}>
+                <div>
+                  <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>
+                    Force Snapshot
+                  </div>
+                  <div style={{ marginTop: "4px", fontSize: "22px", fontWeight: 900, color: "#0f172a" }}>
+                    Lowest Force Load
+                  </div>
                 </div>
-                <Button onClick={() => onOpenModule("detail")}>Open Detail</Button>
+
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {forceSnapshot.map((row, index) => (
+                    <button
+                      key={row.employee.id}
+                      onClick={() => onOpenModule("force")}
+                      style={{
+                        border: index === 0 ? "1px solid #86efac" : "1px solid #e2e8f0",
+                        borderRadius: "14px",
+                        padding: "12px 14px",
+                        background: index === 0 ? "#f0fdf4" : "#ffffff",
+                        textAlign: "left",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center" }}>
+                        <div style={{ fontSize: "14px", fontWeight: 900, color: "#0f172a" }}>
+                          {index + 1}. {row.employee.firstName} {row.employee.lastName}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 800 }}>
+                          Forced {row.totalForces}
+                        </div>
+                      </div>
+                      <div style={{ marginTop: "6px", fontSize: "12px", color: "#475569", lineHeight: 1.45 }}>
+                        Last: {row.lastForced} | Total OT: {row.totalOvertime.toFixed(1)} hrs
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Force Snapshot</CardTitle>
-            </CardHeader>
             <CardContent>
-              <div style={{ display: "grid", gap: "10px" }}>
-                {forceSnapshot.map((row, index) => (
-                  <button
-                    key={row.employee.id}
-                    onClick={() => onOpenModule("force")}
-                    style={{
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "12px",
-                      padding: "12px",
-                      background: index === 0 ? "#dcfce7" : "#ffffff",
-                      textAlign: "left",
-                      cursor: "pointer"
-                    }}
-                  >
-                    <div style={{ fontWeight: 700 }}>{index + 1}. {row.employee.firstName} {row.employee.lastName}</div>
-                    <div style={{ marginTop: "6px", fontSize: "13px", color: "#475569" }}>
-                      Forces: {row.totalForces} | Last: {row.lastForced} | OT: {row.totalOvertime.toFixed(1)} hrs
+              <div style={{ padding: "4px", display: "grid", gap: "12px" }}>
+                <div>
+                  <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>
+                    Overtime Mix
+                  </div>
+                  <div style={{ marginTop: "4px", fontSize: "22px", fontWeight: 900, color: "#0f172a" }}>
+                    Hours Breakdown
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div style={{ border: "1px solid #dbeafe", borderRadius: "14px", background: "#f8fbff", padding: "12px 14px" }}>
+                    <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 800, textTransform: "uppercase" }}>
+                      Manual OT
                     </div>
-                  </button>
-                ))}
-                <Button onClick={() => onOpenModule("force")}>Open Force</Button>
+                    <div style={{ marginTop: "8px", fontSize: "22px", fontWeight: 900, color: "#1d4ed8" }}>
+                      {overtimeSnapshot.manualHours.toFixed(1)}
+                    </div>
+                  </div>
+                  <div style={{ border: "1px solid #dbeafe", borderRadius: "14px", background: "#f8fbff", padding: "12px 14px" }}>
+                    <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 800, textTransform: "uppercase" }}>
+                      Detail OT
+                    </div>
+                    <div style={{ marginTop: "8px", fontSize: "22px", fontWeight: 900, color: "#1d4ed8" }}>
+                      {overtimeSnapshot.detailHours.toFixed(1)}
+                    </div>
+                  </div>
+                </div>
+
+                <Button onClick={() => onOpenModule("reports")}>Open Reports</Button>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: "10px" }}>Detail Queue Events</div>
-              <div style={{ display: "grid", gap: "8px" }}>
-                {recentActivity.length === 0 && (
-                  <div style={{ color: "#475569", fontSize: "13px" }}>No detail activity yet.</div>
-                )}
-                {recentActivity.map((event) => {
-                  const employee = employees.find((employeeRow) => employeeRow.id === event.employeeId)
-                  return (
-                    <div key={event.id} style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "10px", background: "#ffffff" }}>
-                      <div style={{ fontWeight: 700 }}>{employee ? `${employee.firstName} ${employee.lastName}` : "Unknown Employee"} | {event.type}</div>
-                      <div style={{ marginTop: "4px", fontSize: "13px", color: "#475569" }}>{formatDate(event.date)} | {event.description}</div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: "10px" }}>Overtime Snapshot</div>
-              <div style={{ display: "grid", gap: "8px" }}>
-                <div style={{ border: "1px solid #dbeafe", borderRadius: "10px", padding: "10px", background: "#f8fbff" }}>
-                  <div style={{ fontSize: "13px", color: "#475569" }}>Manual overtime</div>
-                  <div style={{ fontWeight: 800, fontSize: "18px" }}>{overtimeSnapshot.manualHours.toFixed(1)} hrs</div>
-                </div>
-                <div style={{ border: "1px solid #dbeafe", borderRadius: "10px", padding: "10px", background: "#f8fbff" }}>
-                  <div style={{ fontSize: "13px", color: "#475569" }}>Detail overtime</div>
-                  <div style={{ fontWeight: 800, fontSize: "18px" }}>{overtimeSnapshot.detailHours.toFixed(1)} hrs</div>
-                </div>
-                <Button onClick={() => onOpenModule("reports")}>Open Reports</Button>
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: "10px" }}>Recent Changes</div>
-              <div style={{ display: "grid", gap: "8px" }}>
-                {recentChanges.length === 0 && (
-                  <div style={{ color: "#475569", fontSize: "13px" }}>No recent changes yet.</div>
-                )}
-                {recentChanges.map((event) => (
-                  <div key={event.id} style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "10px", background: "#ffffff" }}>
-                    <div style={{ fontWeight: 700 }}>{event.module} | {event.action}</div>
-                    <div style={{ marginTop: "4px", fontSize: "13px", color: "#475569" }}>{event.summary}</div>
-                    <div style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>
-                      {new Date(event.createdAt).toLocaleString()}
-                    </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.05fr 1fr", gap: "18px" }}>
+        <Card>
+          <CardContent>
+            <div style={{ padding: "4px", display: "grid", gap: "14px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>
+                    Detail Queue Activity
                   </div>
-                ))}
+                  <div style={{ marginTop: "4px", fontSize: "22px", fontWeight: 900, color: "#0f172a" }}>
+                    Recent Detail Movement
+                  </div>
+                </div>
+                <Button onClick={() => onOpenModule("detail")}>Open Detail</Button>
               </div>
+
+              {recentDetailActivity.length === 0 ? (
+                <div style={{ color: "#475569", fontSize: "13px" }}>
+                  No detail activity yet.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {recentDetailActivity.map((event) => {
+                    const employee = employeeMap.get(event.employeeId)
+                    return (
+                      <div
+                        key={event.id}
+                        style={{
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "14px",
+                          padding: "12px 14px",
+                          background: "#ffffff"
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 900, color: "#0f172a" }}>
+                            {employee ? `${employee.firstName} ${employee.lastName}` : "Unknown Employee"} | {event.type}
+                          </div>
+                          <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700 }}>
+                            {formatRelativeActivity(event.createdAt)}
+                          </div>
+                        </div>
+                        <div style={{ marginTop: "6px", fontSize: "12px", color: "#475569", lineHeight: 1.5 }}>
+                          {formatDate(event.date)} | {event.description}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <div style={{ padding: "4px", display: "grid", gap: "14px" }}>
+              <div>
+                <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", fontWeight: 800 }}>
+                  Audit Trail
+                </div>
+                <div style={{ marginTop: "4px", fontSize: "22px", fontWeight: 900, color: "#0f172a" }}>
+                  Recent Changes
+                </div>
+              </div>
+
+              {recentChanges.length === 0 ? (
+                <div style={{ color: "#475569", fontSize: "13px" }}>
+                  No recent changes yet.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {recentChanges.map((event) => (
+                    <div
+                      key={event.id}
+                      style={{
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "14px",
+                        padding: "12px 14px",
+                        background: "#ffffff"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+                        <div style={{ fontSize: "14px", fontWeight: 900, color: "#0f172a" }}>
+                          {event.module} | {event.action}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700 }}>
+                          {formatRelativeActivity(event.createdAt)}
+                        </div>
+                      </div>
+                      <div style={{ marginTop: "6px", fontSize: "12px", color: "#475569", lineHeight: 1.5 }}>
+                        {event.summary}
+                      </div>
+                      <div style={{ marginTop: "6px", fontSize: "11px", color: "#94a3b8" }}>
+                        {formatDateTime(event.createdAt)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
