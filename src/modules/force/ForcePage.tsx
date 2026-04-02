@@ -226,21 +226,6 @@ export function ForcePage({
     )
   }
 
-  async function deleteForceHistoryEntry(targetRow: ForceHistoryRow, originalIndex: number) {
-    const nextRows = forceHistory.filter((_, index) => index !== originalIndex)
-
-    pushUndoSnapshot([targetRow.employee_id])
-    setForceHistory(nextRows)
-    await syncForceHistoryForEmployees(nextRows, [targetRow.employee_id])
-
-    const employee = employees.find((row) => row.id === targetRow.employee_id)
-    onAuditEvent?.(
-      "Force History Deleted",
-      `Deleted force history for ${employee ? `${employee.firstName} ${employee.lastName}` : "employee"}.`,
-      `Deleted date: ${targetRow.forced_date}`
-    )
-  }
-
   async function deleteSelectedForceHistoryEntries() {
     if (selectedHistoryRows.length === 0) return
 
@@ -318,7 +303,7 @@ export function ForcePage({
         >
           <div style={{ fontWeight: 800, color: "#0f172a" }}>Force History</div>
           <div style={{ fontSize: "12px", color: "#475569" }}>
-            Edit or delete individual force entries here. This is the best place to clean up experimental dates.
+            Check the exact rows you want to remove, then press Delete Selected.
           </div>
 
           {forceHistoryList.length === 0 ? (
@@ -347,7 +332,7 @@ export function ForcePage({
                       key={rowKey}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "36px 1.6fr 160px 110px 110px",
+                        gridTemplateColumns: "36px 1.8fr 160px 110px",
                         gap: "10px",
                         alignItems: "center",
                         padding: "10px 12px",
@@ -390,10 +375,6 @@ export function ForcePage({
 
                       <button onClick={() => void saveForceHistoryEntry(row, originalIndex)}>
                         Save
-                      </button>
-
-                      <button onClick={() => void deleteForceHistoryEntry(row, originalIndex)}>
-                        Delete
                       </button>
                     </div>
                   )
