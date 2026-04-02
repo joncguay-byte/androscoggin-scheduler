@@ -871,6 +871,16 @@ export function OvertimePage({
     return (reloadedRows || mergedRows) as ForceHistoryRow[]
   }
 
+  async function loadLiveForceHistory() {
+    const { data, error } = await supabase
+      .from("force_history")
+      .select("*")
+      .order("forced_date", { ascending: false })
+
+    if (error) throw error
+    return (data || []) as ForceHistoryRow[]
+  }
+
   function employeeCanWorkOvertimeShift(
     employee: Employee,
     request: OvertimeShiftRequest,
@@ -977,7 +987,8 @@ export function OvertimePage({
     if (!assigned) return
 
     const today = new Date().toISOString().slice(0, 10)
-    const nextForceRows = [{ employee_id: employeeId, forced_date: today }, ...forceHistory]
+    const liveForceRows = await loadLiveForceHistory()
+    const nextForceRows = [{ employee_id: employeeId, forced_date: today }, ...liveForceRows]
     setForceHistory(nextForceRows)
     const syncedForceRows = await syncForceHistoryForEmployees(nextForceRows, [employeeId])
     setForceHistory(syncedForceRows)

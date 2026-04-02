@@ -86,6 +86,16 @@ export function ForcePage({
     setUndoStack((current) => [{ rows: snapshot, employeeIds }, ...current].slice(0, 10))
   }
 
+  async function loadLiveForceHistory() {
+    const { data, error } = await supabase
+      .from("force_history")
+      .select("*")
+      .order("forced_date", { ascending: false })
+
+    if (error) throw error
+    return (data || []) as ForceHistoryRow[]
+  }
+
   async function syncEntireForceHistory(nextRows: ForceHistoryRow[]) {
     const currentRows = forceHistory
 
@@ -264,12 +274,13 @@ export function ForcePage({
 
   async function forceEmployee(empId: string) {
     const today = new Date().toISOString().slice(0, 10)
+    const liveRows = await loadLiveForceHistory()
 
     pushUndoSnapshot([empId])
 
     const nextRows = [
       { employee_id: empId, forced_date: today },
-      ...forceHistory
+      ...liveRows
     ]
 
     setForceHistory(nextRows)
@@ -299,6 +310,7 @@ export function ForcePage({
 
   async function saveForceDates(employeeId: string) {
     const draft = draftDatesByEmployee[employeeId] || { last1: "", last2: "" }
+    const liveRows = await loadLiveForceHistory()
     const cleanedDates = [draft.last1, draft.last2]
       .filter((value) => value.trim().length > 0)
       .filter((value, index, array) => array.indexOf(value) === index)
@@ -306,7 +318,7 @@ export function ForcePage({
 
     pushUndoSnapshot([employeeId])
 
-    const remainingRows = forceHistory.filter((row) => row.employee_id !== employeeId)
+    const remainingRows = liveRows.filter((row) => row.employee_id !== employeeId)
     const nextRows = [
       ...remainingRows,
       ...cleanedDates.map((forcedDate) => ({
@@ -364,8 +376,9 @@ export function ForcePage({
     const rowKey = getForceHistoryRowKey(originalRow, originalIndex)
     const nextForcedDate = historyDrafts[rowKey]?.trim() || ""
     if (!nextForcedDate) return
+    const liveRows = await loadLiveForceHistory()
 
-    const nextRows = forceHistory
+    const nextRows = liveRows
       .map((row, index) =>
         getForceHistoryRowKey(row, index) === getForceHistoryRowKey(originalRow, originalIndex)
           ? { ...row, forced_date: nextForcedDate }
@@ -396,9 +409,10 @@ export function ForcePage({
   async function deleteSelectedForceHistoryEntries() {
     if (selectedHistoryRows.length === 0) return
 
+    const liveRows = await loadLiveForceHistory()
     const selectedKeySet = new Set(selectedHistoryRows)
-    const targetRows = forceHistory.filter((row, index) => selectedKeySet.has(getForceHistoryRowKey(row, index)))
-    const nextRows = forceHistory.filter((row, index) => !selectedKeySet.has(getForceHistoryRowKey(row, index)))
+    const targetRows = liveRows.filter((row, index) => selectedKeySet.has(getForceHistoryRowKey(row, index)))
+    const nextRows = liveRows.filter((row, index) => !selectedKeySet.has(getForceHistoryRowKey(row, index)))
 
     pushUndoSnapshot([...new Set(targetRows.map((row) => row.employee_id))])
     setForceHistory(nextRows)
