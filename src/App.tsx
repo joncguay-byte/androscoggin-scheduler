@@ -1107,6 +1107,7 @@ export default function App() {
     if (!patrolImportPreview) return
 
     const { fileName, parsed } = patrolImportPreview
+    const importedRange = parsed.importedDateRange
     const schedulePayload = parsed.scheduleRows.map((row) => ({
       assignment_date: row.assignment_date,
       shift_type: row.shift_type,
@@ -1120,9 +1121,33 @@ export default function App() {
       replacement_hours: row.replacement_hours
     }))
 
+    if (!importedRange) {
+      pushAppToast({
+        tone: "error",
+        title: "Patrol import failed",
+        message: "The workbook did not include a valid patrol date range."
+      })
+      return
+    }
+
+    const { error: deleteScheduleError } = await supabase
+      .from("patrol_schedule")
+      .delete()
+      .gte("assignment_date", importedRange.start)
+      .lte("assignment_date", importedRange.end)
+
+    if (deleteScheduleError) {
+      pushAppToast({
+        tone: "error",
+        title: "Patrol schedule cleanup failed",
+        message: deleteScheduleError.message
+      })
+      return
+    }
+
     const { error: scheduleError } = await supabase
       .from("patrol_schedule")
-      .upsert(schedulePayload, { onConflict: "assignment_date,shift_type,position_code" })
+      .insert(schedulePayload)
 
     if (scheduleError) {
       pushAppToast({
@@ -1133,27 +1158,25 @@ export default function App() {
       return
     }
 
-    if (parsed.importedDateRange) {
-      const { error: deleteOverridesError } = await supabase
-        .from("patrol_overrides")
-        .delete()
-        .gte("assignment_date", parsed.importedDateRange.start)
-        .lte("assignment_date", parsed.importedDateRange.end)
+    const { error: deleteOverridesError } = await supabase
+      .from("patrol_overrides")
+      .delete()
+      .gte("assignment_date", importedRange.start)
+      .lte("assignment_date", importedRange.end)
 
-      if (deleteOverridesError) {
-        pushAppToast({
-          tone: "error",
-          title: "Patrol overrides cleanup failed",
-          message: deleteOverridesError.message
-        })
-        return
-      }
+    if (deleteOverridesError) {
+      pushAppToast({
+        tone: "error",
+        title: "Patrol overrides cleanup failed",
+        message: deleteOverridesError.message
+      })
+      return
     }
 
     if (parsed.overrideRows.length > 0) {
       const { error: overrideError } = await supabase
         .from("patrol_overrides")
-        .upsert(
+        .insert(
           parsed.overrideRows.map((row) => ({
             assignment_date: row.assignment_date,
             shift_type: row.shift_type,
@@ -1166,8 +1189,7 @@ export default function App() {
             replacement_vehicle: row.replacement_vehicle,
             replacement_hours: row.replacement_hours,
             updated_at: new Date().toISOString()
-          })),
-          { onConflict: "assignment_date,shift_type,position_code" }
+          }))
         )
 
       if (overrideError) {
