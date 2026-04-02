@@ -40,8 +40,26 @@ type OvertimePageProps = {
 
 const CARD_STYLE = {
   border: "1px solid #dbe3ee",
-  borderRadius: "10px",
-  background: "#ffffff"
+  borderRadius: "18px",
+  background: "#ffffff",
+  boxShadow: "0 16px 34px rgba(15, 23, 42, 0.07)"
+} as const
+
+const SECTION_EYEBROW_STYLE = {
+  fontSize: "11px",
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase" as const,
+  color: "#64748b"
+} as const
+
+const ACTION_CHIP_STYLE = {
+  padding: "7px 11px",
+  borderRadius: "999px",
+  border: "none",
+  fontWeight: 800,
+  cursor: "pointer",
+  fontSize: "12px"
 } as const
 
 const TIME_OFF_REASON_OPTIONS = [
@@ -1815,7 +1833,10 @@ export function OvertimePage({
   const workspaceBuilderPanel = (
     <Card>
       <CardHeader>
-        <CardTitle>Shift Selector</CardTitle>
+        <div style={{ display: "grid", gap: "4px" }}>
+          <div style={SECTION_EYEBROW_STYLE}>Build Coverage</div>
+          <CardTitle>Shift Selector</CardTitle>
+        </div>
       </CardHeader>
       <CardContent>
         <div style={{ display: "grid", gap: "12px" }}>
@@ -1934,7 +1955,7 @@ export function OvertimePage({
           </div>
 
           {!builderEmployee && (
-            <div style={{ padding: "18px", borderRadius: "12px", background: "#f8fafc", border: "1px dashed #cbd5e1", fontSize: "13px", color: "#64748b" }}>
+            <div style={{ padding: "18px", borderRadius: "16px", background: "#f8fafc", border: "1px dashed #cbd5e1", fontSize: "13px", color: "#64748b", lineHeight: 1.55 }}>
               Choose an employee, then click the scheduled shift boxes for the dates you want to mark off. Saving here writes those shifts into the patrol overtime feed without leaving this module.
             </div>
           )}
@@ -1960,8 +1981,8 @@ export function OvertimePage({
                 <div style={{ fontSize: "12px", color: "#475569" }}>
                   {builderEmployee.team} | {builderEmployee.rank} | Default {builderEmployee.defaultVehicle} | {builderEmployee.defaultShiftHours}
                 </div>
-                <div style={{ fontSize: "12px", color: "#334155" }}>
-                  Each day below shows the full staffing picture. Click this employee’s scheduled shift box to mark it off and create overtime from this module.
+                <div style={{ fontSize: "12px", color: "#334155", lineHeight: 1.55 }}>
+                  Each day below shows the full staffing picture. Click this employee's scheduled shift box to mark it off and create overtime from this module.
                 </div>
               </div>
               <div
@@ -2443,7 +2464,7 @@ export function OvertimePage({
 
   const missionControlCardContent: Record<MissionControlCardKey, React.ReactNode> = {
     order: (
-      <div style={{ display: "grid", gap: "6px" }}>
+      <div style={{ display: "grid", gap: "8px" }}>
         <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
           Overtime Order
         </div>
@@ -2468,6 +2489,9 @@ export function OvertimePage({
             </option>
           ))}
         </select>
+        <div style={{ fontSize: "11px", color: "#cbd5e1", lineHeight: 1.45 }}>
+          Seniority starts the order. After a force or assignment, that employee rotates down.
+        </div>
         <button
           onClick={() => printElementById("overtime-list-print-section", "Overtime List")}
           style={{
@@ -2487,20 +2511,26 @@ export function OvertimePage({
       </div>
     ),
     queue: (
-      <div>
+      <div style={{ display: "grid", gap: "6px" }}>
         <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
           Open Queue
         </div>
         <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>{overtimeShiftQueue.length}</div>
+        <div style={{ fontSize: "11px", color: "#cbd5e1" }}>
+          Shifts currently requiring coverage under staffing rules.
+        </div>
       </div>
     ),
     responses: (
-      <div>
+      <div style={{ display: "grid", gap: "6px" }}>
         <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
           Interested Responses
         </div>
         <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>
           {overtimeShiftQueue.reduce((total, request) => total + request.responses.filter((response) => response.status === "Interested").length, 0)}
+        </div>
+        <div style={{ fontSize: "11px", color: "#cbd5e1" }}>
+          Live interest captured from overtime email responses.
         </div>
       </div>
     )
@@ -2510,18 +2540,16 @@ export function OvertimePage({
     <Card>
       <CardHeader>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <CardTitle>Patrol Time Off Feed</CardTitle>
+          <div style={{ display: "grid", gap: "4px" }}>
+            <div style={SECTION_EYEBROW_STYLE}>Input Feed</div>
+            <CardTitle>Patrol Time Off Feed</CardTitle>
+          </div>
           <button
             onClick={undoLastQueueAction}
             style={{
-              padding: "5px 9px",
-              borderRadius: "8px",
-              border: "none",
+              ...ACTION_CHIP_STYLE,
               background: "#e2e8f0",
-              color: "#0f172a",
-              fontWeight: 700,
-              cursor: "pointer",
-              fontSize: "12px"
+              color: "#0f172a"
             }}
           >
             Undo
@@ -2634,49 +2662,49 @@ export function OvertimePage({
   )
 
   return (
-    <div style={{ display: "grid", gap: "18px" }}>
+    <div style={{ display: "grid", gap: "20px" }}>
       <div
         style={{
           display: "grid",
-          gap: "18px"
+          gap: "20px"
         }}
       >
           <div
             style={{
               ...CARD_STYLE,
-              padding: "18px",
-              background: "linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%)",
+              padding: "20px 22px",
+              background: "linear-gradient(135deg, #0b1f42 0%, #143565 48%, #203f74 100%)",
               color: "#ffffff",
               display: "grid",
-              gap: "14px"
+              gap: "16px"
             }}
           >
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(320px, 1.2fr) minmax(560px, 0.95fr)",
-                gap: "18px",
+                gridTemplateColumns: "minmax(340px, 1.15fr) minmax(620px, 1fr)",
+                gap: "20px",
                 alignItems: "start"
               }}
             >
               <div>
                 <div style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#93c5fd" }}>
-                  Preview 2
+                  Overtime Workspace
                 </div>
-                <div style={{ fontSize: "24px", fontWeight: 900, marginTop: "4px" }}>
+                <div style={{ fontSize: "28px", fontWeight: 900, marginTop: "4px", lineHeight: 1.05 }}>
                   Overtime Mission Control
                 </div>
-                <div style={{ fontSize: "13px", color: "#cbd5e1", marginTop: "6px", maxWidth: "700px" }}>
-                  Build time off, generate overtime, queue it, collect interest, and assign coverage from one control center.
+                <div style={{ fontSize: "13px", color: "#dbe7fb", marginTop: "8px", maxWidth: "700px", lineHeight: 1.6 }}>
+                  Build time off, generate overtime, queue it, collect employee interest, and assign coverage from one control center with fewer jumps and clearer live signals.
                 </div>
               </div>
               <div
                 style={{
                   display: "grid",
                   width: "100%",
-                  minWidth: "560px",
-                  gridTemplateColumns: "minmax(250px, 1.08fr) minmax(220px, 0.92fr)",
-                  gridTemplateRows: "repeat(2, minmax(96px, auto))",
+                  minWidth: "620px",
+                  gridTemplateColumns: "minmax(270px, 1.08fr) minmax(240px, 0.92fr)",
+                  gridTemplateRows: "repeat(2, minmax(110px, auto))",
                   gap: "12px",
                   alignItems: "stretch",
                   justifySelf: "end"
@@ -2691,16 +2719,17 @@ export function OvertimePage({
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={() => moveMissionControlCard(cardKey)}
                     style={{
-                      borderRadius: "12px",
-                      background: "rgba(255,255,255,0.08)",
+                      borderRadius: "16px",
+                      background: "rgba(255,255,255,0.11)",
                       border: draggingMissionCard === cardKey ? "1px solid #93c5fd" : "1px solid rgba(255,255,255,0.1)",
-                      padding: cardKey === "order" ? "9px 10px" : "10px 12px",
+                      padding: cardKey === "order" ? "12px 12px" : "12px 14px",
                       display: "grid",
-                      gap: "6px",
-                      minHeight: cardKey === "order" ? "84px" : "96px",
+                      gap: "8px",
+                      minHeight: cardKey === "order" ? "96px" : "110px",
                       cursor: "grab",
                       gridColumn: index === 0 ? "1 / 2" : "2 / 3",
-                      gridRow: index === 0 ? "1 / 2" : index === 1 ? "1 / 2" : "2 / 3"
+                      gridRow: index === 0 ? "1 / 2" : index === 1 ? "1 / 2" : "2 / 3",
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)"
                     }}
                   >
                     {missionControlCardContent[cardKey]}
@@ -2714,12 +2743,12 @@ export function OvertimePage({
           </div>
       </div>
 
-      <div style={{ display: "grid", gap: "18px" }}>
+      <div style={{ display: "grid", gap: "20px" }}>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(250px, 320px) minmax(250px, 360px) minmax(250px, 320px)",
-          gap: "18px",
+          gridTemplateColumns: "minmax(280px, 0.95fr) minmax(340px, 1.15fr) minmax(280px, 0.9fr)",
+          gap: "20px",
           alignItems: "start"
         }}
       >
@@ -2736,20 +2765,18 @@ export function OvertimePage({
                 flexWrap: "wrap"
               }}
             >
-              <CardTitle>Overtime Shift Queue</CardTitle>
+              <div style={{ display: "grid", gap: "4px" }}>
+                <div style={SECTION_EYEBROW_STYLE}>Coverage Queue</div>
+                <CardTitle>Overtime Shift Queue</CardTitle>
+              </div>
 
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <button
                   onClick={toggleQueueSelectMode}
                   style={{
-                    padding: "6px 10px",
-                    borderRadius: "8px",
-                    border: "none",
+                    ...ACTION_CHIP_STYLE,
                     background: queueSelectMode ? "#2563eb" : "#e2e8f0",
-                    color: queueSelectMode ? "#ffffff" : "#0f172a",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontSize: "12px"
+                    color: queueSelectMode ? "#ffffff" : "#0f172a"
                   }}
                 >
                   Select
@@ -2758,14 +2785,9 @@ export function OvertimePage({
                 <button
                   onClick={selectAllQueueShifts}
                   style={{
-                    padding: "6px 10px",
-                    borderRadius: "8px",
-                    border: "none",
+                    ...ACTION_CHIP_STYLE,
                     background: "#e2e8f0",
-                    color: "#0f172a",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontSize: "12px"
+                    color: "#0f172a"
                   }}
                 >
                   Select All
@@ -2774,14 +2796,9 @@ export function OvertimePage({
                 <button
                   onClick={sendSelectedQueueShiftsToNotifications}
                   style={{
-                    padding: "6px 10px",
-                    borderRadius: "8px",
-                    border: "none",
+                    ...ACTION_CHIP_STYLE,
                     background: "#0f766e",
-                    color: "#ffffff",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontSize: "12px"
+                    color: "#ffffff"
                   }}
                 >
                   Send Selected
@@ -2792,14 +2809,9 @@ export function OvertimePage({
                     autoAssignQueueShifts(selectedQueueShiftIds.length > 0 ? selectedQueueShiftIds : undefined)
                   }
                   style={{
-                    padding: "6px 10px",
-                    borderRadius: "8px",
-                    border: "none",
+                    ...ACTION_CHIP_STYLE,
                     background: "#e2e8f0",
-                    color: "#0f172a",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontSize: "12px"
+                    color: "#0f172a"
                   }}
                 >
                   Auto Assign
@@ -3168,7 +3180,10 @@ export function OvertimePage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Interested Responders</CardTitle>
+            <div style={{ display: "grid", gap: "4px" }}>
+              <div style={SECTION_EYEBROW_STYLE}>Response Review</div>
+              <CardTitle>Interested Responders</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <div
@@ -3251,14 +3266,17 @@ export function OvertimePage({
       <div>
       <Card>
         <CardHeader>
-          <CardTitle>Assigned Queue Shifts</CardTitle>
+          <div style={{ display: "grid", gap: "4px" }}>
+            <div style={SECTION_EYEBROW_STYLE}>Coverage Locked In</div>
+            <CardTitle>Assigned Queue Shifts</CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-              gap: "10px"
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: "12px"
             }}
           >
             {assignedQueueShifts.length === 0 && (
