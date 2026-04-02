@@ -54,8 +54,8 @@ export function ForcePage({
 
   useEffect(() => {
     const nextDrafts: Record<string, string> = {}
-    forceHistory.forEach((row) => {
-      nextDrafts[`${row.employee_id}-${row.forced_date}`] = row.forced_date
+    forceHistory.forEach((row, index) => {
+      nextDrafts[`${row.employee_id}-${row.forced_date}-${index}`] = row.forced_date
     })
     setHistoryDrafts(nextDrafts)
   }, [forceHistory])
@@ -198,14 +198,14 @@ export function ForcePage({
     )
   }
 
-  async function saveForceHistoryEntry(originalRow: ForceHistoryRow) {
-    const rowKey = `${originalRow.employee_id}-${originalRow.forced_date}`
+  async function saveForceHistoryEntry(originalRow: ForceHistoryRow, originalIndex: number) {
+    const rowKey = `${originalRow.employee_id}-${originalRow.forced_date}-${originalIndex}`
     const nextForcedDate = historyDrafts[rowKey]?.trim() || ""
     if (!nextForcedDate) return
 
     const nextRows = forceHistory
-      .map((row) =>
-        row.employee_id === originalRow.employee_id && row.forced_date === originalRow.forced_date
+      .map((row, index) =>
+        index === originalIndex
           ? { ...row, forced_date: nextForcedDate }
           : row
       )
@@ -225,10 +225,8 @@ export function ForcePage({
     )
   }
 
-  async function deleteForceHistoryEntry(targetRow: ForceHistoryRow) {
-    const nextRows = forceHistory.filter(
-      (row) => !(row.employee_id === targetRow.employee_id && row.forced_date === targetRow.forced_date)
-    )
+  async function deleteForceHistoryEntry(targetRow: ForceHistoryRow, originalIndex: number) {
+    const nextRows = forceHistory.filter((_, index) => index !== originalIndex)
 
     pushUndoSnapshot([targetRow.employee_id])
     setForceHistory(nextRows)
@@ -243,8 +241,9 @@ export function ForcePage({
   }
 
   const forceList = buildForceList()
-  const forceHistoryList = [...forceHistory]
-    .sort((a, b) => b.forced_date.localeCompare(a.forced_date) || a.employee_id.localeCompare(b.employee_id))
+  const forceHistoryList = forceHistory
+    .map((row, originalIndex) => ({ row, originalIndex }))
+    .sort((a, b) => b.row.forced_date.localeCompare(a.row.forced_date) || a.row.employee_id.localeCompare(b.row.employee_id))
 
   return (
     <div id="force-print-section" style={{ padding: "20px" }}>
@@ -308,9 +307,9 @@ export function ForcePage({
             </div>
           ) : (
             <div style={{ display: "grid", gap: "8px" }}>
-              {forceHistoryList.map((row) => {
+              {forceHistoryList.map(({ row, originalIndex }) => {
                 const employee = employees.find((candidate) => candidate.id === row.employee_id)
-                const rowKey = `${row.employee_id}-${row.forced_date}`
+                const rowKey = `${row.employee_id}-${row.forced_date}-${originalIndex}`
 
                 return (
                   <div
@@ -346,11 +345,11 @@ export function ForcePage({
                       }
                     />
 
-                    <button onClick={() => void saveForceHistoryEntry(row)}>
+                    <button onClick={() => void saveForceHistoryEntry(row, originalIndex)}>
                       Save
                     </button>
 
-                    <button onClick={() => void deleteForceHistoryEntry(row)}>
+                    <button onClick={() => void deleteForceHistoryEntry(row, originalIndex)}>
                       Delete
                     </button>
                   </div>
