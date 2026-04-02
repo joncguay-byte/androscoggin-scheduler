@@ -10,6 +10,14 @@ function isExcludedFromForceRotation(employee: Employee) {
   return EXCLUDED_FORCE_ROTATION_NAMES.has(`${employee.firstName} ${employee.lastName}`.trim().toLowerCase())
 }
 
+function isEligibleForForceRotation(employee: Employee) {
+  if (employee.status !== "Active") return false
+  if (isExcludedFromForceRotation(employee)) return false
+  if (employee.team === "CID" || employee.team === "SRO" || employee.team === "None") return false
+  if (employee.rank === "Detective") return false
+  return true
+}
+
 function getEmployeeForceDates(forceHistory: ForceHistoryRow[], employeeId: string) {
   return forceHistory
     .filter((row) => row.employee_id === employeeId)
@@ -19,7 +27,7 @@ function getEmployeeForceDates(forceHistory: ForceHistoryRow[], employeeId: stri
 
 export function buildForceRotationOrder(employees: Employee[], forceHistory: ForceHistoryRow[]) {
   return employees
-    .filter((employee) => !isExcludedFromForceRotation(employee))
+    .filter(isEligibleForForceRotation)
     .sort((a, b) => {
     const aDates = getEmployeeForceDates(forceHistory, a.id)
     const bDates = getEmployeeForceDates(forceHistory, b.id)
