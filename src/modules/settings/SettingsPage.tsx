@@ -13,7 +13,8 @@ import {
 } from "../../components/ui/simple-ui"
 import { supabase } from "../../lib/supabase"
 import type { ParsedPatrolImport } from "../../lib/patrol-excel-import"
-import type { AppLayoutVariant, AppRole, Employee, PatrolScheduleRow, ReportType, ScheduleView } from "../../types"
+import type { AppLayoutVariant, AppRole, Employee, ReportType, ScheduleView } from "../../types"
+import { PatrolCalendarPreviewBoard } from "../patrol/PatrolCalendarPreviewBoard"
 
 type ModuleOption = {
   key: string
@@ -81,53 +82,6 @@ type UserProfile = {
   created_at?: string
 }
 
-const patrolPreviewDayRows: Array<{ code: PatrolScheduleRow["position_code"]; label: string }> = [
-  { code: "SUP1", label: "Supervisor" },
-  { code: "SUP2", label: "Days" },
-  { code: "DEP1", label: "Days" },
-  { code: "DEP2", label: "Days" },
-  { code: "POL", label: "Poland Days" }
-]
-
-const patrolPreviewNightRows: Array<{ code: PatrolScheduleRow["position_code"]; label: string }> = [
-  { code: "POL", label: "Poland Nights" },
-  { code: "SUP1", label: "Supervisor" },
-  { code: "SUP2", label: "Nights" },
-  { code: "DEP1", label: "Nights" },
-  { code: "DEP2", label: "Nights" }
-]
-
-function formatPreviewDate(isoDate: string) {
-  const date = new Date(`${isoDate}T12:00:00`)
-  return date.toLocaleDateString(undefined, { month: "numeric", day: "numeric" })
-}
-
-function buildPreviewMonthDates(baseDate: Date) {
-  const year = baseDate.getFullYear()
-  const month = baseDate.getMonth()
-  const firstDay = new Date(year, month, 1)
-  const lastDay = new Date(year, month + 1, 0)
-  const gridStart = new Date(firstDay)
-  gridStart.setDate(firstDay.getDate() - firstDay.getDay())
-  const gridEnd = new Date(lastDay)
-  gridEnd.setDate(lastDay.getDate() + (6 - lastDay.getDay()))
-
-  const dates: string[] = []
-  for (let cursor = new Date(gridStart); cursor <= gridEnd; cursor.setDate(cursor.getDate() + 1)) {
-    dates.push(cursor.toISOString().slice(0, 10))
-  }
-
-  return dates
-}
-
-function chunkPreviewDates(dates: string[], size: number) {
-  const chunks: string[][] = []
-  for (let index = 0; index < dates.length; index += size) {
-    chunks.push(dates.slice(index, index + size))
-  }
-  return chunks
-}
-
 const layoutOptions: { value: AppLayoutVariant, label: string }[] = [
   { value: "command-brass", label: "Command Brass" },
   { value: "ops-strip", label: "Operations Strip" },
@@ -187,7 +141,6 @@ export function SettingsPage({
   const canEdit = currentUserRole === "admin" || currentUserRole === "sergeant"
   const overtimeBackupInputRef = useRef<HTMLInputElement | null>(null)
   const patrolWorkbookInputRef = useRef<HTMLInputElement | null>(null)
-  const employeeMap = new Map(employees.map((employee) => [employee.id, employee]))
   const [drafts, setDrafts] = useState<Record<keyof ReferenceSettings, string>>({
     vehicles: "",
     shiftTemplates: "",
@@ -902,7 +855,7 @@ export function SettingsPage({
                 ))}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "14px" }}>
+              <div style={{ display: "grid", gap: "14px" }}>
                 <div
                   style={{
                     border: "1px solid #e2e8f0",
@@ -921,14 +874,6 @@ export function SettingsPage({
                       return <div style={{ fontSize: "13px", color: "#64748b" }}>No imported date range found.</div>
                     }
 
-                    const previewDates = buildPreviewMonthDates(previewMonthStart)
-                    const previewWeeks = chunkPreviewDates(previewDates, 7)
-                    const rowMap = new Map(
-                      patrolImportPreview.parsed.scheduleRows.map((row) => [
-                        `${row.assignment_date}-${row.shift_type}-${row.position_code}`,
-                        row
-                      ] as const)
-                    )
                     const importedMonthKeys = Array.from(
                       new Set(
                         patrolImportPreview.parsed.scheduleRows.map((row) => row.assignment_date.slice(0, 7))
@@ -938,160 +883,28 @@ export function SettingsPage({
                     const currentMonthIndex = importedMonthKeys.indexOf(currentMonthKey)
                     const canGoPrev = currentMonthIndex > 0
                     const canGoNext = currentMonthIndex >= 0 && currentMonthIndex < importedMonthKeys.length - 1
-                    const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-
-                    const renderRow = (
-                      shiftType: PatrolScheduleRow["shift_type"],
-                      positionCode: PatrolScheduleRow["position_code"],
-                      rowLabel: string,
-                      weekDates: string[]
-                    ) => (
-                      <div
-                        key={`${shiftType}-${positionCode}-${rowLabel}-${weekDates[0]}`}
-                        style={{ display: "grid", gridTemplateColumns: "120px repeat(7, minmax(0, 1fr))", borderTop: "1px solid #e2e8f0" }}
-                      >
-                        <div style={{ padding: "8px 10px", borderRight: "1px solid #e2e8f0", background: "#f8fafc", fontWeight: 700, fontSize: "12px" }}>
-                          {rowLabel}
-                        </div>
-                        {weekDates.map((isoDate) => {
-                          const row = rowMap.get(`${isoDate}-${shiftType}-${positionCode}`) || null
-                          const employee = row?.employee_id ? employeeMap.get(row.employee_id) || null : null
-                          const replacement = row?.replacement_employee_id ? employeeMap.get(row.replacement_employee_id) || null : null
-                          const isOff = Boolean(row?.status) && row?.status !== "Scheduled" && row?.status !== "Open Shift"
-                          const inCurrentMonth = isoDate.slice(0, 7) === currentMonthKey
-
-                          return (
-                            <div
-                              key={`${isoDate}-${shiftType}-${positionCode}`}
-                              style={{
-                                padding: "6px",
-                                borderRight: "1px solid #e2e8f0",
-                                background: isOff ? "#fde68a" : inCurrentMonth ? "#ffffff" : "#f8fafc",
-                                minHeight: "68px",
-                                display: "grid",
-                                gap: "2px",
-                                alignContent: "start",
-                                opacity: inCurrentMonth ? 1 : 0.72
-                              }}
-                            >
-                              <div style={{ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) 34px", gap: "4px", border: "1px solid #d1d5db", borderRadius: "4px", padding: "2px 4px", background: isOff ? "#fde68a" : "#f8fafc", fontSize: "11px", fontWeight: 700 }}>
-                                <span>{row?.vehicle || ""}</span>
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {employee?.lastName || ""}
-                                </span>
-                                <span style={{ textAlign: "center" }}>
-                                  {isOff ? row?.status || "" : row?.shift_hours || ""}
-                                </span>
-                              </div>
-                              {replacement && (
-                                <div style={{ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) 34px", gap: "4px", border: "1px solid #d1d5db", borderRadius: "4px", padding: "2px 4px", background: "#eff6ff", color: "#2563eb", fontSize: "10px" }}>
-                                  <span>{row?.replacement_vehicle || replacement.defaultVehicle || ""}</span>
-                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {replacement.lastName}
-                                  </span>
-                                  <span style={{ textAlign: "center" }}>
-                                    {row?.replacement_hours || replacement.defaultShiftHours || ""}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
 
                     return (
-                      <div style={{ display: "grid", gap: "10px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                          <div style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a" }}>
-                            {previewMonthStart.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                          </div>
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            <Button
-                              onClick={() => {
-                                if (!canGoPrev || currentMonthIndex < 1) return
-                                const [year, month] = importedMonthKeys[currentMonthIndex - 1].split("-").map(Number)
-                                setPreviewMonthStart(new Date(year, month - 1, 1))
-                              }}
-                              disabled={!canGoPrev}
-                            >
-                              Prev Month
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                if (!canGoNext || currentMonthIndex < 0) return
-                                const [year, month] = importedMonthKeys[currentMonthIndex + 1].split("-").map(Number)
-                                setPreviewMonthStart(new Date(year, month - 1, 1))
-                              }}
-                              disabled={!canGoNext}
-                            >
-                              Next Month
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div style={{ maxHeight: "860px", overflow: "auto", border: "1px solid #e2e8f0", borderRadius: "12px", background: "#ffffff" }}>
-                          {previewWeeks.map((weekDates) => (
-                            <div key={weekDates[0]} style={{ borderBottom: "8px solid #f8fafc" }}>
-                              <div style={{ display: "grid", gridTemplateColumns: "120px repeat(7, minmax(0, 1fr))", background: "#eff6ff", borderBottom: "1px solid #dbeafe" }}>
-                                <div style={{ padding: "8px 10px", borderRight: "1px solid #dbeafe", fontWeight: 800, fontSize: "12px" }}>Position</div>
-                                {weekDates.map((isoDate, index) => (
-                                  <div key={isoDate} style={{ padding: "8px 6px", borderRight: "1px solid #dbeafe", textAlign: "center", fontWeight: 800, fontSize: "12px", opacity: isoDate.slice(0, 7) === currentMonthKey ? 1 : 0.72 }}>
-                                    <div style={{ fontSize: "10px", color: "#475569" }}>{weekdayLabels[index]}</div>
-                                    <div>{formatPreviewDate(isoDate)}</div>
-                                  </div>
-                                ))}
-                              </div>
-
-                              <div style={{ padding: "6px 10px", background: "#f8fafc", fontWeight: 800, fontSize: "12px", borderBottom: "1px solid #e2e8f0" }}>
-                                Days
-                              </div>
-                              {patrolPreviewDayRows.map((row) => renderRow("Days", row.code, row.label, weekDates))}
-                              <div style={{ padding: "6px 10px", background: "#f8fafc", fontWeight: 800, fontSize: "12px", borderTop: "1px solid #e2e8f0", borderBottom: "1px solid #e2e8f0" }}>
-                                Nights
-                              </div>
-                              {patrolPreviewNightRows.map((row) => renderRow("Nights", row.code, row.label, weekDates))}
-                            </div>
-                          ))}
-                        </div>
+                      <div style={{ maxHeight: "900px", overflow: "auto", borderRadius: "12px" }}>
+                        <PatrolCalendarPreviewBoard
+                          rows={patrolImportPreview.parsed.scheduleRows}
+                          employees={employees}
+                          baseDate={previewMonthStart}
+                          availableMonthKeys={importedMonthKeys}
+                          onPrevMonth={() => {
+                            if (!canGoPrev || currentMonthIndex < 1) return
+                            const [year, month] = importedMonthKeys[currentMonthIndex - 1].split("-").map(Number)
+                            setPreviewMonthStart(new Date(year, month - 1, 1))
+                          }}
+                          onNextMonth={() => {
+                            if (!canGoNext || currentMonthIndex < 0) return
+                            const [year, month] = importedMonthKeys[currentMonthIndex + 1].split("-").map(Number)
+                            setPreviewMonthStart(new Date(year, month - 1, 1))
+                          }}
+                        />
                       </div>
                     )
                   })()}
-                </div>
-
-                <div
-                  style={{
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "12px",
-                    padding: "12px",
-                    background: "#ffffff"
-                  }}
-                >
-                  <div style={{ fontWeight: 800, marginBottom: "8px" }}>Unmatched Names</div>
-                  {patrolImportPreview.parsed.unmatchedNames.length === 0 ? (
-                    <div style={{ fontSize: "13px", color: "#166534" }}>
-                      No unmatched names were found in this workbook.
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                      {patrolImportPreview.parsed.unmatchedNames.map((name) => (
-                        <div
-                          key={name}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: "999px",
-                            border: "1px solid #f5c2c7",
-                            background: "#fff7f7",
-                            color: "#991b1b",
-                            fontSize: "12px",
-                            fontWeight: 700
-                          }}
-                        >
-                          {name}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
 
