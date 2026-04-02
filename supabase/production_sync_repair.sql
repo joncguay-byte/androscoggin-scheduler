@@ -102,3 +102,15 @@ set
   sender_name = coalesce(nullif(sender_name, ''), 'Androscoggin Scheduler'),
   updated_at = now()
 where config_key = 'default';
+
+create index if not exists patrol_schedule_assignment_date_idx
+on public.patrol_schedule (assignment_date);
+
+create index if not exists patrol_overrides_assignment_date_idx
+on public.patrol_overrides (assignment_date);
+
+create index if not exists patrol_schedule_assignment_slot_idx
+on public.patrol_schedule (assignment_date, shift_type, position_code);
+
+create index if not exists patrol_overrides_assignment_slot_idx
+on public.patrol_overrides (assignment_date, shift_type, position_code);

@@ -1157,7 +1157,7 @@ export default function App() {
       updated_at: new Date().toISOString()
     }))
 
-    for (const dateChunk of chunkArray(uniqueImportDates, 14)) {
+    for (const dateChunk of chunkArray(uniqueImportDates, 1)) {
       const { error: deleteScheduleError } = await supabase
         .from("patrol_schedule")
         .delete()
@@ -1173,7 +1173,7 @@ export default function App() {
       }
     }
 
-    for (const rowChunk of chunkArray(schedulePayload, 120)) {
+    for (const rowChunk of chunkArray(schedulePayload, 40)) {
       const { error: scheduleError } = await supabase
         .from("patrol_schedule")
         .insert(rowChunk)
@@ -1192,7 +1192,7 @@ export default function App() {
       new Set(parsed.overrideRows.map((row) => row.assignment_date))
     ).sort()
 
-    for (const dateChunk of chunkArray(uniqueOverrideDates, 14)) {
+    for (const dateChunk of chunkArray(uniqueOverrideDates, 1)) {
       const { error: deleteOverridesError } = await supabase
         .from("patrol_overrides")
         .delete()
@@ -1208,7 +1208,7 @@ export default function App() {
       }
     }
 
-    for (const rowChunk of chunkArray(overridePayload, 120)) {
+    for (const rowChunk of chunkArray(overridePayload, 40)) {
       const { error: overrideError } = await supabase
         .from("patrol_overrides")
         .insert(rowChunk)
