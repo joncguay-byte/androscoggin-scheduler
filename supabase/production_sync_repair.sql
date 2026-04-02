@@ -13,6 +13,25 @@ alter table public.force_history
 create unique index if not exists force_history_id_key
 on public.force_history (id);
 
+alter table public.force_history enable row level security;
+
+drop policy if exists "force_history_read_authenticated" on public.force_history;
+drop policy if exists "force_history_write_admin_sergeant" on public.force_history;
+drop policy if exists "force_history_write_authenticated" on public.force_history;
+
+create policy "force_history_read_authenticated"
+on public.force_history
+for select
+to authenticated
+using (true);
+
+create policy "force_history_write_authenticated"
+on public.force_history
+for all
+to authenticated
+using (true)
+with check (true);
+
 alter table public.overtime_shift_requests
   add column if not exists off_reason text;
 
