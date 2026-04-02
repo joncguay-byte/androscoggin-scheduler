@@ -1,5 +1,18 @@
 create extension if not exists pgcrypto;
 
+alter table public.force_history
+  add column if not exists id uuid;
+
+update public.force_history
+set id = gen_random_uuid()
+where id is null;
+
+alter table public.force_history
+  alter column id set default gen_random_uuid();
+
+create unique index if not exists force_history_id_key
+on public.force_history (id);
+
 alter table public.overtime_shift_requests
   add column if not exists off_reason text;
 

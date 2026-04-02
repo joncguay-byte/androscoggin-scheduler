@@ -141,6 +141,7 @@ export type OvertimeEntry = {
 }
 
 export type ForceHistoryRow = {
+  id?: string
   employee_id: string
   forced_date: string
 }

@@ -1409,7 +1409,7 @@ export default function App() {
     async function loadForceHistory() {
       const { data, error } = await supabase
         .from("force_history")
-        .select("employee_id,forced_date")
+        .select("*")
         .order("forced_date", { ascending: false })
 
       if (error) {

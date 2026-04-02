@@ -753,18 +753,25 @@ export function OvertimePage({
     ])
   }
 
-  function undoLastQueueAction() {
+  async function undoLastQueueAction() {
     const snapshot = undoStack[undoStack.length - 1]
     if (!snapshot) {
       window.alert("No overtime queue action is available to undo.")
       return
     }
 
+    const forceEmployeeIds = [...new Set([
+      ...forceHistory.map((row) => row.employee_id),
+      ...snapshot.forceHistory.map((row) => row.employee_id)
+    ])]
+
     setPatrolOverrideRows(snapshot.patrolOverrideRows)
     setOvertimeShiftRequests(snapshot.overtimeShiftRequests)
     setOvertimeQueueIds(snapshot.overtimeQueueIds)
     setForceHistory(snapshot.forceHistory)
     setUndoStack((current) => current.slice(0, -1))
+    const syncedForceHistory = await syncForceHistoryForEmployees(snapshot.forceHistory, forceEmployeeIds)
+    setForceHistory(syncedForceHistory)
     invalidatePatrolScheduleCache()
     onAuditEvent("Overtime Undo", "Reverted the latest overtime queue action.")
   }
@@ -774,24 +781,82 @@ export function OvertimePage({
   }
 
   async function syncForceHistoryForEmployees(nextRows: ForceHistoryRow[], employeeIds: string[]) {
-    for (const employeeId of employeeIds) {
+    const relevantCurrentRows = forceHistory.filter((row) => employeeIds.includes(row.employee_id))
+    const relevantNextRows = nextRows.filter((row) => employeeIds.includes(row.employee_id))
+
+    if (relevantCurrentRows.some((row) => !row.id)) {
+      for (const employeeId of employeeIds) {
+        await supabase
+          .from("force_history")
+          .delete()
+          .eq("employee_id", employeeId)
+
+        const employeeRows = relevantNextRows.filter((row) => row.employee_id === employeeId)
+        if (employeeRows.length > 0) {
+          await supabase
+            .from("force_history")
+            .insert(
+              employeeRows.map((row) => ({
+                employee_id: row.employee_id,
+                forced_date: row.forced_date
+              }))
+            )
+        }
+      }
+
+      return nextRows
+    }
+
+    const currentIds = new Set(relevantCurrentRows.map((row) => row.id).filter(Boolean))
+    const nextIds = new Set(relevantNextRows.map((row) => row.id).filter(Boolean))
+    const rowsToDelete = relevantCurrentRows.filter((row) => row.id && !nextIds.has(row.id))
+    const rowsToUpdate = relevantNextRows.filter((row) => row.id && currentIds.has(row.id))
+    const rowsToInsert = relevantNextRows.filter((row) => !row.id)
+
+    for (const row of rowsToDelete) {
       await supabase
         .from("force_history")
         .delete()
-        .eq("employee_id", employeeId)
-
-      const employeeRows = nextRows.filter((row) => row.employee_id === employeeId)
-      if (employeeRows.length > 0) {
-        await supabase
-          .from("force_history")
-          .insert(
-            employeeRows.map((row) => ({
-              employee_id: row.employee_id,
-              forced_date: row.forced_date
-            }))
-          )
-      }
+        .eq("id", row.id!)
     }
+
+    for (const row of rowsToUpdate) {
+      await supabase
+        .from("force_history")
+        .update({ forced_date: row.forced_date })
+        .eq("id", row.id!)
+    }
+
+    let insertedRows: ForceHistoryRow[] = []
+    if (rowsToInsert.length > 0) {
+      const { data } = await supabase
+        .from("force_history")
+        .insert(
+          rowsToInsert.map((row) => ({
+            employee_id: row.employee_id,
+            forced_date: row.forced_date
+          }))
+        )
+        .select("*")
+
+      insertedRows = (data || []) as ForceHistoryRow[]
+    }
+
+    const insertedBuckets = new Map<string, ForceHistoryRow[]>()
+    insertedRows.forEach((row) => {
+      const key = `${row.employee_id}-${row.forced_date}`
+      insertedBuckets.set(key, [...(insertedBuckets.get(key) || []), row])
+    })
+
+    return nextRows.map((row) => {
+      if (row.id) return row
+      const key = `${row.employee_id}-${row.forced_date}`
+      const matches = insertedBuckets.get(key)
+      if (!matches || matches.length === 0) return row
+      const nextMatch = matches.shift()!
+      insertedBuckets.set(key, matches)
+      return nextMatch
+    })
   }
 
   function employeeCanWorkOvertimeShift(
@@ -902,7 +967,8 @@ export function OvertimePage({
     const today = new Date().toISOString().slice(0, 10)
     const nextForceRows = [{ employee_id: employeeId, forced_date: today }, ...forceHistory]
     setForceHistory(nextForceRows)
-    await syncForceHistoryForEmployees(nextForceRows, [employeeId])
+    const syncedForceRows = await syncForceHistoryForEmployees(nextForceRows, [employeeId])
+    setForceHistory(syncedForceRows)
 
     onAuditEvent(
       "Force Assignment Applied",

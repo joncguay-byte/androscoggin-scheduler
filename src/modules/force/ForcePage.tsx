@@ -13,6 +13,10 @@ type ForceListRow = Employee & {
   totalOvertimeHours: number
 }
 
+function getForceHistoryRowKey(row: ForceHistoryRow, fallbackIndex: number) {
+  return row.id || `${row.employee_id}-${row.forced_date}-${fallbackIndex}`
+}
+
 export function ForcePage({
   employees,
   overtimeEntries,
@@ -67,22 +71,80 @@ export function ForcePage({
   }
 
   async function syncForceHistoryForEmployees(nextRows: ForceHistoryRow[], employeeIds: string[]) {
-    for (const employeeId of employeeIds) {
+    const relevantCurrentRows = forceHistory.filter((row) => employeeIds.includes(row.employee_id))
+    const relevantNextRows = nextRows.filter((row) => employeeIds.includes(row.employee_id))
+
+    if (relevantCurrentRows.some((row) => !row.id)) {
+      for (const employeeId of employeeIds) {
+        await supabase
+          .from("force_history")
+          .delete()
+          .eq("employee_id", employeeId)
+
+        const employeeRows = relevantNextRows.filter((row) => row.employee_id === employeeId)
+        if (employeeRows.length > 0) {
+          await supabase
+            .from("force_history")
+            .insert(employeeRows.map((row) => ({
+              employee_id: row.employee_id,
+              forced_date: row.forced_date
+            })))
+        }
+      }
+
+      return nextRows
+    }
+
+    const currentIds = new Set(relevantCurrentRows.map((row) => row.id).filter(Boolean))
+    const nextIds = new Set(relevantNextRows.map((row) => row.id).filter(Boolean))
+    const rowsToDelete = relevantCurrentRows.filter((row) => row.id && !nextIds.has(row.id))
+    const rowsToUpdate = relevantNextRows.filter((row) => row.id && currentIds.has(row.id))
+    const rowsToInsert = relevantNextRows.filter((row) => !row.id)
+
+    for (const row of rowsToDelete) {
       await supabase
         .from("force_history")
         .delete()
-        .eq("employee_id", employeeId)
+        .eq("id", row.id!)
+    }
 
-      const employeeRows = nextRows.filter((row) => row.employee_id === employeeId)
-      if (employeeRows.length > 0) {
-        await supabase
-          .from("force_history")
-          .insert(employeeRows.map((row) => ({
+    for (const row of rowsToUpdate) {
+      await supabase
+        .from("force_history")
+        .update({ forced_date: row.forced_date })
+        .eq("id", row.id!)
+    }
+
+    let insertedRows: ForceHistoryRow[] = []
+    if (rowsToInsert.length > 0) {
+      const { data } = await supabase
+        .from("force_history")
+        .insert(
+          rowsToInsert.map((row) => ({
             employee_id: row.employee_id,
             forced_date: row.forced_date
-          })))
-      }
+          }))
+        )
+        .select("*")
+
+      insertedRows = (data || []) as ForceHistoryRow[]
     }
+
+    const insertedBuckets = new Map<string, ForceHistoryRow[]>()
+    insertedRows.forEach((row) => {
+      const key = `${row.employee_id}-${row.forced_date}`
+      insertedBuckets.set(key, [...(insertedBuckets.get(key) || []), row])
+    })
+
+    return nextRows.map((row) => {
+      if (row.id) return row
+      const key = `${row.employee_id}-${row.forced_date}`
+      const matches = insertedBuckets.get(key)
+      if (!matches || matches.length === 0) return row
+      const nextMatch = matches.shift()!
+      insertedBuckets.set(key, matches)
+      return nextMatch
+    })
   }
 
   function buildForceList(): ForceListRow[] {
@@ -138,7 +200,8 @@ export function ForcePage({
       }
     }))
 
-    await syncForceHistoryForEmployees(nextRows, [empId])
+    const syncedRows = await syncForceHistoryForEmployees(nextRows, [empId])
+    setForceHistory(syncedRows)
 
     const employee = employees.find((row) => row.id === empId)
     onAuditEvent?.(
@@ -175,7 +238,8 @@ export function ForcePage({
       }
     }))
 
-    await syncForceHistoryForEmployees(nextRows, [employeeId])
+    const syncedRows = await syncForceHistoryForEmployees(nextRows, [employeeId])
+    setForceHistory(syncedRows)
 
     const employee = employees.find((row) => row.id === employeeId)
     onAuditEvent?.(
@@ -191,7 +255,8 @@ export function ForcePage({
 
     setUndoStack((current) => current.slice(1))
     setForceHistory(previous.rows)
-    await syncForceHistoryForEmployees(previous.rows, previous.employeeIds)
+    const syncedRows = await syncForceHistoryForEmployees(previous.rows, previous.employeeIds)
+    setForceHistory(syncedRows)
 
     onAuditEvent?.(
       "Force Undo",
@@ -200,13 +265,13 @@ export function ForcePage({
   }
 
   async function saveForceHistoryEntry(originalRow: ForceHistoryRow, originalIndex: number) {
-    const rowKey = `${originalRow.employee_id}-${originalRow.forced_date}-${originalIndex}`
+    const rowKey = getForceHistoryRowKey(originalRow, originalIndex)
     const nextForcedDate = historyDrafts[rowKey]?.trim() || ""
     if (!nextForcedDate) return
 
     const nextRows = forceHistory
       .map((row, index) =>
-        index === originalIndex
+        getForceHistoryRowKey(row, index) === getForceHistoryRowKey(originalRow, originalIndex)
           ? { ...row, forced_date: nextForcedDate }
           : row
       )
@@ -216,7 +281,8 @@ export function ForcePage({
 
     pushUndoSnapshot([originalRow.employee_id])
     setForceHistory(nextRows)
-    await syncForceHistoryForEmployees(nextRows, [originalRow.employee_id])
+    const syncedRows = await syncForceHistoryForEmployees(nextRows, [originalRow.employee_id])
+    setForceHistory(syncedRows)
 
     const employee = employees.find((row) => row.id === originalRow.employee_id)
     onAuditEvent?.(
@@ -229,15 +295,16 @@ export function ForcePage({
   async function deleteSelectedForceHistoryEntries() {
     if (selectedHistoryRows.length === 0) return
 
-    const selectedIndexSet = new Set(selectedHistoryRows.map((value) => Number(value)))
-    const targetRows = forceHistory.filter((_, index) => selectedIndexSet.has(index))
+    const selectedKeySet = new Set(selectedHistoryRows)
+    const targetRows = forceHistory.filter((row, index) => selectedKeySet.has(getForceHistoryRowKey(row, index)))
     const employeeIds = [...new Set(targetRows.map((row) => row.employee_id))]
-    const nextRows = forceHistory.filter((_, index) => !selectedIndexSet.has(index))
+    const nextRows = forceHistory.filter((row, index) => !selectedKeySet.has(getForceHistoryRowKey(row, index)))
 
     pushUndoSnapshot(employeeIds)
     setForceHistory(nextRows)
     setSelectedHistoryRows([])
-    await syncForceHistoryForEmployees(nextRows, employeeIds)
+    const syncedRows = await syncForceHistoryForEmployees(nextRows, employeeIds)
+    setForceHistory(syncedRows)
 
     onAuditEvent?.(
       "Force History Deleted",
@@ -249,7 +316,7 @@ export function ForcePage({
   const forceHistoryList = forceHistory
     .map((row, originalIndex) => ({ row, originalIndex }))
     .sort((a, b) => b.row.forced_date.localeCompare(a.row.forced_date) || a.row.employee_id.localeCompare(b.row.employee_id))
-  const allVisibleHistoryRowIds = forceHistoryList.map(({ originalIndex }) => String(originalIndex))
+  const allVisibleHistoryRowIds = forceHistoryList.map(({ row, originalIndex }) => getForceHistoryRowKey(row, originalIndex))
   const allVisibleSelected =
     forceHistoryList.length > 0 && allVisibleHistoryRowIds.every((id) => selectedHistoryRows.includes(id))
 
@@ -335,8 +402,8 @@ export function ForcePage({
               <div style={{ display: "grid", gap: "8px" }}>
                 {forceHistoryList.map(({ row, originalIndex }) => {
                   const employee = employees.find((candidate) => candidate.id === row.employee_id)
-                  const rowKey = `${row.employee_id}-${row.forced_date}-${originalIndex}`
-                  const isSelected = selectedHistoryRows.includes(String(originalIndex))
+                  const rowKey = getForceHistoryRowKey(row, originalIndex)
+                  const isSelected = selectedHistoryRows.includes(rowKey)
 
                   return (
                     <div
@@ -358,8 +425,8 @@ export function ForcePage({
                         onChange={(event) =>
                           setSelectedHistoryRows((current) =>
                             event.target.checked
-                              ? [...current, String(originalIndex)]
-                              : current.filter((value) => value !== String(originalIndex))
+                              ? [...current, rowKey]
+                              : current.filter((value) => value !== rowKey)
                           )
                         }
                       />
