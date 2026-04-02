@@ -34,7 +34,7 @@ export function ForcePage({
   const [undoStack, setUndoStack] = useState<Array<{ rows: ForceHistoryRow[]; employeeIds: string[] }>>([])
   const [showForceHistory, setShowForceHistory] = useState(false)
   const [historyDrafts, setHistoryDrafts] = useState<Record<string, string>>({})
-  const [selectedHistoryEmployeeId, setSelectedHistoryEmployeeId] = useState("")
+  const [selectedHistoryRows, setSelectedHistoryRows] = useState<string[]>([])
 
   useEffect(() => {
     const nextDrafts: Record<string, { last1: string; last2: string }> = {}
@@ -60,17 +60,6 @@ export function ForcePage({
     })
     setHistoryDrafts(nextDrafts)
   }, [forceHistory])
-
-  useEffect(() => {
-    if (!showForceHistory) return
-
-    const hasSelectedEmployee = selectedHistoryEmployeeId
-      && forceHistory.some((row) => row.employee_id === selectedHistoryEmployeeId)
-
-    if (!hasSelectedEmployee) {
-      setSelectedHistoryEmployeeId(forceHistory[0]?.employee_id || "")
-    }
-  }, [forceHistory, selectedHistoryEmployeeId, showForceHistory])
 
   function pushUndoSnapshot(employeeIds: string[]) {
     const snapshot = forceHistory.map((row) => ({ ...row }))
@@ -252,28 +241,29 @@ export function ForcePage({
     )
   }
 
+  async function deleteSelectedForceHistoryEntries() {
+    if (selectedHistoryRows.length === 0) return
+
+    const selectedIndexSet = new Set(selectedHistoryRows.map((value) => Number(value)))
+    const targetRows = forceHistory.filter((_, index) => selectedIndexSet.has(index))
+    const employeeIds = [...new Set(targetRows.map((row) => row.employee_id))]
+    const nextRows = forceHistory.filter((_, index) => !selectedIndexSet.has(index))
+
+    pushUndoSnapshot(employeeIds)
+    setForceHistory(nextRows)
+    setSelectedHistoryRows([])
+    await syncForceHistoryForEmployees(nextRows, employeeIds)
+
+    onAuditEvent?.(
+      "Force History Deleted",
+      `Deleted ${targetRows.length} selected force history entr${targetRows.length === 1 ? "y" : "ies"}.`
+    )
+  }
+
   const forceList = buildForceList()
   const forceHistoryList = forceHistory
     .map((row, originalIndex) => ({ row, originalIndex }))
     .sort((a, b) => b.row.forced_date.localeCompare(a.row.forced_date) || a.row.employee_id.localeCompare(b.row.employee_id))
-  const forceHistoryEmployees = Array.from(
-    new Map(
-      forceHistoryList.map(({ row }) => {
-        const employee = employees.find((candidate) => candidate.id === row.employee_id)
-        return [
-          row.employee_id,
-          {
-            employeeId: row.employee_id,
-            label: employee ? `${employee.lastName}, ${employee.firstName}` : row.employee_id,
-            count: forceHistory.filter((entry) => entry.employee_id === row.employee_id).length
-          }
-        ] as const
-      })
-    ).values()
-  ).sort((a, b) => a.label.localeCompare(b.label))
-  const selectedEmployeeHistory = forceHistoryList.filter(
-    ({ row }) => row.employee_id === selectedHistoryEmployeeId
-  )
 
   return (
     <div id="force-print-section" style={{ padding: "20px" }}>
@@ -336,48 +326,48 @@ export function ForcePage({
               No force history entries yet.
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "12px" }}>
-              <div style={{ display: "grid", gap: "8px", alignContent: "start" }}>
-                {forceHistoryEmployees.map((entry) => (
-                  <button
-                    key={entry.employeeId}
-                    onClick={() => setSelectedHistoryEmployeeId(entry.employeeId)}
-                    style={{
-                      border: selectedHistoryEmployeeId === entry.employeeId ? "2px solid #2563eb" : "1px solid #dbeafe",
-                      borderRadius: "12px",
-                      background: selectedHistoryEmployeeId === entry.employeeId ? "#eff6ff" : "#ffffff",
-                      padding: "10px 12px",
-                      textAlign: "left",
-                      cursor: "pointer"
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, color: "#0f172a" }}>{entry.label}</div>
-                    <div style={{ fontSize: "12px", color: "#64748b" }}>
-                      {entry.count} entr{entry.count === 1 ? "y" : "ies"}
-                    </div>
-                  </button>
-                ))}
+            <div style={{ display: "grid", gap: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => void deleteSelectedForceHistoryEntries()}
+                  disabled={selectedHistoryRows.length === 0}
+                >
+                  Delete Selected
+                </button>
               </div>
 
               <div style={{ display: "grid", gap: "8px" }}>
-                {selectedEmployeeHistory.map(({ row, originalIndex }) => {
+                {forceHistoryList.map(({ row, originalIndex }) => {
                   const employee = employees.find((candidate) => candidate.id === row.employee_id)
                   const rowKey = `${row.employee_id}-${row.forced_date}-${originalIndex}`
+                  const isSelected = selectedHistoryRows.includes(String(originalIndex))
 
                   return (
                     <div
                       key={rowKey}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1.6fr 160px 110px 110px",
+                        gridTemplateColumns: "36px 1.6fr 160px 110px 110px",
                         gap: "10px",
                         alignItems: "center",
                         padding: "10px 12px",
-                        border: "1px solid #e2e8f0",
+                        border: isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0",
                         borderRadius: "12px",
-                        background: "#ffffff"
+                        background: isSelected ? "#eff6ff" : "#ffffff"
                       }}
                     >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(event) =>
+                          setSelectedHistoryRows((current) =>
+                            event.target.checked
+                              ? [...current, String(originalIndex)]
+                              : current.filter((value) => value !== String(originalIndex))
+                          )
+                        }
+                      />
+
                       <div>
                         <div style={{ fontWeight: 700 }}>
                           {employee ? `${employee.lastName}, ${employee.firstName}` : row.employee_id}
