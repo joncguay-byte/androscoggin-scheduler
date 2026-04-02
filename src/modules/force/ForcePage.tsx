@@ -82,16 +82,17 @@ export function ForcePage({
     const currentRows = forceHistory
 
     if (currentRows.some((row) => !row.id) || nextRows.some((row) => !row.id)) {
-      await supabase
+      const { error: resetError } = await supabase
         .from("force_history")
         .delete()
         .not("employee_id", "is", null)
+      if (resetError) throw resetError
 
       if (nextRows.length === 0) {
         return []
       }
 
-      const { data } = await supabase
+      const { data, error: insertError } = await supabase
         .from("force_history")
         .insert(
           nextRows.map((row) => ({
@@ -100,11 +101,13 @@ export function ForcePage({
           }))
         )
         .select("*")
+      if (insertError) throw insertError
 
-      const { data: reloadedRows } = await supabase
+      const { data: reloadedRows, error: reloadError } = await supabase
         .from("force_history")
         .select("*")
         .order("forced_date", { ascending: false })
+      if (reloadError) throw reloadError
 
       return (reloadedRows || data || []) as ForceHistoryRow[]
     }
@@ -112,13 +115,20 @@ export function ForcePage({
     if (nextRows.length === 0) {
       const currentIds = currentRows.map((row) => row.id).filter(Boolean) as string[]
       if (currentIds.length > 0) {
-        await supabase
+        const { error: deleteError } = await supabase
           .from("force_history")
           .delete()
           .in("id", currentIds)
+        if (deleteError) throw deleteError
       }
 
-      return []
+      const { data: reloadedRows, error: reloadError } = await supabase
+        .from("force_history")
+        .select("*")
+        .order("forced_date", { ascending: false })
+      if (reloadError) throw reloadError
+
+      return (reloadedRows || []) as ForceHistoryRow[]
     }
 
     const currentIds = new Set(currentRows.map((row) => row.id!))
@@ -128,25 +138,27 @@ export function ForcePage({
     const rowsToInsert = nextRows.filter((row) => !row.id)
 
     if (rowsToDelete.length > 0) {
-      await supabase
+      const { error } = await supabase
         .from("force_history")
         .delete()
         .in("id", rowsToDelete.map((row) => row.id!))
+      if (error) throw error
     }
 
     for (const row of rowsToUpdate) {
       const existing = currentRows.find((candidate) => candidate.id === row.id)
       if (!existing || existing.forced_date === row.forced_date) continue
 
-      await supabase
+      const { error } = await supabase
         .from("force_history")
         .update({ forced_date: row.forced_date })
         .eq("id", row.id!)
+      if (error) throw error
     }
 
     let insertedRows: ForceHistoryRow[] = []
     if (rowsToInsert.length > 0) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("force_history")
         .insert(
           rowsToInsert.map((row) => ({
@@ -155,6 +167,7 @@ export function ForcePage({
           }))
         )
         .select("*")
+      if (error) throw error
 
       insertedRows = (data || []) as ForceHistoryRow[]
     }
@@ -175,10 +188,11 @@ export function ForcePage({
       return nextMatch
     })
 
-    const { data: reloadedRows } = await supabase
+    const { data: reloadedRows, error: reloadError } = await supabase
       .from("force_history")
       .select("*")
       .order("forced_date", { ascending: false })
+    if (reloadError) throw reloadError
 
     return (reloadedRows || mergedRows) as ForceHistoryRow[]
   }
@@ -236,8 +250,13 @@ export function ForcePage({
       }
     }))
 
-    const syncedRows = await syncEntireForceHistory(nextRows)
-    setForceHistory(syncedRows)
+    try {
+      const syncedRows = await syncEntireForceHistory(nextRows)
+      setForceHistory(syncedRows)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to save force history.")
+      return
+    }
 
     const employee = employees.find((row) => row.id === empId)
     onAuditEvent?.(
@@ -274,8 +293,13 @@ export function ForcePage({
       }
     }))
 
-    const syncedRows = await syncEntireForceHistory(nextRows)
-    setForceHistory(syncedRows)
+    try {
+      const syncedRows = await syncEntireForceHistory(nextRows)
+      setForceHistory(syncedRows)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to save force dates.")
+      return
+    }
 
     const employee = employees.find((row) => row.id === employeeId)
     onAuditEvent?.(
@@ -291,8 +315,13 @@ export function ForcePage({
 
     setUndoStack((current) => current.slice(1))
     setForceHistory(previous.rows)
-    const syncedRows = await syncEntireForceHistory(previous.rows)
-    setForceHistory(syncedRows)
+    try {
+      const syncedRows = await syncEntireForceHistory(previous.rows)
+      setForceHistory(syncedRows)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to undo the force change.")
+      return
+    }
 
     onAuditEvent?.(
       "Force Undo",
@@ -317,8 +346,13 @@ export function ForcePage({
 
     pushUndoSnapshot([originalRow.employee_id])
     setForceHistory(nextRows)
-    const syncedRows = await syncEntireForceHistory(nextRows)
-    setForceHistory(syncedRows)
+    try {
+      const syncedRows = await syncEntireForceHistory(nextRows)
+      setForceHistory(syncedRows)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to edit force history.")
+      return
+    }
 
     const employee = employees.find((row) => row.id === originalRow.employee_id)
     onAuditEvent?.(
@@ -338,8 +372,13 @@ export function ForcePage({
     pushUndoSnapshot([...new Set(targetRows.map((row) => row.employee_id))])
     setForceHistory(nextRows)
     setSelectedHistoryRows([])
-    const syncedRows = await syncEntireForceHistory(nextRows)
-    setForceHistory(syncedRows)
+    try {
+      const syncedRows = await syncEntireForceHistory(nextRows)
+      setForceHistory(syncedRows)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to delete force history.")
+      return
+    }
 
     onAuditEvent?.(
       "Force History Deleted",
