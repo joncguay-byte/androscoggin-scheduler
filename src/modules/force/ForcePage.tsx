@@ -459,9 +459,103 @@ export function ForcePage({
   const allVisibleHistoryRowIds = forceHistoryList.map(({ row, originalIndex }) => getForceHistoryRowKey(row, originalIndex))
   const allVisibleSelected =
     forceHistoryList.length > 0 && allVisibleHistoryRowIds.every((id) => selectedHistoryRows.includes(id))
+  const neverForcedCount = forceList.filter((employee) => employee.total === 0).length
+  const totalForceEntries = forceHistory.length
+  const topCandidate = forceList[0] || null
+  const recentForcedLabel = forceHistoryList[0]
+    ? (() => {
+        const employee = employees.find((candidate) => candidate.id === forceHistoryList[0].row.employee_id)
+        return employee ? `${employee.lastName}, ${employee.firstName}` : forceHistoryList[0].row.employee_id
+      })()
+    : "None"
 
   return (
-    <div id="force-print-section" style={{ padding: "20px" }}>
+    <div id="force-print-section" style={{ padding: "20px", display: "grid", gap: "16px" }}>
+      <div
+        style={{
+          display: "grid",
+          gap: "14px",
+          padding: "18px",
+          background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
+          borderRadius: "16px",
+          border: "1px solid #dbeafe"
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: "12px",
+            flexWrap: "wrap"
+          }}
+        >
+          <div style={{ display: "grid", gap: "4px" }}>
+            <div style={{ fontSize: "11px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1d4ed8" }}>
+              Force Operations
+            </div>
+            <div style={{ fontSize: "28px", lineHeight: 1.05, fontWeight: 800, color: "#0f172a" }}>
+              Force Rotation
+            </div>
+            <div style={{ fontSize: "13px", color: "#475569" }}>
+              Track the live force queue, keep history clean, and manage overrides without losing the rotation.
+            </div>
+          </div>
+
+          {!readOnly && (
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                data-no-print="true"
+                onClick={() => printElementById("force-print-section", "Force Rotation")}
+              >
+                Print Force
+              </button>
+              <button
+                data-no-print="true"
+                onClick={() => setShowForceHistory((current) => !current)}
+              >
+                {showForceHistory ? "Hide Force History" : "Force History"}
+              </button>
+              <button
+                data-no-print="true"
+                onClick={() => void undoForceAction()}
+                disabled={undoStack.length === 0}
+              >
+                Undo
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
+          {[
+            { label: "Next Candidate", value: topCandidate ? `${topCandidate.lastName}, ${topCandidate.firstName}` : "None", tone: "#1d4ed8", bg: "#eff6ff" },
+            { label: "Never Forced", value: String(neverForcedCount), tone: "#166534", bg: "#ecfdf5" },
+            { label: "History Entries", value: String(totalForceEntries), tone: "#7c3aed", bg: "#f5f3ff" },
+            { label: "Recent Force", value: recentForcedLabel, tone: "#92400e", bg: "#fffbeb" }
+          ].map((card) => (
+            <div
+              key={card.label}
+              style={{
+                border: "1px solid rgba(148, 163, 184, 0.22)",
+                borderRadius: "12px",
+                padding: "12px 14px",
+                background: card.bg,
+                display: "grid",
+                gap: "3px"
+              }}
+            >
+              <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>
+                {card.label}
+              </div>
+              <div style={{ fontSize: card.label === "Next Candidate" || card.label === "Recent Force" ? "17px" : "26px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>
+                {card.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div
         style={{
           display: "flex",
@@ -472,7 +566,7 @@ export function ForcePage({
           flexWrap: "wrap"
         }}
       >
-        <h2>Force Rotation</h2>
+        <h2 style={{ margin: 0 }}>Rotation Board</h2>
         {!readOnly && (
           <>
             <button
@@ -505,13 +599,18 @@ export function ForcePage({
             display: "grid",
             gap: "10px",
             marginBottom: "16px",
-            padding: "14px",
+            padding: "16px",
             border: "1px solid #dbeafe",
-            borderRadius: "14px",
-            background: "#f8fbff"
+            borderRadius: "16px",
+            background: "linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)"
           }}
         >
-          <div style={{ fontWeight: 800, color: "#0f172a" }}>Force History</div>
+          <div style={{ display: "grid", gap: "3px" }}>
+            <div style={{ fontWeight: 800, color: "#0f172a" }}>Force History</div>
+            <div style={{ fontSize: "12px", color: "#64748b" }}>
+              Clean up exact force entries without disturbing the live queue.
+            </div>
+          </div>
           <div style={{ fontSize: "12px", color: "#475569" }}>
             Check the exact rows you want to remove, then press Delete Selected.
           </div>
@@ -627,10 +726,11 @@ export function ForcePage({
           style={{
             display: "grid",
             gridTemplateColumns: "40px 190px 100px 150px 150px 140px 120px 120px",
-            padding: "8px",
+            padding: "10px 12px",
             borderBottom: "1px solid #e5e7eb",
             alignItems: "center",
-            background: index === 0 ? "#dcfce7" : "white"
+            background: index === 0 ? "linear-gradient(90deg, #dcfce7 0%, #f8fffb 100%)" : index % 2 === 0 ? "#ffffff" : "#fbfdff",
+            borderRadius: index === 0 ? "12px 12px 0 0" : "0"
           }}
         >
           <div>{index + 1}</div>
