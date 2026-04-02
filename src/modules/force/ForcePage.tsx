@@ -32,6 +32,8 @@ export function ForcePage({
 }) {
   const [draftDatesByEmployee, setDraftDatesByEmployee] = useState<Record<string, { last1: string; last2: string }>>({})
   const [undoStack, setUndoStack] = useState<Array<{ rows: ForceHistoryRow[]; employeeIds: string[] }>>([])
+  const [showForceHistory, setShowForceHistory] = useState(false)
+  const [historyDrafts, setHistoryDrafts] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const nextDrafts: Record<string, { last1: string; last2: string }> = {}
@@ -49,6 +51,14 @@ export function ForcePage({
 
     setDraftDatesByEmployee(nextDrafts)
   }, [employees, forceHistory])
+
+  useEffect(() => {
+    const nextDrafts: Record<string, string> = {}
+    forceHistory.forEach((row) => {
+      nextDrafts[`${row.employee_id}-${row.forced_date}`] = row.forced_date
+    })
+    setHistoryDrafts(nextDrafts)
+  }, [forceHistory])
 
   function pushUndoSnapshot(employeeIds: string[]) {
     const snapshot = forceHistory.map((row) => ({ ...row }))
@@ -188,7 +198,53 @@ export function ForcePage({
     )
   }
 
+  async function saveForceHistoryEntry(originalRow: ForceHistoryRow) {
+    const rowKey = `${originalRow.employee_id}-${originalRow.forced_date}`
+    const nextForcedDate = historyDrafts[rowKey]?.trim() || ""
+    if (!nextForcedDate) return
+
+    const nextRows = forceHistory
+      .map((row) =>
+        row.employee_id === originalRow.employee_id && row.forced_date === originalRow.forced_date
+          ? { ...row, forced_date: nextForcedDate }
+          : row
+      )
+      .filter((row, index, rows) =>
+        rows.findIndex((candidate) => candidate.employee_id === row.employee_id && candidate.forced_date === row.forced_date) === index
+      )
+
+    pushUndoSnapshot([originalRow.employee_id])
+    setForceHistory(nextRows)
+    await syncForceHistoryForEmployees(nextRows, [originalRow.employee_id])
+
+    const employee = employees.find((row) => row.id === originalRow.employee_id)
+    onAuditEvent?.(
+      "Force History Edited",
+      `Updated force history for ${employee ? `${employee.firstName} ${employee.lastName}` : "employee"}.`,
+      `Previous date: ${originalRow.forced_date} | New date: ${nextForcedDate}`
+    )
+  }
+
+  async function deleteForceHistoryEntry(targetRow: ForceHistoryRow) {
+    const nextRows = forceHistory.filter(
+      (row) => !(row.employee_id === targetRow.employee_id && row.forced_date === targetRow.forced_date)
+    )
+
+    pushUndoSnapshot([targetRow.employee_id])
+    setForceHistory(nextRows)
+    await syncForceHistoryForEmployees(nextRows, [targetRow.employee_id])
+
+    const employee = employees.find((row) => row.id === targetRow.employee_id)
+    onAuditEvent?.(
+      "Force History Deleted",
+      `Deleted force history for ${employee ? `${employee.firstName} ${employee.lastName}` : "employee"}.`,
+      `Deleted date: ${targetRow.forced_date}`
+    )
+  }
+
   const forceList = buildForceList()
+  const forceHistoryList = [...forceHistory]
+    .sort((a, b) => b.forced_date.localeCompare(a.forced_date) || a.employee_id.localeCompare(b.employee_id))
 
   return (
     <div id="force-print-section" style={{ padding: "20px" }}>
@@ -213,6 +269,12 @@ export function ForcePage({
             </button>
             <button
               data-no-print="true"
+              onClick={() => setShowForceHistory((current) => !current)}
+            >
+              {showForceHistory ? "Hide Force History" : "Force History"}
+            </button>
+            <button
+              data-no-print="true"
               onClick={() => void undoForceAction()}
               disabled={undoStack.length === 0}
             >
@@ -221,6 +283,83 @@ export function ForcePage({
           </>
         )}
       </div>
+
+      {!readOnly && showForceHistory && (
+        <div
+          data-no-print="true"
+          style={{
+            display: "grid",
+            gap: "10px",
+            marginBottom: "16px",
+            padding: "14px",
+            border: "1px solid #dbeafe",
+            borderRadius: "14px",
+            background: "#f8fbff"
+          }}
+        >
+          <div style={{ fontWeight: 800, color: "#0f172a" }}>Force History</div>
+          <div style={{ fontSize: "12px", color: "#475569" }}>
+            Edit or delete individual force entries here. This is the best place to clean up experimental dates.
+          </div>
+
+          {forceHistoryList.length === 0 ? (
+            <div style={{ fontSize: "13px", color: "#64748b" }}>
+              No force history entries yet.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: "8px" }}>
+              {forceHistoryList.map((row) => {
+                const employee = employees.find((candidate) => candidate.id === row.employee_id)
+                const rowKey = `${row.employee_id}-${row.forced_date}`
+
+                return (
+                  <div
+                    key={rowKey}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1.6fr 160px 110px 110px",
+                      gap: "10px",
+                      alignItems: "center",
+                      padding: "10px 12px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      background: "#ffffff"
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700 }}>
+                        {employee ? `${employee.lastName}, ${employee.firstName}` : row.employee_id}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#64748b" }}>
+                        Original date: {row.forced_date}
+                      </div>
+                    </div>
+
+                    <input
+                      type="date"
+                      value={historyDrafts[rowKey] || row.forced_date}
+                      onChange={(event) =>
+                        setHistoryDrafts((current) => ({
+                          ...current,
+                          [rowKey]: event.target.value
+                        }))
+                      }
+                    />
+
+                    <button onClick={() => void saveForceHistoryEntry(row)}>
+                      Save
+                    </button>
+
+                    <button onClick={() => void deleteForceHistoryEntry(row)}>
+                      Delete
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {forceList.map((employee, index) => (
         <div
