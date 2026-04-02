@@ -34,6 +34,7 @@ export function ForcePage({
   const [undoStack, setUndoStack] = useState<Array<{ rows: ForceHistoryRow[]; employeeIds: string[] }>>([])
   const [showForceHistory, setShowForceHistory] = useState(false)
   const [historyDrafts, setHistoryDrafts] = useState<Record<string, string>>({})
+  const [selectedHistoryEmployeeId, setSelectedHistoryEmployeeId] = useState("")
 
   useEffect(() => {
     const nextDrafts: Record<string, { last1: string; last2: string }> = {}
@@ -59,6 +60,17 @@ export function ForcePage({
     })
     setHistoryDrafts(nextDrafts)
   }, [forceHistory])
+
+  useEffect(() => {
+    if (!showForceHistory) return
+
+    const hasSelectedEmployee = selectedHistoryEmployeeId
+      && forceHistory.some((row) => row.employee_id === selectedHistoryEmployeeId)
+
+    if (!hasSelectedEmployee) {
+      setSelectedHistoryEmployeeId(forceHistory[0]?.employee_id || "")
+    }
+  }, [forceHistory, selectedHistoryEmployeeId, showForceHistory])
 
   function pushUndoSnapshot(employeeIds: string[]) {
     const snapshot = forceHistory.map((row) => ({ ...row }))
@@ -244,6 +256,24 @@ export function ForcePage({
   const forceHistoryList = forceHistory
     .map((row, originalIndex) => ({ row, originalIndex }))
     .sort((a, b) => b.row.forced_date.localeCompare(a.row.forced_date) || a.row.employee_id.localeCompare(b.row.employee_id))
+  const forceHistoryEmployees = Array.from(
+    new Map(
+      forceHistoryList.map(({ row }) => {
+        const employee = employees.find((candidate) => candidate.id === row.employee_id)
+        return [
+          row.employee_id,
+          {
+            employeeId: row.employee_id,
+            label: employee ? `${employee.lastName}, ${employee.firstName}` : row.employee_id,
+            count: forceHistory.filter((entry) => entry.employee_id === row.employee_id).length
+          }
+        ] as const
+      })
+    ).values()
+  ).sort((a, b) => a.label.localeCompare(b.label))
+  const selectedEmployeeHistory = forceHistoryList.filter(
+    ({ row }) => row.employee_id === selectedHistoryEmployeeId
+  )
 
   return (
     <div id="force-print-section" style={{ padding: "20px" }}>
@@ -306,55 +336,79 @@ export function ForcePage({
               No force history entries yet.
             </div>
           ) : (
-            <div style={{ display: "grid", gap: "8px" }}>
-              {forceHistoryList.map(({ row, originalIndex }) => {
-                const employee = employees.find((candidate) => candidate.id === row.employee_id)
-                const rowKey = `${row.employee_id}-${row.forced_date}-${originalIndex}`
-
-                return (
-                  <div
-                    key={rowKey}
+            <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "12px" }}>
+              <div style={{ display: "grid", gap: "8px", alignContent: "start" }}>
+                {forceHistoryEmployees.map((entry) => (
+                  <button
+                    key={entry.employeeId}
+                    onClick={() => setSelectedHistoryEmployeeId(entry.employeeId)}
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "1.6fr 160px 110px 110px",
-                      gap: "10px",
-                      alignItems: "center",
-                      padding: "10px 12px",
-                      border: "1px solid #e2e8f0",
+                      border: selectedHistoryEmployeeId === entry.employeeId ? "2px solid #2563eb" : "1px solid #dbeafe",
                       borderRadius: "12px",
-                      background: "#ffffff"
+                      background: selectedHistoryEmployeeId === entry.employeeId ? "#eff6ff" : "#ffffff",
+                      padding: "10px 12px",
+                      textAlign: "left",
+                      cursor: "pointer"
                     }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 700 }}>
-                        {employee ? `${employee.lastName}, ${employee.firstName}` : row.employee_id}
-                      </div>
-                      <div style={{ fontSize: "12px", color: "#64748b" }}>
-                        Original date: {row.forced_date}
-                      </div>
+                    <div style={{ fontWeight: 700, color: "#0f172a" }}>{entry.label}</div>
+                    <div style={{ fontSize: "12px", color: "#64748b" }}>
+                      {entry.count} entr{entry.count === 1 ? "y" : "ies"}
                     </div>
+                  </button>
+                ))}
+              </div>
 
-                    <input
-                      type="date"
-                      value={historyDrafts[rowKey] || row.forced_date}
-                      onChange={(event) =>
-                        setHistoryDrafts((current) => ({
-                          ...current,
-                          [rowKey]: event.target.value
-                        }))
-                      }
-                    />
+              <div style={{ display: "grid", gap: "8px" }}>
+                {selectedEmployeeHistory.map(({ row, originalIndex }) => {
+                  const employee = employees.find((candidate) => candidate.id === row.employee_id)
+                  const rowKey = `${row.employee_id}-${row.forced_date}-${originalIndex}`
 
-                    <button onClick={() => void saveForceHistoryEntry(row, originalIndex)}>
-                      Save
-                    </button>
+                  return (
+                    <div
+                      key={rowKey}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1.6fr 160px 110px 110px",
+                        gap: "10px",
+                        alignItems: "center",
+                        padding: "10px 12px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "12px",
+                        background: "#ffffff"
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 700 }}>
+                          {employee ? `${employee.lastName}, ${employee.firstName}` : row.employee_id}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#64748b" }}>
+                          Original date: {row.forced_date}
+                        </div>
+                      </div>
 
-                    <button onClick={() => void deleteForceHistoryEntry(row, originalIndex)}>
-                      Delete
-                    </button>
-                  </div>
-                )
-              })}
+                      <input
+                        type="date"
+                        value={historyDrafts[rowKey] || row.forced_date}
+                        onChange={(event) =>
+                          setHistoryDrafts((current) => ({
+                            ...current,
+                            [rowKey]: event.target.value
+                          }))
+                        }
+                      />
+
+                      <button onClick={() => void saveForceHistoryEntry(row, originalIndex)}>
+                        Save
+                      </button>
+
+                      <button onClick={() => void deleteForceHistoryEntry(row, originalIndex)}>
+                        Delete
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
