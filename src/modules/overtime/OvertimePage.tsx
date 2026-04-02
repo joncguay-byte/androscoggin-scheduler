@@ -2464,8 +2464,8 @@ export function OvertimePage({
 
   const missionControlCardContent: Record<MissionControlCardKey, React.ReactNode> = {
     order: (
-      <div style={{ display: "grid", gap: "8px" }}>
-        <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
+      <div style={{ display: "grid", gap: "4px" }}>
+        <div style={{ fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#cbd5e1", fontWeight: 800 }}>
           Overtime Order
         </div>
         <select
@@ -2473,12 +2473,12 @@ export function OvertimePage({
           onChange={() => undefined}
           style={{
             width: "100%",
-            padding: "8px 10px",
-            borderRadius: "8px",
+            padding: "5px 7px",
+            borderRadius: "6px",
             border: "1px solid rgba(255,255,255,0.18)",
             background: "rgba(15,23,42,0.45)",
             color: "#ffffff",
-            fontSize: "12px",
+            fontSize: "10px",
             fontWeight: 700
           }}
         >
@@ -2489,20 +2489,20 @@ export function OvertimePage({
             </option>
           ))}
         </select>
-        <div style={{ fontSize: "11px", color: "#cbd5e1", lineHeight: 1.45 }}>
+        <div style={{ fontSize: "9px", color: "#cbd5e1", lineHeight: 1.25 }}>
           Seniority starts the order. After a force or assignment, that employee rotates down.
         </div>
         <button
           onClick={() => printElementById("overtime-list-print-section", "Overtime List")}
           style={{
             justifySelf: "start",
-            padding: "6px 10px",
-            borderRadius: "8px",
+            padding: "4px 8px",
+            borderRadius: "6px",
             border: "none",
             background: "#2563eb",
             color: "#ffffff",
             fontWeight: 800,
-            fontSize: "11px",
+            fontSize: "9px",
             cursor: "pointer"
           }}
         >
@@ -2511,25 +2511,25 @@ export function OvertimePage({
       </div>
     ),
     queue: (
-      <div style={{ display: "grid", gap: "6px" }}>
-        <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
+      <div style={{ display: "grid", gap: "4px" }}>
+        <div style={{ fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#cbd5e1", fontWeight: 800 }}>
           Open Queue
         </div>
-        <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>{overtimeShiftQueue.length}</div>
-        <div style={{ fontSize: "11px", color: "#cbd5e1" }}>
+        <div style={{ fontSize: "16px", fontWeight: 900, marginTop: "2px" }}>{overtimeShiftQueue.length}</div>
+        <div style={{ fontSize: "9px", color: "#cbd5e1", lineHeight: 1.2 }}>
           Shifts currently requiring coverage under staffing rules.
         </div>
       </div>
     ),
     responses: (
-      <div style={{ display: "grid", gap: "6px" }}>
-        <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#cbd5e1", fontWeight: 800 }}>
+      <div style={{ display: "grid", gap: "4px" }}>
+        <div style={{ fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#cbd5e1", fontWeight: 800 }}>
           Interested Responses
         </div>
-        <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>
+        <div style={{ fontSize: "16px", fontWeight: 900, marginTop: "2px" }}>
           {overtimeShiftQueue.reduce((total, request) => total + request.responses.filter((response) => response.status === "Interested").length, 0)}
         </div>
-        <div style={{ fontSize: "11px", color: "#cbd5e1" }}>
+        <div style={{ fontSize: "9px", color: "#cbd5e1", lineHeight: 1.2 }}>
           Live interest captured from overtime email responses.
         </div>
       </div>
@@ -2672,29 +2672,29 @@ export function OvertimePage({
           <div
             style={{
               ...CARD_STYLE,
-              padding: "20px 22px",
+              padding: "10px 12px",
               background: "linear-gradient(135deg, #0b1f42 0%, #143565 48%, #203f74 100%)",
               color: "#ffffff",
               display: "grid",
-              gap: "16px"
+              gap: "8px"
             }}
           >
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(340px, 1.15fr) minmax(620px, 1fr)",
-                gap: "20px",
+                gridTemplateColumns: "minmax(240px, 0.9fr) minmax(420px, 0.9fr)",
+                gap: "10px",
                 alignItems: "start"
               }}
             >
               <div>
-                <div style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#93c5fd" }}>
+                <div style={{ fontSize: "9px", fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#93c5fd" }}>
                   Overtime Workspace
                 </div>
-                <div style={{ fontSize: "28px", fontWeight: 900, marginTop: "4px", lineHeight: 1.05 }}>
+                <div style={{ fontSize: "18px", fontWeight: 900, marginTop: "2px", lineHeight: 1.05 }}>
                   Overtime Mission Control
                 </div>
-                <div style={{ fontSize: "13px", color: "#dbe7fb", marginTop: "8px", maxWidth: "700px", lineHeight: 1.6 }}>
+                <div style={{ fontSize: "10px", color: "#dbe7fb", marginTop: "4px", maxWidth: "520px", lineHeight: 1.35 }}>
                   Build time off, generate overtime, queue it, collect employee interest, and assign coverage from one control center with fewer jumps and clearer live signals.
                 </div>
               </div>
@@ -2702,10 +2702,10 @@ export function OvertimePage({
                 style={{
                   display: "grid",
                   width: "100%",
-                  minWidth: "620px",
-                  gridTemplateColumns: "minmax(270px, 1.08fr) minmax(240px, 0.92fr)",
-                  gridTemplateRows: "repeat(2, minmax(110px, auto))",
-                  gap: "12px",
+                  minWidth: "420px",
+                  gridTemplateColumns: "minmax(190px, 0.95fr) minmax(150px, 0.8fr)",
+                  gridTemplateRows: "repeat(2, minmax(74px, auto))",
+                  gap: "8px",
                   alignItems: "stretch",
                   justifySelf: "end"
                 }}
@@ -2719,13 +2719,13 @@ export function OvertimePage({
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={() => moveMissionControlCard(cardKey)}
                     style={{
-                      borderRadius: "16px",
+                      borderRadius: "12px",
                       background: "rgba(255,255,255,0.11)",
                       border: draggingMissionCard === cardKey ? "1px solid #93c5fd" : "1px solid rgba(255,255,255,0.1)",
-                      padding: cardKey === "order" ? "12px 12px" : "12px 14px",
+                      padding: cardKey === "order" ? "8px 8px" : "8px 10px",
                       display: "grid",
-                      gap: "8px",
-                      minHeight: cardKey === "order" ? "96px" : "110px",
+                      gap: "4px",
+                      minHeight: cardKey === "order" ? "64px" : "74px",
                       cursor: "grab",
                       gridColumn: index === 0 ? "1 / 2" : "2 / 3",
                       gridRow: index === 0 ? "1 / 2" : index === 1 ? "1 / 2" : "2 / 3",
