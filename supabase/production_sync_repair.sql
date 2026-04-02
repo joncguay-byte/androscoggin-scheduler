@@ -114,3 +114,34 @@ on public.patrol_schedule (assignment_date, shift_type, position_code);
 
 create index if not exists patrol_overrides_assignment_slot_idx
 on public.patrol_overrides (assignment_date, shift_type, position_code);
+
+create or replace function public.current_app_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select role from public.profiles where id = auth.uid()),
+    auth.jwt() -> 'app_metadata' ->> 'role',
+    auth.jwt() -> 'user_metadata' ->> 'role',
+    'deputy'
+  );
+$$;
+
+revoke all on function public.current_app_role() from public;
+grant execute on function public.current_app_role() to authenticated;
+
+create or replace function public.is_admin_or_sergeant()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_app_role() in ('admin', 'sergeant');
+$$;
+
+revoke all on function public.is_admin_or_sergeant() from public;
+grant execute on function public.is_admin_or_sergeant() to authenticated;
