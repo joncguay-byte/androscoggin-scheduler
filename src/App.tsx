@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Header from "./components/Header"
 import SummaryCards from "./components/SummaryCards"
 import ModuleTabs from "./components/ModuleTabs"
-import CommandStatusStrip from "./components/CommandStatusStrip"
 import AppToastViewport from "./components/AppToastViewport"
 import LoginPage from "./modules/auth/LoginPage"
 
@@ -761,15 +760,6 @@ export default function App() {
   const [overtimeBuilderPatrolLaunch, setOvertimeBuilderPatrolLaunch] = useState<OvertimeBuilderPatrolLaunch | null>(null)
   const [patrolImportPreview, setPatrolImportPreview] = useState<PatrolImportPreviewState>(null)
   const [isMobileLayout, setIsMobileLayout] = useState(false)
-  const [deployedBuildId, setDeployedBuildId] = useState("")
-  const [buildSyncStatus, setBuildSyncStatus] = useState<"checking" | "current" | "update_available" | "error">("checking")
-  const [appStateSyncStatus, setAppStateSyncStatus] = useState<{
-    mode: "checking" | "connected" | "local"
-    message: string
-  }>({
-    mode: "checking",
-    message: "Checking Supabase sync for local modules..."
-  })
   const [patrolOverridesSyncReady, setPatrolOverridesSyncReady] = useState(false)
   const [overtimeNotificationsSyncReady, setOvertimeNotificationsSyncReady] = useState(false)
   const [overtimeNotificationsSyncError, setOvertimeNotificationsSyncError] = useState("")
@@ -1769,20 +1759,6 @@ export default function App() {
       setDetailQueueIds(normalized.detailQueueIds)
       setAuditEvents(normalized.auditEvents)
       lastSupabaseSnapshotRef.current = JSON.stringify(normalized)
-      setAppStateSyncStatus({
-        mode: "connected",
-        message: "Supabase sync is active for Employees, CID, Detail, Settings, audit, overtime, notifications, and patrol overrides."
-      })
-    } else if (result.error) {
-      setAppStateSyncStatus({
-        mode: "local",
-        message: "Using local browser storage for Employees, CID, Detail, Settings, and audit until Supabase app_state is available."
-      })
-    } else {
-      setAppStateSyncStatus({
-        mode: "local",
-        message: "No Supabase app state found yet. Local browser storage is active until app_state is set up."
-      })
     }
 
     hasHydratedSupabaseState.current = true
@@ -1851,15 +1827,6 @@ export default function App() {
       if (result.ok) {
         lastSupabaseSnapshotRef.current = snapshotJson
         lastSupabaseSyncActorRef.current = currentSyncActorKey
-        setAppStateSyncStatus({
-          mode: "connected",
-          message: "Supabase sync is active for Employees, CID, Detail, Settings, audit, overtime, notifications, and patrol overrides."
-        })
-      } else {
-        setAppStateSyncStatus({
-          mode: "local",
-          message: "Local browser storage is still active. Add the app_state schema in Supabase to turn on cloud sync."
-        })
       }
     }, 700)
 
@@ -2138,67 +2105,6 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-
-    let active = true
-
-    const checkForDeployedBuild = async () => {
-      try {
-        const response = await fetch(`/version.json?ts=${Date.now()}`, {
-          cache: "no-store",
-          headers: {
-            "cache-control": "no-cache"
-          }
-        })
-
-        if (!response.ok) {
-          throw new Error(`Unable to load version.json (${response.status})`)
-        }
-
-        const payload = await response.json() as { buildId?: string }
-
-        if (!active) return
-
-        const nextBuildId = typeof payload.buildId === "string" ? payload.buildId : ""
-        setDeployedBuildId(nextBuildId)
-
-        if (nextBuildId && nextBuildId !== __APP_BUILD_ID__) {
-          setBuildSyncStatus("update_available")
-          return
-        }
-
-        setBuildSyncStatus("current")
-      } catch {
-        if (!active) return
-
-        setBuildSyncStatus((current) => (current === "update_available" ? current : "error"))
-      }
-    }
-
-    void checkForDeployedBuild()
-
-    const intervalId = window.setInterval(() => {
-      void checkForDeployedBuild()
-    }, 45000)
-
-    const handleRefreshCheck = () => {
-      if (document.visibilityState === "visible") {
-        void checkForDeployedBuild()
-      }
-    }
-
-    window.addEventListener("focus", handleRefreshCheck)
-    document.addEventListener("visibilitychange", handleRefreshCheck)
-
-    return () => {
-      active = false
-      window.clearInterval(intervalId)
-      window.removeEventListener("focus", handleRefreshCheck)
-      document.removeEventListener("visibilitychange", handleRefreshCheck)
-    }
-  }, [])
-
-  useEffect(() => {
     function syncFromQuery() {
       if (typeof window === "undefined") return
       const searchParams = new URLSearchParams(window.location.search)
@@ -2442,21 +2348,6 @@ export default function App() {
               : undefined
           }
         />
-
-        {!isMobileLayout && (
-          <div style={{ marginTop: "14px" }}>
-            <CommandStatusStrip
-              buildSyncStatus={buildSyncStatus}
-              deployedBuildId={deployedBuildId}
-              appStateSyncStatus={appStateSyncStatus}
-              currentUserRole={currentUserRole}
-              patrolOverridesSyncReady={patrolOverridesSyncReady}
-              overtimeNotificationsSyncReady={overtimeNotificationsSyncReady}
-              auditEvents={auditEvents}
-              onReload={() => window.location.reload()}
-            />
-          </div>
-        )}
 
         {!isMobileLayout && <div style={{ marginTop: "14px", marginBottom: "14px" }}>
           <SummaryCards
