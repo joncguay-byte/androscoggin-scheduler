@@ -20,6 +20,20 @@ function buildVersionPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), buildVersionPlugin()],
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return
+          if (id.includes("@supabase")) return "supabase"
+          if (id.includes("@tanstack/react-query")) return "react-query"
+          if (id.includes("lucide-react")) return "icons"
+          return "vendor"
+        }
+      }
+    }
+  },
   define: {
     __APP_BUILD_ID__: JSON.stringify(buildId)
   }

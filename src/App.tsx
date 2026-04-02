@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import Header from "./components/Header"
@@ -8,17 +8,6 @@ import CommandStatusStrip from "./components/CommandStatusStrip"
 import AppToastViewport from "./components/AppToastViewport"
 import LoginPage from "./modules/auth/LoginPage"
 
-import { PatrolPage } from "./modules/patrol/PatrolPage"
-import { CommandPage } from "./modules/command/CommandPage"
-import { AuditPage } from "./modules/audit/AuditPage"
-import { OvertimePage } from "./modules/overtime/OvertimePage"
-import { NotificationsPage } from "./modules/notifications/NotificationsPage"
-import { CIDPage } from "./modules/cid/CIDPage"
-import { DetailPage } from "./modules/detail/DetailPage"
-import EmployeesPage from "./modules/employees/EmployeesPage"
-import { ForcePage } from "./modules/force/ForcePage"
-import { ReportsPage } from "./modules/reports/ReportsPage"
-import { SettingsPage } from "./modules/settings/SettingsPage"
 import type { AppSettings, ReferenceSettings } from "./modules/settings/SettingsPage"
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/simple-ui"
 
@@ -98,6 +87,18 @@ type PatrolImportPreviewState = {
   fileName: string
   parsed: ParsedPatrolImport
 } | null
+
+const CommandPage = lazy(() => import("./modules/command/CommandPage").then((module) => ({ default: module.CommandPage })))
+const AuditPage = lazy(() => import("./modules/audit/AuditPage").then((module) => ({ default: module.AuditPage })))
+const PatrolPage = lazy(() => import("./modules/patrol/PatrolPage").then((module) => ({ default: module.PatrolPage })))
+const OvertimePage = lazy(() => import("./modules/overtime/OvertimePage").then((module) => ({ default: module.OvertimePage })))
+const NotificationsPage = lazy(() => import("./modules/notifications/NotificationsPage").then((module) => ({ default: module.NotificationsPage })))
+const CIDPage = lazy(() => import("./modules/cid/CIDPage").then((module) => ({ default: module.CIDPage })))
+const DetailPage = lazy(() => import("./modules/detail/DetailPage").then((module) => ({ default: module.DetailPage })))
+const EmployeesPage = lazy(() => import("./modules/employees/EmployeesPage"))
+const ForcePage = lazy(() => import("./modules/force/ForcePage").then((module) => ({ default: module.ForcePage })))
+const ReportsPage = lazy(() => import("./modules/reports/ReportsPage").then((module) => ({ default: module.ReportsPage })))
+const SettingsPage = lazy(() => import("./modules/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })))
 
 
 const moduleOrder: ModuleDefinition[] = [
@@ -2238,6 +2239,21 @@ export default function App() {
     })
   }
 
+  function renderModuleLoadingCard(label: string) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Loading {label}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div style={{ color: "#475569", fontSize: "14px", lineHeight: 1.5 }}>
+            Pulling the latest {label.toLowerCase()} workspace into view.
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   const queuedOvertimeRequests = useMemo(
     () => {
       const patrolTimeOffFeed = [...overtimeShiftRequests].filter(
@@ -2547,6 +2563,7 @@ export default function App() {
             transformOrigin: "top center"
           }}
         >
+        <Suspense fallback={renderModuleLoadingCard(moduleOrder.find((module) => module.key === activeModule)?.label || "module")}>
         {activeModule === "command" && (
           <CommandPage
             currentUserRole={currentUserRole}
@@ -2742,6 +2759,7 @@ export default function App() {
             }))}
           />
         )}
+        </Suspense>
         </div>
       </div>
       <AppToastViewport />
