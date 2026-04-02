@@ -68,7 +68,7 @@ export default function Header({
         marginBottom: "10px",
         border: style.border,
         borderRadius: "18px",
-        padding: compact ? "12px 14px" : "12px 18px",
+        padding: compact ? "12px 14px" : "14px 20px",
         boxSizing: "border-box",
         background: style.background,
         borderColor: colorSettings?.border || undefined,
@@ -136,7 +136,7 @@ export default function Header({
           </div>
         )}
 
-        <h2 style={{ margin: 0, color: colorSettings?.accent || style.titleColor, fontSize: compact ? "20px" : "30px", lineHeight: 1.15 }}>
+        <h2 style={{ margin: 0, color: colorSettings?.accent || style.titleColor, fontSize: compact ? "20px" : "30px", lineHeight: 1.1, letterSpacing: "-0.02em" }}>
           {title}
         </h2>
       </div>
@@ -166,10 +166,11 @@ export default function Header({
               padding: "6px 10px",
               borderRadius: "999px",
               border: "1px solid rgba(255,255,255,0.35)",
-              background: "rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.16)",
               color: style.userColor,
               cursor: "pointer",
               fontWeight: 700,
+              boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
               transition: "transform 150ms ease, background 150ms ease, box-shadow 150ms ease"
             }}
           >

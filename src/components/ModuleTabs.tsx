@@ -78,7 +78,9 @@ export default function ModuleTabs({
         marginBottom: "20px",
         flexWrap: compact ? "nowrap" : "wrap",
         overflowX: compact ? "auto" : "visible",
-        paddingBottom: compact ? "4px" : undefined
+        padding: compact ? "0 0 4px" : "4px",
+        borderRadius: "18px",
+        background: compact ? "transparent" : "rgba(248, 250, 252, 0.78)"
       }}
     >
 
@@ -105,9 +107,10 @@ export default function ModuleTabs({
               cursor: "pointer",
               fontWeight: "700",
               fontSize: compact ? "12px" : undefined,
+              letterSpacing: "-0.01em",
               whiteSpace: "nowrap",
               flexShrink: 0,
-              boxShadow: isActive ? "0 8px 18px rgba(15, 23, 42, 0.14)" : "none",
+              boxShadow: isActive ? "0 8px 18px rgba(15, 23, 42, 0.14)" : "0 1px 2px rgba(15, 23, 42, 0.03)",
               transform: isActive ? "translateY(-1px)" : "translateY(0)",
               transition: "transform 140ms ease, box-shadow 140ms ease, background 140ms ease, color 140ms ease"
             }}

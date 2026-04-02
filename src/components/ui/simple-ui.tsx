@@ -27,23 +27,39 @@ type OptionProps = {
 }
 
 export const Card = ({ children, className }: CardProps) => (
-  <div className={className} style={{ border: "1px solid #e2e8f0", borderRadius: 16, background: "white", boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)" }}>
+  <div
+    className={className}
+    style={{
+      border: "1px solid #e2e8f0",
+      borderRadius: 18,
+      background: "linear-gradient(180deg, #ffffff 0%, #fcfdff 100%)",
+      boxShadow: "0 12px 28px rgba(15, 23, 42, 0.05)",
+      overflow: "hidden"
+    }}
+  >
     {children}
   </div>
 );
 
 export const CardHeader = ({ children }: { children?: ReactNode }) => (
-  <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", fontWeight: 600 }}>
+  <div
+    style={{
+      padding: "14px 18px",
+      borderBottom: "1px solid #e2e8f0",
+      fontWeight: 600,
+      background: "linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)"
+    }}
+  >
     {children}
   </div>
 );
 
 export const CardTitle = ({ children }: { children?: ReactNode }) => (
-  <div style={{ fontSize: 16, fontWeight: 700 }}>{children}</div>
+  <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em", color: "#0f172a" }}>{children}</div>
 );
 
 export const CardContent = ({ children, className }: CardProps) => (
-  <div className={className} style={{ padding: 16 }}>{children}</div>
+  <div className={className} style={{ padding: 18 }}>{children}</div>
 );
 
 export const Button = ({ children, className, style, ...props }: ButtonProps) => (
@@ -51,12 +67,15 @@ export const Button = ({ children, className, style, ...props }: ButtonProps) =>
     {...props}
     className={className}
     style={{
-      padding: "6px 12px",
+      padding: "8px 14px",
       border: "1px solid #cbd5e1",
-      borderRadius: 8,
-      background: "#f8fafc",
+      borderRadius: 10,
+      background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+      color: "#0f172a",
       cursor: "pointer",
-      transition: "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease",
+      fontWeight: 700,
+      boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+      transition: "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease, color 140ms ease",
       ...style
     }}
   >
@@ -65,7 +84,18 @@ export const Button = ({ children, className, style, ...props }: ButtonProps) =>
 );
 
 export const Input = (props: InputProps) => (
-  <input {...props} style={{ width: "100%", padding: 6, border: "1px solid #cbd5e1", borderRadius: 6 }} />
+  <input
+    {...props}
+    style={{
+      width: "100%",
+      padding: "8px 10px",
+      border: "1px solid #cbd5e1",
+      borderRadius: 10,
+      background: "#ffffff",
+      boxSizing: "border-box",
+      color: "#0f172a"
+    }}
+  />
 );
 
 export const Label = ({ children }: { children?: ReactNode }) => (
@@ -74,7 +104,17 @@ export const Label = ({ children }: { children?: ReactNode }) => (
 
 export function Select({ value, onValueChange, children }: SelectProps) {
   return (
-    <select value={value} onChange={(e) => onValueChange?.(e.target.value)} style={{ padding: 6, border: "1px solid #cbd5e1", borderRadius: 6 }}>
+    <select
+      value={value}
+      onChange={(e) => onValueChange?.(e.target.value)}
+      style={{
+        padding: "8px 10px",
+        border: "1px solid #cbd5e1",
+        borderRadius: 10,
+        background: "#ffffff",
+        color: "#0f172a"
+      }}
+    >
       {children}
     </select>
   );
