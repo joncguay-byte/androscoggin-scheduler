@@ -16,6 +16,7 @@ import { isForceRequired, isShiftCovered } from "../../lib/staffing-engine"
 import { supabase } from "../../lib/supabase"
 import { ensureMonthSchedule } from "../../lib/schedule-generator"
 import { pushAppToast } from "../../stores/ui-store"
+import type { ReferenceSettings } from "../settings/SettingsPage"
 type ScheduleRow = {
   id?: string
   assignment_date: string
@@ -88,7 +89,7 @@ type OvertimeBuilderLaunch = {
   employeeId: string
 }
 
-const STATUS_OPTIONS = [
+const DEFAULT_STATUS_OPTIONS = [
   "Scheduled",
   "Sick",
   "Vacation",
@@ -365,6 +366,7 @@ export function PatrolPage({
   employees,
   canEdit,
   defaultView = "month",
+  referenceSettings,
   patrolOverrideRows,
   setPatrolOverrideRows,
   overtimeShiftRequests,
@@ -378,6 +380,7 @@ export function PatrolPage({
   employees: Employee[]
   canEdit?: boolean
   defaultView?: ScheduleView
+  referenceSettings: ReferenceSettings
   patrolOverrideRows: ScheduleRow[]
   setPatrolOverrideRows: React.Dispatch<React.SetStateAction<ScheduleRow[]>>
   overtimeShiftRequests: OvertimeShiftRequest[]
@@ -415,6 +418,16 @@ export function PatrolPage({
   const weekSectionRefs = useRef<Array<HTMLDivElement | null>>([])
 
   const dates = useMemo(() => buildVisibleDates(baseDate, view), [baseDate, view])
+  const statusOptions = useMemo(() => {
+    const configured = referenceSettings.patrolStatuses
+      .map((status) => status.trim())
+      .filter(Boolean)
+    return configured.length > 0 ? configured : DEFAULT_STATUS_OPTIONS
+  }, [referenceSettings.patrolStatuses])
+  const nonScheduledStatusOptions = useMemo(
+    () => statusOptions.filter((status) => status !== "Scheduled" && status !== "Open Shift"),
+    [statusOptions]
+  )
   const effectiveScheduleRows = useMemo(
     () => mergeScheduleRows(scheduleRows, patrolOverrideRows),
     [patrolOverrideRows, scheduleRows]
@@ -2187,10 +2200,16 @@ const next = ranking[0]
               <label>
                 <div style={{ fontWeight: 600, marginBottom: "4px" }}>Vehicle</div>
                 <input
+                  list="patrol-vehicle-options"
                   value={editingRow.vehicle || ""}
                   onChange={(e) => updateEditingRow("vehicle", e.target.value)}
                   style={{ width: "100%", padding: "8px" }}
                 />
+                <datalist id="patrol-vehicle-options">
+                  {referenceSettings.vehicles.map((vehicle) => (
+                    <option key={vehicle} value={vehicle} />
+                  ))}
+                </datalist>
               </label>
 
               <label>
@@ -2209,7 +2228,7 @@ const next = ranking[0]
                   onChange={(e) => updateEditingRow("status", e.target.value)}
                   style={{ width: "100%", padding: "8px" }}
                 >
-                  {STATUS_OPTIONS.map((status) => (
+                  {statusOptions.map((status) => (
                     <option key={status} value={status}>
                       {status}
                     </option>
@@ -2236,6 +2255,7 @@ const next = ranking[0]
               <label>
                 <div style={{ fontWeight: 600, marginBottom: "4px" }}>Replacement Vehicle</div>
                 <input
+                  list="patrol-vehicle-options"
                   value={editingRow.replacement_vehicle || ""}
                   onChange={(e) => updateEditingRow("replacement_vehicle", e.target.value)}
                   style={{ width: "100%", padding: "8px" }}
@@ -2822,7 +2842,7 @@ const next = ranking[0]
                 onChange={(event) => setTimeOffReasonSelection({ ...timeOffReasonSelection, reason: event.target.value })}
                 style={{ width: "100%", padding: "8px" }}
               >
-                {STATUS_OPTIONS.filter((status) => status !== "Scheduled" && status !== "Open Shift").map((status) => (
+                {nonScheduledStatusOptions.map((status) => (
                   <option key={status} value={status}>
                     {status}
                   </option>
@@ -2915,7 +2935,7 @@ const next = ranking[0]
                   }
                   style={{ width: "100%", padding: "8px" }}
                 >
-                  {STATUS_OPTIONS.filter((status) => status !== "Scheduled" && status !== "Open Shift").map((status) => (
+                  {nonScheduledStatusOptions.map((status) => (
                     <option key={status} value={status}>
                       {status}
                     </option>

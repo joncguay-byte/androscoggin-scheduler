@@ -2526,6 +2526,7 @@ export default function App() {
             employees={employees}
             canEdit={!isMobileLayout}
             defaultView={settings.defaultPatrolView}
+            referenceSettings={referenceSettings}
             patrolOverrideRows={localPatrolOverrideRows}
             setPatrolOverrideRows={setLocalPatrolOverrideRows}
             overtimeShiftRequests={overtimeShiftRequests}
