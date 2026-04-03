@@ -265,6 +265,28 @@ function toPatrolOverridePayload(row: ScheduleRow) {
   }
 }
 
+function buildPatrolRequestPayload(row: ScheduleRow, employee: Employee | null): OvertimeShiftRequest {
+  return {
+    id: buildPatrolOvertimeRequestId(row.assignment_date, row.shift_type, row.position_code),
+    source: "Patrol Open Shift",
+    assignmentDate: row.assignment_date,
+    shiftType: row.shift_type,
+    positionCode: row.position_code,
+    description: `${positionLabelFromCode(row.position_code)} time off`,
+    offEmployeeId: employee?.id || row.employee_id || null,
+    offEmployeeLastName: employee?.lastName || null,
+    offHours: row.shift_hours || employee?.defaultShiftHours || null,
+    offReason: row.status || "Off",
+    assignedHours: row.replacement_hours || null,
+    selectionActive: true,
+    workflowStatus: "Open",
+    status: row.replacement_employee_id ? "Assigned" : "Open",
+    assignedEmployeeId: row.replacement_employee_id || null,
+    createdAt: new Date().toISOString(),
+    responses: []
+  }
+}
+
 function mergeScheduleRows(baseRows: ScheduleRow[], overrideRows: ScheduleRow[]) {
   const merged = new Map<string, ScheduleRow>()
 
@@ -881,6 +903,24 @@ export function PatrolPage({
       id: row.id,
       ...basePayload
     }
+    const employee = employees.find((employeeRow) => employeeRow.id === row.employee_id) || null
+    const replacement = employees.find((employeeRow) => employeeRow.id === row.replacement_employee_id) || null
+    const shouldCreateOvertimeRequest =
+      isProblemStatus(localRow.status) || localRow.status === "Open Shift" || !!localRow.replacement_employee_id
+    const nextRequest = shouldCreateOvertimeRequest
+      ? buildPatrolRequestPayload(localRow, employee)
+      : null
+
+    function applyLocalSync() {
+      setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
+      setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
+      setOvertimeShiftRequests((current) => {
+        const withoutCurrent = current.filter(
+          (request) => request.id !== buildPatrolOvertimeRequestId(localRow.assignment_date, localRow.shift_type, localRow.position_code)
+        )
+        return nextRequest ? [...withoutCurrent, nextRequest] : withoutCurrent
+      })
+    }
 
     if (error) {
       const message = error.message.toLowerCase()
@@ -890,10 +930,7 @@ export function PatrolPage({
         message.includes("fetch")
 
       if (isNetworkError) {
-        setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
-        setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
-        const employee = employees.find((employeeRow) => employeeRow.id === row.employee_id)
-        const replacement = employees.find((employeeRow) => employeeRow.id === row.replacement_employee_id)
+        applyLocalSync()
         onAuditEvent?.(
           "Patrol Shift Saved",
           `Saved patrol shift locally for ${row.assignment_date} ${row.shift_type} ${row.position_code}.`,
@@ -920,10 +957,7 @@ export function PatrolPage({
     }
 
     invalidatePatrolScheduleCache()
-    setPatrolOverrideRows((current) => mergeScheduleRows(current, [localRow]))
-    setScheduleRows((current) => mergeScheduleRows(current, [localRow]))
-    const employee = employees.find((employeeRow) => employeeRow.id === row.employee_id)
-    const replacement = employees.find((employeeRow) => employeeRow.id === row.replacement_employee_id)
+    applyLocalSync()
     onAuditEvent?.(
       "Patrol Shift Saved",
       `Saved patrol shift for ${row.assignment_date} ${row.shift_type} ${row.position_code}.`,
@@ -931,6 +965,51 @@ export function PatrolPage({
     )
     setSaving(false)
     setEditingRow(null)
+
+    void Promise.all([
+      supabase
+        .from("patrol_overrides")
+        .upsert([toPatrolOverridePayload(localRow)], { onConflict: "assignment_date,shift_type,position_code" }),
+      nextRequest
+        ? supabase
+            .from("overtime_shift_requests")
+            .upsert([
+              {
+                id: nextRequest.id,
+                source: nextRequest.source,
+                batch_id: null,
+                batch_name: null,
+                assignment_date: nextRequest.assignmentDate,
+                shift_type: nextRequest.shiftType,
+                position_code: nextRequest.positionCode,
+                description: nextRequest.description,
+                off_employee_id: nextRequest.offEmployeeId || null,
+                off_employee_last_name: nextRequest.offEmployeeLastName || null,
+                off_hours: nextRequest.offHours || null,
+                off_reason: nextRequest.offReason || null,
+                assigned_hours: nextRequest.assignedHours || null,
+                selection_active: nextRequest.selectionActive ?? true,
+                workflow_status: nextRequest.workflowStatus || "Open",
+                status: nextRequest.status,
+                assigned_employee_id: nextRequest.assignedEmployeeId || null,
+                created_at: nextRequest.createdAt,
+                responses: nextRequest.responses
+              }
+            ], { onConflict: "id" })
+        : supabase
+            .from("overtime_shift_requests")
+            .delete()
+            .eq("id", buildPatrolOvertimeRequestId(localRow.assignment_date, localRow.shift_type, localRow.position_code))
+    ]).catch((syncError) => {
+      console.error("Failed to sync manual patrol edit to overrides/overtime:", syncError)
+      window.setTimeout(() => {
+        pushAppToast({
+          tone: "warning",
+          title: "Patrol shift saved",
+          message: "The overtime sync was delayed. Refresh in a moment if needed."
+        })
+      }, 0)
+    })
   }
 
   function buildWorkingShiftRows(editor: TeamShiftEditor) {
