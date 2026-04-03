@@ -109,6 +109,18 @@ on public.patrol_schedule (assignment_date);
 create index if not exists patrol_overrides_assignment_date_idx
 on public.patrol_overrides (assignment_date);
 
+alter table public.patrol_schedule
+  alter column employee_id type text using employee_id::text;
+
+alter table public.patrol_schedule
+  alter column replacement_employee_id type text using replacement_employee_id::text;
+
+alter table public.patrol_overrides
+  alter column employee_id type text using employee_id::text;
+
+alter table public.patrol_overrides
+  alter column replacement_employee_id type text using replacement_employee_id::text;
+
 create index if not exists patrol_schedule_assignment_slot_idx
 on public.patrol_schedule (assignment_date, shift_type, position_code);
 
