@@ -430,12 +430,12 @@ export function SettingsPage({
         </CardHeader>
         <CardContent>
           <div style={{ display: "grid", gap: "12px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <label>
-                <div style={{ fontWeight: 700, marginBottom: "4px" }}>Endpoint URL</div>
+                <div style={{ fontWeight: 700, marginBottom: "4px" }}>Function Name</div>
                 <Input
-                  value={aiAssistantConfig.endpointUrl}
-                  onChange={(event) => setAiAssistantConfig((current) => ({ ...current, endpointUrl: event.target.value }))}
+                  value={aiAssistantConfig.functionName}
+                  onChange={(event) => setAiAssistantConfig((current) => ({ ...current, functionName: event.target.value }))}
                 />
               </label>
 
@@ -447,15 +447,6 @@ export function SettingsPage({
                 />
               </label>
             </div>
-
-            <label>
-              <div style={{ fontWeight: 700, marginBottom: "4px" }}>API Key</div>
-              <Input
-                type="password"
-                value={aiAssistantConfig.apiKey}
-                onChange={(event) => setAiAssistantConfig((current) => ({ ...current, apiKey: event.target.value }))}
-              />
-            </label>
 
             <label>
               <div style={{ fontWeight: 700, marginBottom: "4px" }}>System Prompt</div>
@@ -475,7 +466,7 @@ export function SettingsPage({
 
             <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ fontSize: "12px", color: "#64748b" }}>
-                These AI settings are stored locally on this device and used by the assistant panels across the app.
+                The browser now calls a Supabase Edge Function. Store the real `OPENAI_API_KEY` in function secrets, not in this app UI.
               </div>
               <Button
                 onClick={() => {
