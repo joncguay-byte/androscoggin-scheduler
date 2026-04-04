@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, SelectItem } from "../../components/ui/simple-ui"
 import { printElementById } from "../../lib/print"
 import { explainAuditEvent } from "../../lib/ops-assistant"
+import { AiAssistPanel } from "../../components/AiAssistPanel"
 import type { AppRole, AuditEvent, AuditModule } from "../../types"
 
 type AuditPageProps = {
@@ -262,6 +263,12 @@ export function AuditPage({ currentUserRole, auditEvents }: AuditPageProps) {
                             <div key={bullet}>{bullet}</div>
                           ))}
                         </div>
+                        <AiAssistPanel
+                          title="Live Audit Explanation"
+                          feature="Audit Explanation Assistant"
+                          instruction="Explain this audit event in plain operational language, include downstream effects, and suggest what an operator should verify next."
+                          context={JSON.stringify(event, null, 2)}
+                        />
                       </div>
                     )
                   })()}

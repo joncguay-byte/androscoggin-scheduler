@@ -12,6 +12,7 @@ import {
 } from "../../components/ui/simple-ui"
 import { printElementById } from "../../lib/print"
 import { buildReportBriefing } from "../../lib/ops-assistant"
+import { AiAssistPanel } from "../../components/AiAssistPanel"
 import type { AppRole, DetailRecord, Employee, ForceHistoryRow, OvertimeEntry, ReportType, Team } from "../../types"
 
 type ReportsPageProps = {
@@ -554,6 +555,14 @@ export function ReportsPage({
                 <div key={bullet}>{bullet}</div>
               ))}
             </div>
+          </div>
+          <div style={{ marginTop: "10px" }}>
+            <AiAssistPanel
+              title="Live Reporting Analysis"
+              feature="Reporting Assistant"
+              instruction="Review this report snapshot and provide a concise operational analysis with notable imbalances, fairness concerns, and recommended follow-up."
+              context={reportBriefing.text}
+            />
           </div>
         </CardContent>
       </Card>

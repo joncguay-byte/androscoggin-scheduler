@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase"
 import { printElementById } from "../../lib/print"
 import { buildForceRotationOrder, getEmployeeForceSummary } from "../../lib/force-rotation"
 import { buildForceFairnessInsight } from "../../lib/ops-assistant"
+import { AiAssistPanel } from "../../components/AiAssistPanel"
 import { pushAppToast } from "../../stores/ui-store"
 import type { DetailRecord, Employee, ForceHistoryRow, OvertimeEntry } from "../../types"
 
@@ -578,6 +579,26 @@ export function ForcePage({
             ))}
           </div>
         </div>
+        <AiAssistPanel
+          title="Live Force Analysis"
+          feature="Force Fairness Assistant"
+          instruction="Explain the current force rotation order, why the top candidate is next, and any fairness or history concerns that command staff should know."
+          context={JSON.stringify({
+            topCandidate: topCandidate ? {
+              id: topCandidate.id,
+              firstName: topCandidate.firstName,
+              lastName: topCandidate.lastName,
+              total: topCandidate.total,
+              last1: topCandidate.last1,
+              last2: topCandidate.last2,
+              daysSince: topCandidate.daysSince
+            } : null,
+            totalForceEntries,
+            neverForcedCount,
+            recentForcedLabel,
+            forceHistory: forceHistory.slice(0, 80)
+          }, null, 2)}
+        />
       </div>
 
       <div

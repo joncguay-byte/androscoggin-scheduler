@@ -16,6 +16,8 @@ import type { ParsedPatrolImport } from "../../lib/patrol-excel-import"
 import type { AppLayoutVariant, AppRole, Employee, ReportType, ScheduleView } from "../../types"
 import { PatrolCalendarPreviewBoard } from "../patrol/PatrolCalendarPreviewBoard"
 import { buildConfigurationAssistantInsights, buildImportCleanupInsights } from "../../lib/ops-assistant"
+import { getDefaultAiAssistantConfig, saveAiAssistantConfig, type AiAssistantConfig } from "../../lib/ai-assistant"
+import { AiAssistPanel } from "../../components/AiAssistPanel"
 
 type ModuleOption = {
   key: string
@@ -154,6 +156,7 @@ export function SettingsPage({
   const [profilesError, setProfilesError] = useState("")
   const [savingProfileId, setSavingProfileId] = useState("")
   const [previewMonthStart, setPreviewMonthStart] = useState<Date | null>(null)
+  const [aiAssistantConfig, setAiAssistantConfig] = useState<AiAssistantConfig>(() => getDefaultAiAssistantConfig())
   const configurationInsights = buildConfigurationAssistantInsights(settings, referenceSettings)
   const importInsights = patrolImportPreview
     ? buildImportCleanupInsights(
@@ -411,6 +414,78 @@ export function SettingsPage({
                 </div>
               </div>
             ))}
+            <AiAssistPanel
+              title="Live Configuration Guidance"
+              feature="Configuration Assistant"
+              instruction="Review the scheduler configuration and suggest the best improvements for making it reusable across multiple departments."
+              context={JSON.stringify({ settings, referenceSettings }, null, 2)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Live AI Assistant</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div style={{ display: "grid", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "12px" }}>
+              <label>
+                <div style={{ fontWeight: 700, marginBottom: "4px" }}>Endpoint URL</div>
+                <Input
+                  value={aiAssistantConfig.endpointUrl}
+                  onChange={(event) => setAiAssistantConfig((current) => ({ ...current, endpointUrl: event.target.value }))}
+                />
+              </label>
+
+              <label>
+                <div style={{ fontWeight: 700, marginBottom: "4px" }}>Model</div>
+                <Input
+                  value={aiAssistantConfig.model}
+                  onChange={(event) => setAiAssistantConfig((current) => ({ ...current, model: event.target.value }))}
+                />
+              </label>
+            </div>
+
+            <label>
+              <div style={{ fontWeight: 700, marginBottom: "4px" }}>API Key</div>
+              <Input
+                type="password"
+                value={aiAssistantConfig.apiKey}
+                onChange={(event) => setAiAssistantConfig((current) => ({ ...current, apiKey: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              <div style={{ fontWeight: 700, marginBottom: "4px" }}>System Prompt</div>
+              <textarea
+                value={aiAssistantConfig.systemPrompt}
+                onChange={(event) => setAiAssistantConfig((current) => ({ ...current, systemPrompt: event.target.value }))}
+                style={{
+                  width: "100%",
+                  minHeight: "100px",
+                  padding: "10px 12px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "10px",
+                  resize: "vertical"
+                }}
+              />
+            </label>
+
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>
+                These AI settings are stored locally on this device and used by the assistant panels across the app.
+              </div>
+              <Button
+                onClick={() => {
+                  saveAiAssistantConfig(aiAssistantConfig)
+                  onAuditEvent?.("AI Assistant Config Saved", "Saved local AI assistant settings for the scheduler.")
+                }}
+              >
+                Save AI Settings
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -936,6 +1011,18 @@ export function SettingsPage({
                         </div>
                       </div>
                     ))}
+                    <AiAssistPanel
+                      title="Live Import Cleanup Guidance"
+                      feature="Import Cleanup Assistant"
+                      instruction="Review this patrol import preview and identify likely cleanup issues, missing mappings, or coverage risks before commit."
+                      context={JSON.stringify({
+                        fileName: patrolImportPreview.fileName,
+                        unmatchedNames: patrolImportPreview.parsed.unmatchedNames,
+                        importedDateRange: patrolImportPreview.parsed.importedDateRange,
+                        scheduleRows: patrolImportPreview.parsed.scheduleRows.slice(0, 80),
+                        overrideRows: patrolImportPreview.parsed.overrideRows.slice(0, 80)
+                      }, null, 2)}
+                    />
                   </div>
                   {(() => {
                     const importedRange = patrolImportPreview.parsed.importedDateRange

@@ -9,6 +9,7 @@ import { ensureMonthSchedule } from "../../lib/schedule-generator"
 import { supabase } from "../../lib/supabase"
 import { pushAppToast } from "../../stores/ui-store"
 import { buildOvertimeFairnessInsight } from "../../lib/ops-assistant"
+import { AiAssistPanel } from "../../components/AiAssistPanel"
 import type {
   AppRole,
   DetailRecord,
@@ -3222,6 +3223,22 @@ export function OvertimePage({
                 ))}
               </div>
             </div>
+            <AiAssistPanel
+              title="Live Fairness Analysis"
+              feature="Overtime Fairness Assistant"
+              instruction="Review this overtime queue shift and explain the fairest current assignment options with conflicts, queue order, and recommendation logic."
+              context={JSON.stringify({
+                selectedQueueShift: selectedQueueEntry?.request || null,
+                selectedResponders: selectedQueueEntry?.responders.map((entry) => ({
+                  employeeId: entry.employee?.id || entry.response.employeeId,
+                  employeeName: entry.employee ? `${entry.employee.firstName} ${entry.employee.lastName}` : entry.response.employeeId,
+                  status: entry.response.status
+                })) || [],
+                queueOrder: overtimeQueueIds,
+                patrolRows: effectivePatrolRows.filter((row) => row.assignment_date === selectedQueueEntry?.request.assignmentDate),
+                detailRecords: detailRecords.filter((record) => record.date === selectedQueueEntry?.request.assignmentDate)
+              }, null, 2)}
+            />
             <div
               style={{
                 display: "grid",
