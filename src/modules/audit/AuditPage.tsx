@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, SelectItem } from "../../components/ui/simple-ui"
 import { printElementById } from "../../lib/print"
+import { explainAuditEvent } from "../../lib/ops-assistant"
 import type { AppRole, AuditEvent, AuditModule } from "../../types"
 
 type AuditPageProps = {
@@ -40,6 +41,7 @@ export function AuditPage({ currentUserRole, auditEvents }: AuditPageProps) {
   const [moduleFilter, setModuleFilter] = useState<AuditModule | "All">("All")
   const [search, setSearch] = useState("")
   const [limit, setLimit] = useState("100")
+  const [explainedEventId, setExplainedEventId] = useState<string | null>(null)
 
   const filteredEvents = useMemo(() => {
     const lowered = search.trim().toLowerCase()
@@ -239,6 +241,30 @@ export function AuditPage({ currentUserRole, auditEvents }: AuditPageProps) {
                       {event.details}
                     </div>
                   )}
+
+                  <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end" }}>
+                    <Button
+                      data-no-print="true"
+                      onClick={() => setExplainedEventId((current) => current === event.id ? null : event.id)}
+                    >
+                      {explainedEventId === event.id ? "Hide Explanation" : "Explain"}
+                    </Button>
+                  </div>
+
+                  {explainedEventId === event.id && (() => {
+                    const insight = explainAuditEvent(event)
+                    return (
+                      <div style={{ marginTop: "10px", border: "1px solid #dbeafe", borderRadius: "12px", padding: "12px", background: "#eff6ff", display: "grid", gap: "6px" }}>
+                        <div style={{ fontWeight: 800, color: "#0f172a" }}>{insight.title}</div>
+                        <div style={{ fontSize: "13px", color: "#334155" }}>{insight.summary}</div>
+                        <div style={{ display: "grid", gap: "4px", fontSize: "12px", color: "#475569" }}>
+                          {insight.bullets.map((bullet) => (
+                            <div key={bullet}>{bullet}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               ))}
 

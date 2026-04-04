@@ -8,6 +8,7 @@ import { printElementById } from "../../lib/print"
 import { ensureMonthSchedule } from "../../lib/schedule-generator"
 import { supabase } from "../../lib/supabase"
 import { pushAppToast } from "../../stores/ui-store"
+import { buildOvertimeFairnessInsight } from "../../lib/ops-assistant"
 import type {
   AppRole,
   DetailRecord,
@@ -463,6 +464,17 @@ export function OvertimePage({
   const selectedQueueEntry = useMemo(
     () => interestedRespondersByQueue.find(({ request }) => request.id === selectedQueueShiftId) || null,
     [interestedRespondersByQueue, selectedQueueShiftId]
+  )
+  const overtimeFairnessInsight = useMemo(
+    () =>
+      buildOvertimeFairnessInsight({
+        request: selectedQueueEntry?.request || null,
+        employees,
+        queueIds: overtimeQueueIds,
+        patrolRows: effectivePatrolRows,
+        detailRecords
+      }),
+    [detailRecords, effectivePatrolRows, employees, overtimeQueueIds, selectedQueueEntry]
   )
 
   useEffect(() => {
@@ -3186,6 +3198,30 @@ export function OvertimePage({
             </div>
           </CardHeader>
           <CardContent>
+            <div
+              style={{
+                border: "1px solid #dbeafe",
+                borderRadius: "12px",
+                padding: "10px 12px",
+                background:
+                  overtimeFairnessInsight.tone === "success"
+                    ? "#ecfdf5"
+                    : overtimeFairnessInsight.tone === "warning"
+                      ? "#fffbeb"
+                      : "#eff6ff",
+                marginBottom: "10px",
+                display: "grid",
+                gap: "4px"
+              }}
+            >
+              <div style={{ fontWeight: 800, color: "#0f172a" }}>{overtimeFairnessInsight.title}</div>
+              <div style={{ fontSize: "12px", color: "#334155" }}>{overtimeFairnessInsight.summary}</div>
+              <div style={{ display: "grid", gap: "3px", fontSize: "11px", color: "#475569" }}>
+                {overtimeFairnessInsight.bullets.map((bullet) => (
+                  <div key={bullet}>{bullet}</div>
+                ))}
+              </div>
+            </div>
             <div
               style={{
                 display: "grid",

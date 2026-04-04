@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { printElementById } from "../../lib/print"
 import { buildForceRotationOrder, getEmployeeForceSummary } from "../../lib/force-rotation"
+import { buildForceFairnessInsight } from "../../lib/ops-assistant"
 import { pushAppToast } from "../../stores/ui-store"
 import type { DetailRecord, Employee, ForceHistoryRow, OvertimeEntry } from "../../types"
 
@@ -462,6 +463,7 @@ export function ForcePage({
   const neverForcedCount = forceList.filter((employee) => employee.total === 0).length
   const totalForceEntries = forceHistory.length
   const topCandidate = forceList[0] || null
+  const forceFairnessInsight = buildForceFairnessInsight(employees, forceHistory)
   const recentForcedLabel = forceHistoryList[0]
     ? (() => {
         const employee = employees.find((candidate) => candidate.id === forceHistoryList[0].row.employee_id)
@@ -551,8 +553,30 @@ export function ForcePage({
                   <div style={{ fontSize: card.label === "Next Candidate" || card.label === "Recent Force" ? "13px" : "18px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>
                     {card.value}
                   </div>
-                </div>
-              ))}
+              </div>
+            ))}
+        </div>
+
+        <div
+          style={{
+            border: "1px solid #dbeafe",
+            borderRadius: "12px",
+            padding: "10px 12px",
+            background:
+              forceFairnessInsight.tone === "success"
+                ? "#ecfdf5"
+                : "#eff6ff",
+            display: "grid",
+            gap: "4px"
+          }}
+        >
+          <div style={{ fontWeight: 800, color: "#0f172a" }}>{forceFairnessInsight.title}</div>
+          <div style={{ fontSize: "12px", color: "#334155" }}>{forceFairnessInsight.summary}</div>
+          <div style={{ display: "grid", gap: "3px", fontSize: "11px", color: "#475569" }}>
+            {forceFairnessInsight.bullets.map((bullet) => (
+              <div key={bullet}>{bullet}</div>
+            ))}
+          </div>
         </div>
       </div>
 

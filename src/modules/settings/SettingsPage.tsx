@@ -15,6 +15,7 @@ import { supabase } from "../../lib/supabase"
 import type { ParsedPatrolImport } from "../../lib/patrol-excel-import"
 import type { AppLayoutVariant, AppRole, Employee, ReportType, ScheduleView } from "../../types"
 import { PatrolCalendarPreviewBoard } from "../patrol/PatrolCalendarPreviewBoard"
+import { buildConfigurationAssistantInsights, buildImportCleanupInsights } from "../../lib/ops-assistant"
 
 type ModuleOption = {
   key: string
@@ -153,6 +154,14 @@ export function SettingsPage({
   const [profilesError, setProfilesError] = useState("")
   const [savingProfileId, setSavingProfileId] = useState("")
   const [previewMonthStart, setPreviewMonthStart] = useState<Date | null>(null)
+  const configurationInsights = buildConfigurationAssistantInsights(settings, referenceSettings)
+  const importInsights = patrolImportPreview
+    ? buildImportCleanupInsights(
+        patrolImportPreview.parsed.scheduleRows,
+        patrolImportPreview.parsed.overrideRows,
+        patrolImportPreview.parsed.unmatchedNames
+      )
+    : []
 
   useEffect(() => {
     let active = true
@@ -368,6 +377,40 @@ export function SettingsPage({
 
           <div style={{ marginTop: "14px", fontSize: "13px", color: "#475569" }}>
             These settings are global for the shared app and stay local for now. Once you are happy with them, we can move this whole section into Supabase.
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>AI Configuration Assistant</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div style={{ display: "grid", gap: "10px" }}>
+            {configurationInsights.map((insight) => (
+              <div
+                key={insight.title}
+                style={{
+                  border: "1px solid #dbeafe",
+                  borderRadius: "12px",
+                  padding: "12px",
+                  background:
+                    insight.tone === "success"
+                      ? "#ecfdf5"
+                      : insight.tone === "warning"
+                        ? "#fffbeb"
+                        : "#eff6ff"
+                }}
+              >
+                <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>{insight.title}</div>
+                <div style={{ fontSize: "13px", color: "#334155", marginBottom: "6px" }}>{insight.summary}</div>
+                <div style={{ display: "grid", gap: "4px", fontSize: "12px", color: "#475569" }}>
+                  {insight.bullets.map((bullet) => (
+                    <div key={bullet}>{bullet}</div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -867,6 +910,32 @@ export function SettingsPage({
                   <div style={{ fontWeight: 800, marginBottom: "8px" }}>Patrol Calendar Preview</div>
                   <div style={{ fontSize: "12px", color: "#475569", marginBottom: "10px" }}>
                     This shows the imported Patrol calendar month view before anything is committed.
+                  </div>
+                  <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
+                    {importInsights.map((insight) => (
+                      <div
+                        key={insight.title}
+                        style={{
+                          border: "1px solid #dbeafe",
+                          borderRadius: "12px",
+                          padding: "10px 12px",
+                          background:
+                            insight.tone === "success"
+                              ? "#ecfdf5"
+                              : insight.tone === "warning"
+                                ? "#fffbeb"
+                                : "#eff6ff"
+                        }}
+                      >
+                        <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>{insight.title}</div>
+                        <div style={{ fontSize: "12px", color: "#334155", marginBottom: "4px" }}>{insight.summary}</div>
+                        <div style={{ display: "grid", gap: "3px", fontSize: "11px", color: "#475569" }}>
+                          {insight.bullets.map((bullet) => (
+                            <div key={bullet}>{bullet}</div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                   {(() => {
                     const importedRange = patrolImportPreview.parsed.importedDateRange

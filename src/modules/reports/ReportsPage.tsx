@@ -11,6 +11,7 @@ import {
   SelectItem
 } from "../../components/ui/simple-ui"
 import { printElementById } from "../../lib/print"
+import { buildReportBriefing } from "../../lib/ops-assistant"
 import type { AppRole, DetailRecord, Employee, ForceHistoryRow, OvertimeEntry, ReportType, Team } from "../../types"
 
 type ReportsPageProps = {
@@ -66,6 +67,16 @@ function buildCsv(rows: string[][]) {
 
 function downloadCsv(filename: string, rows: string[][]) {
   const blob = new Blob([buildCsv(rows)], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadText(filename: string, text: string) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url
@@ -461,6 +472,28 @@ export function ReportsPage({
     ])
   }
 
+  const reportBriefing = useMemo(
+    () =>
+      buildReportBriefing({
+        reportType,
+        totalHours: totals.totalHours,
+        employeeCount: totals.employeeCount,
+        teamTotals,
+        topEmployees: employeeTotals.slice(0, 5).map((row) => ({
+          employeeName: row.employeeName,
+          totalHours: row.totalHours
+        })),
+        forceSummaryRows: forceSummaryRows.slice(0, 5).map((row) => ({
+          employeeName: row.employeeName,
+          total: row.total,
+          lastForced: row.lastForced
+        })),
+        patrolStaffingRows,
+        cidOnCallName
+      }),
+    [cidOnCallName, employeeTotals, forceSummaryRows, patrolStaffingRows, reportType, teamTotals, totals]
+  )
+
   return (
     <div style={{ display: "grid", gap: "18px" }}>
       <Card>
@@ -498,6 +531,27 @@ export function ReportsPage({
                   <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b" }}>{card.label}</div>
                   <div style={{ fontSize: card.label === "CID On-Call" || card.label === "Report Type" ? "13px" : "18px", lineHeight: 1.05, fontWeight: 800, color: card.tone }}>{card.value}</div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <CardTitle>AI Reporting Assistant</CardTitle>
+            <Button data-no-print="true" onClick={() => downloadText("operational-briefing.txt", reportBriefing.text)}>
+              Export Briefing
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div style={{ display: "grid", gap: "8px", border: "1px solid #dbeafe", borderRadius: "12px", padding: "12px", background: "#eff6ff" }}>
+            <div style={{ fontWeight: 800, color: "#0f172a" }}>{reportBriefing.title}</div>
+            <div style={{ fontSize: "13px", color: "#334155" }}>{reportBriefing.summary}</div>
+            <div style={{ display: "grid", gap: "4px", fontSize: "12px", color: "#475569" }}>
+              {reportBriefing.bullets.map((bullet) => (
+                <div key={bullet}>{bullet}</div>
               ))}
             </div>
           </div>
