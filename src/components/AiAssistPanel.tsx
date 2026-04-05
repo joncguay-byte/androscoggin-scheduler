@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { Button } from "./ui/simple-ui"
 import { hasAiAssistantConfig, readAiAssistantConfig, requestAiAssistantResponse } from "../lib/ai-assistant"
 import { pushAppToast } from "../stores/ui-store"
@@ -14,7 +14,7 @@ export function AiAssistPanel({ title, feature, context, instruction }: AiAssist
   const [loading, setLoading] = useState(false)
   const [response, setResponse] = useState("")
   const [open, setOpen] = useState(false)
-  const configReady = useMemo(() => hasAiAssistantConfig(readAiAssistantConfig()), [])
+  const configReady = hasAiAssistantConfig(readAiAssistantConfig())
 
   async function handleGenerate() {
     setLoading(true)
