@@ -84,7 +84,7 @@ export function AiAssistPanel({ title, feature, context, instruction }: AiAssist
           {!configReady && (
             <div style={{ fontSize: "11px", color: "#92400e" }}>Configure AI in Settings</div>
           )}
-          <Button data-no-print="true" onClick={() => void handleGenerate()} disabled={loading || !configReady}>
+          <Button data-no-print="true" onClick={() => void handleGenerate()} disabled={loading}>
             {loading ? "Thinking..." : "Enhance With AI"}
           </Button>
         </div>

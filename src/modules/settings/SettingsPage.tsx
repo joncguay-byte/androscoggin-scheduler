@@ -16,7 +16,7 @@ import type { ParsedPatrolImport } from "../../lib/patrol-excel-import"
 import type { AppLayoutVariant, AppRole, Employee, ReportType, ScheduleView } from "../../types"
 import { PatrolCalendarPreviewBoard } from "../patrol/PatrolCalendarPreviewBoard"
 import { buildConfigurationAssistantInsights, buildImportCleanupInsights } from "../../lib/ops-assistant"
-import { getDefaultAiAssistantConfig, saveAiAssistantConfig, type AiAssistantConfig } from "../../lib/ai-assistant"
+import { readAiAssistantConfig, saveAiAssistantConfig, type AiAssistantConfig } from "../../lib/ai-assistant"
 import { AiAssistPanel } from "../../components/AiAssistPanel"
 
 type ModuleOption = {
@@ -156,7 +156,7 @@ export function SettingsPage({
   const [profilesError, setProfilesError] = useState("")
   const [savingProfileId, setSavingProfileId] = useState("")
   const [previewMonthStart, setPreviewMonthStart] = useState<Date | null>(null)
-  const [aiAssistantConfig, setAiAssistantConfig] = useState<AiAssistantConfig>(() => getDefaultAiAssistantConfig())
+  const [aiAssistantConfig, setAiAssistantConfig] = useState<AiAssistantConfig>(() => readAiAssistantConfig())
   const configurationInsights = buildConfigurationAssistantInsights(settings, referenceSettings)
   const importInsights = patrolImportPreview
     ? buildImportCleanupInsights(
