@@ -43,7 +43,8 @@ import {
   Settings,
   Briefcase,
   Clock3,
-  Bell
+  Bell,
+  Sparkles
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type {
@@ -67,6 +68,7 @@ import type {
 
 type ModuleKey =
   | "command"
+  | "ai"
   | "audit"
   | "patrol"
   | "overtime"
@@ -88,6 +90,7 @@ type PatrolImportPreviewState = {
 } | null
 
 const CommandPage = lazy(() => import("./modules/command/CommandPage").then((module) => ({ default: module.CommandPage })))
+const AiAssistantPage = lazy(() => import("./modules/ai/AiAssistantPage").then((module) => ({ default: module.AiAssistantPage })))
 const AuditPage = lazy(() => import("./modules/audit/AuditPage").then((module) => ({ default: module.AuditPage })))
 const PatrolPage = lazy(() => import("./modules/patrol/PatrolPage").then((module) => ({ default: module.PatrolPage })))
 const OvertimePage = lazy(() => import("./modules/overtime/OvertimePage").then((module) => ({ default: module.OvertimePage })))
@@ -103,6 +106,8 @@ const SettingsPage = lazy(() => import("./modules/settings/SettingsPage").then((
 const moduleOrder: ModuleDefinition[] = [
 
   { key: "command", label: "Command", icon: LayoutDashboard },
+
+  { key: "ai", label: "AI Assistant", icon: Sparkles },
 
   { key: "patrol", label: "Patrol", icon: Shield },
 
@@ -1593,7 +1598,7 @@ export default function App() {
   }, [settings])
 
   useEffect(() => {
-    const requiredModules: ModuleKey[] = ["overtime", "notifications"]
+    const requiredModules: ModuleKey[] = ["ai", "overtime", "notifications"]
     const missingModules = requiredModules.filter((moduleKey) => !settings.visibleModules.includes(moduleKey))
 
     if (missingModules.length === 0) return
@@ -2295,6 +2300,7 @@ export default function App() {
   }
 
   const requiresLiveSyncBarrier =
+    activeModule === "ai" ||
     activeModule === "patrol" ||
     activeModule === "overtime" ||
     activeModule === "notifications"
@@ -2511,6 +2517,21 @@ export default function App() {
             forceHistory={forceHistoryRows}
             auditEvents={auditEvents}
             onOpenModule={setActiveModule}
+          />
+        )}
+
+        {activeModule === "ai" && (
+          <AiAssistantPage
+            currentUserRole={currentUserRole}
+            employees={employees}
+            settings={settings}
+            referenceSettings={referenceSettings}
+            patrolRows={patrolSummaryRows}
+            overtimeShiftRequests={overtimeShiftRequests}
+            detailRecords={detailRecords}
+            forceHistory={forceHistoryRows}
+            notificationDeliveries={notificationDeliveries}
+            auditEvents={auditEvents}
           />
         )}
 

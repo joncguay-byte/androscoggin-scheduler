@@ -3,6 +3,7 @@ import type { StateCreator } from "zustand"
 
 export type UiModuleKey =
   | "command"
+  | "ai"
   | "audit"
   | "patrol"
   | "overtime"

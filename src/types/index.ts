@@ -294,6 +294,7 @@ export type ReportType =
 
 export type AuditModule =
   | "App"
+  | "AI"
   | "Patrol"
   | "Overtime"
   | "Notifications"

@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react"
 
 type ModuleKey =
   | "command"
+  | "ai"
   | "audit"
   | "patrol"
   | "overtime"
