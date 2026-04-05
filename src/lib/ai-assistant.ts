@@ -52,6 +52,47 @@ function extractFunctionText(payload: any): string {
   throw new Error(payload?.error || "The AI function returned an unreadable response.")
 }
 
+async function extractInvokeErrorMessage(error: any): Promise<string> {
+  const fallbackMessage =
+    typeof error?.message === "string" && error.message.trim()
+      ? error.message
+      : "AI function request failed."
+
+  const response = error?.context
+  if (!response || typeof response !== "object") {
+    return fallbackMessage
+  }
+
+  try {
+    const cloned = typeof response.clone === "function" ? response.clone() : response
+    if (typeof cloned.json === "function") {
+      const payload = await cloned.json()
+      if (typeof payload?.error === "string" && payload.error.trim()) {
+        return payload.error.trim()
+      }
+      if (typeof payload?.message === "string" && payload.message.trim()) {
+        return payload.message.trim()
+      }
+    }
+  } catch {
+    // Fall through to text parsing.
+  }
+
+  try {
+    const cloned = typeof response.clone === "function" ? response.clone() : response
+    if (typeof cloned.text === "function") {
+      const text = await cloned.text()
+      if (typeof text === "string" && text.trim()) {
+        return text.trim()
+      }
+    }
+  } catch {
+    // Fall through to fallback.
+  }
+
+  return fallbackMessage
+}
+
 export async function requestAiAssistantResponse(params: {
   feature: string
   context: string
@@ -75,7 +116,7 @@ export async function requestAiAssistantResponse(params: {
   })
 
   if (error) {
-    throw new Error(error.message || "AI function request failed.")
+    throw new Error(await extractInvokeErrorMessage(error))
   }
 
   return extractFunctionText(data)
