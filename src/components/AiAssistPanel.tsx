@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { Button } from "./ui/simple-ui"
 import { hasAiAssistantConfig, readAiAssistantConfig, requestAiAssistantResponse } from "../lib/ai-assistant"
 import { pushAppToast } from "../stores/ui-store"
@@ -15,17 +15,12 @@ export function AiAssistPanel({ title, feature, context, instruction }: AiAssist
   const [response, setResponse] = useState("")
   const [open, setOpen] = useState(false)
   const [statusMessage, setStatusMessage] = useState("Ready")
-  const responseRef = useRef<HTMLDivElement | null>(null)
   const configReady = hasAiAssistantConfig(readAiAssistantConfig())
-
-  useEffect(() => {
-    if (open) {
-      responseRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
-    }
-  }, [open, loading, response])
 
   async function handleGenerate() {
     if (!configReady) {
+      setOpen(true)
+      setStatusMessage("Save the AI function name and model in Settings first.")
       pushAppToast({
         tone: "warning",
         title: "AI assistant not configured",
@@ -92,24 +87,50 @@ export function AiAssistPanel({ title, feature, context, instruction }: AiAssist
 
       {open && (
         <div
-          ref={responseRef}
           style={{
-            border: loading ? "1px solid #93c5fd" : "1px solid #dbeafe",
-            borderRadius: "12px",
-            padding: "12px",
-            background: loading ? "#eff6ff" : "#f8fbff",
-            boxShadow: loading ? "0 0 0 3px rgba(59, 130, 246, 0.08)" : "none"
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.3)",
+            display: "grid",
+            placeItems: "center",
+            zIndex: 10000,
+            padding: "16px"
           }}
         >
-          {response ? (
-            <div style={{ whiteSpace: "pre-wrap", fontSize: "12px", color: "#334155", lineHeight: 1.45 }}>
-              {response}
+          <div
+            style={{
+              width: "min(720px, 100%)",
+              maxHeight: "80vh",
+              overflow: "auto",
+              border: loading ? "1px solid #93c5fd" : "1px solid #dbeafe",
+              borderRadius: "16px",
+              padding: "16px",
+              background: loading ? "#eff6ff" : "#f8fbff",
+              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", marginBottom: "12px" }}>
+              <div style={{ display: "grid", gap: "4px" }}>
+                <div style={{ fontWeight: 800, fontSize: "14px", color: "#0f172a" }}>{title}</div>
+                <div style={{ fontSize: "12px", color: loading ? "#1d4ed8" : "#475569" }}>
+                  {loading ? "Generating live assistant response..." : statusMessage}
+                </div>
+              </div>
+              <Button onClick={() => setOpen(false)} disabled={loading}>
+                Close
+              </Button>
             </div>
-          ) : (
-            <div style={{ fontSize: "12px", color: "#64748b" }}>
-              {loading ? "Generating live assistant response..." : statusMessage}
-            </div>
-          )}
+
+            {response ? (
+              <div style={{ whiteSpace: "pre-wrap", fontSize: "12px", color: "#334155", lineHeight: 1.5 }}>
+                {response}
+              </div>
+            ) : (
+              <div style={{ fontSize: "12px", color: "#64748b", lineHeight: 1.5 }}>
+                {loading ? "Generating live assistant response..." : statusMessage}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
