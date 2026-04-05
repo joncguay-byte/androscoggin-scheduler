@@ -2525,13 +2525,20 @@ export default function App() {
             currentUserRole={currentUserRole}
             employees={employees}
             settings={settings}
+            setSettings={setSettings}
             referenceSettings={referenceSettings}
+            setReferenceSettings={setReferenceSettings}
+            moduleOptions={moduleOrder.map((module) => ({
+              key: module.key,
+              label: module.label
+            }))}
             patrolRows={patrolSummaryRows}
             overtimeShiftRequests={overtimeShiftRequests}
             detailRecords={detailRecords}
             forceHistory={forceHistoryRows}
             notificationDeliveries={notificationDeliveries}
             auditEvents={auditEvents}
+            onAuditEvent={(action, summary, details) => appendAuditEvent("AI", action, summary, details)}
           />
         )}
 
