@@ -16,8 +16,9 @@ import type { ParsedPatrolImport } from "../../lib/patrol-excel-import"
 import type { AppLayoutVariant, AppRole, Employee, ReportType, ScheduleView } from "../../types"
 import { PatrolCalendarPreviewBoard } from "../patrol/PatrolCalendarPreviewBoard"
 import { buildConfigurationAssistantInsights, buildImportCleanupInsights } from "../../lib/ops-assistant"
-import { readAiAssistantConfig, readAiAssistantUsage, saveAiAssistantConfig, type AiAssistantConfig } from "../../lib/ai-assistant"
+import { readAiAssistantConfig, readAiAssistantUsage, requestAiAssistantResponse, saveAiAssistantConfig, type AiAssistantConfig } from "../../lib/ai-assistant"
 import { AiAssistPanel } from "../../components/AiAssistPanel"
+import { pushAppToast } from "../../stores/ui-store"
 
 type ModuleOption = {
   key: string
@@ -118,6 +119,115 @@ const referenceLabels: Record<keyof ReferenceSettings, string> = {
   patrolStatuses: "Patrol Statuses"
 }
 
+type ConfigAction =
+  | { type: "set_department_title"; value: string }
+  | { type: "set_print_header_title"; value: string }
+  | { type: "set_default_layout_variant"; value: AppLayoutVariant }
+  | { type: "set_default_patrol_view"; value: ScheduleView }
+  | { type: "set_default_report_type"; value: ReportType }
+  | { type: "set_visible_modules"; modules: string[] }
+  | { type: "add_reference"; key: keyof ReferenceSettings; values: string[] }
+  | { type: "remove_reference"; key: keyof ReferenceSettings; values: string[] }
+
+type PlannedConfigAction = {
+  id: string
+  action: ConfigAction
+}
+
+type ConfigActionPlan = {
+  summary: string
+  actions: PlannedConfigAction[]
+}
+
+function extractJsonBlock(text: string) {
+  const fencedMatch = text.match(/```json\s*([\s\S]*?)```/i)
+  if (fencedMatch?.[1]) return fencedMatch[1].trim()
+
+  const firstBrace = text.indexOf("{")
+  const lastBrace = text.lastIndexOf("}")
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return text.slice(firstBrace, lastBrace + 1)
+  }
+
+  return text.trim()
+}
+
+function normalizeConfigActionPlan(rawText: string): ConfigActionPlan {
+  const parsed = JSON.parse(extractJsonBlock(rawText)) as {
+    summary?: string
+    actions?: Array<Record<string, unknown>>
+  }
+
+  const rawActions = Array.isArray(parsed.actions) ? parsed.actions : []
+  const actions: PlannedConfigAction[] = rawActions.flatMap((rawAction, index) => {
+    const type = typeof rawAction.type === "string" ? rawAction.type : ""
+
+    switch (type) {
+      case "set_department_title":
+      case "set_print_header_title": {
+        const value = typeof rawAction.value === "string" ? rawAction.value.trim() : ""
+        if (!value) return []
+        return [{ id: `${type}-${index}`, action: { type, value } }]
+      }
+      case "set_default_layout_variant":
+      case "set_default_patrol_view":
+      case "set_default_report_type": {
+        const value = typeof rawAction.value === "string" ? rawAction.value : ""
+        if (!value) return []
+        return [{ id: `${type}-${index}`, action: { type, value } as ConfigAction }]
+      }
+      case "set_visible_modules": {
+        const modules = Array.isArray(rawAction.modules)
+          ? rawAction.modules.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          : []
+        if (modules.length === 0) return []
+        return [{ id: `${type}-${index}`, action: { type, modules } }]
+      }
+      case "add_reference":
+      case "remove_reference": {
+        const key = typeof rawAction.key === "string" ? rawAction.key : ""
+        const values = Array.isArray(rawAction.values)
+          ? rawAction.values.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          : []
+        if (!["vehicles", "shiftTemplates", "teams", "ranks", "patrolStatuses"].includes(key) || values.length === 0) return []
+        return [{ id: `${type}-${index}`, action: { type, key: key as keyof ReferenceSettings, values } }]
+      }
+      default:
+        return []
+    }
+  })
+
+  if (actions.length === 0) {
+    throw new Error("The AI did not return any usable configuration actions.")
+  }
+
+  return {
+    summary: typeof parsed.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : "AI generated a configuration action plan.",
+    actions
+  }
+}
+
+function describeConfigAction(action: ConfigAction) {
+  switch (action.type) {
+    case "set_department_title":
+      return `Set Department Title to "${action.value}".`
+    case "set_print_header_title":
+      return `Set Print Header Title to "${action.value}".`
+    case "set_default_layout_variant":
+      return `Set default layout variant to "${action.value}".`
+    case "set_default_patrol_view":
+      return `Set default Patrol view to "${action.value}".`
+    case "set_default_report_type":
+      return `Set default report type to "${action.value}".`
+    case "set_visible_modules":
+      return `Replace visible modules with: ${action.modules.join(", ")}.`
+    case "add_reference":
+      return `Add to ${referenceLabels[action.key]}: ${action.values.join(", ")}.`
+    case "remove_reference":
+      return `Remove from ${referenceLabels[action.key]}: ${action.values.join(", ")}.`
+  }
+}
+
 export function SettingsPage({
   currentUserRole,
   employees,
@@ -158,6 +268,10 @@ export function SettingsPage({
   const [previewMonthStart, setPreviewMonthStart] = useState<Date | null>(null)
   const [aiAssistantConfig, setAiAssistantConfig] = useState<AiAssistantConfig>(() => readAiAssistantConfig())
   const [aiAssistantUsage, setAiAssistantUsage] = useState(() => readAiAssistantUsage())
+  const [aiActionPrompt, setAiActionPrompt] = useState("")
+  const [aiActionPlan, setAiActionPlan] = useState<ConfigActionPlan | null>(null)
+  const [selectedActionIds, setSelectedActionIds] = useState<string[]>([])
+  const [aiActionLoading, setAiActionLoading] = useState(false)
   const configurationInsights = buildConfigurationAssistantInsights(settings, referenceSettings)
   const importInsights = patrolImportPreview
     ? buildImportCleanupInsights(
@@ -284,6 +398,131 @@ export function SettingsPage({
       "Reference Removed",
       `Removed ${value} from ${referenceLabels[key]}.`
     )
+  }
+
+  async function generateAiActionPlan() {
+    const trimmedPrompt = aiActionPrompt.trim()
+    if (!trimmedPrompt) {
+      pushAppToast({
+        tone: "warning",
+        title: "Request needed",
+        message: "Describe the configuration change you want AI to prepare."
+      })
+      return
+    }
+
+    setAiActionLoading(true)
+
+    try {
+      const response = await requestAiAssistantResponse({
+        feature: "Configuration Action Planner",
+        instruction: [
+          "Turn the admin request into a JSON-only action plan for scheduler configuration.",
+          "Return only valid JSON.",
+          'Use this shape: {"summary":"...","actions":[...]}',
+          'Allowed actions: set_department_title, set_print_header_title, set_default_layout_variant, set_default_patrol_view, set_default_report_type, set_visible_modules, add_reference, remove_reference.',
+          'For add_reference/remove_reference use keys: vehicles, shiftTemplates, teams, ranks, patrolStatuses.',
+          "Do not include explanations outside JSON.",
+          `Admin request: ${trimmedPrompt}`
+        ].join("\n"),
+        context: JSON.stringify({
+          settings,
+          referenceSettings,
+          availableModules: moduleOptions,
+          layoutOptions: layoutOptions.map((option) => option.value),
+          patrolViewOptions: patrolViewOptions.map((option) => option.value),
+          reportOptions: reportOptions.map((option) => option.value)
+        }, null, 2)
+      })
+
+      const normalizedPlan = normalizeConfigActionPlan(response)
+      setAiActionPlan(normalizedPlan)
+      setSelectedActionIds(normalizedPlan.actions.map((action) => action.id))
+      pushAppToast({
+        tone: "success",
+        title: "AI plan ready",
+        message: `Prepared ${normalizedPlan.actions.length} configuration changes for review.`
+      })
+    } catch (error) {
+      pushAppToast({
+        tone: "error",
+        title: "AI planning failed",
+        message: error instanceof Error ? error.message : "Could not generate a configuration action plan."
+      })
+    } finally {
+      setAiActionLoading(false)
+      setAiAssistantUsage(readAiAssistantUsage())
+    }
+  }
+
+  function applySelectedAiActions() {
+    if (!aiActionPlan) return
+
+    const plannedActions = aiActionPlan.actions.filter((planned) => selectedActionIds.includes(planned.id))
+    if (plannedActions.length === 0) {
+      pushAppToast({
+        tone: "warning",
+        title: "Nothing selected",
+        message: "Select at least one AI-proposed configuration change to apply."
+      })
+      return
+    }
+
+    const nextSettings: AppSettings = {
+      ...settings,
+      visibleModules: [...settings.visibleModules]
+    }
+    const nextReferenceSettings: ReferenceSettings = {
+      vehicles: [...referenceSettings.vehicles],
+      shiftTemplates: [...referenceSettings.shiftTemplates],
+      teams: [...referenceSettings.teams],
+      ranks: [...referenceSettings.ranks],
+      patrolStatuses: [...referenceSettings.patrolStatuses]
+    }
+
+    plannedActions.forEach(({ action }) => {
+      switch (action.type) {
+        case "set_department_title":
+          nextSettings.departmentTitle = action.value
+          break
+        case "set_print_header_title":
+          nextSettings.printHeaderTitle = action.value
+          break
+        case "set_default_layout_variant":
+          nextSettings.defaultLayoutVariant = action.value
+          break
+        case "set_default_patrol_view":
+          nextSettings.defaultPatrolView = action.value
+          break
+        case "set_default_report_type":
+          nextSettings.defaultReportType = action.value
+          break
+        case "set_visible_modules":
+          nextSettings.visibleModules = [...new Set([...action.modules, "settings", "ai", "overtime", "notifications"])]
+          break
+        case "add_reference":
+          nextReferenceSettings[action.key] = [...new Set([...nextReferenceSettings[action.key], ...action.values])]
+          break
+        case "remove_reference":
+          nextReferenceSettings[action.key] = nextReferenceSettings[action.key].filter((value) => !action.values.includes(value))
+          break
+      }
+    })
+
+    setSettings(nextSettings)
+    setReferenceSettings(nextReferenceSettings)
+    onAuditEvent?.(
+      "AI Configuration Actions Applied",
+      `Applied ${plannedActions.length} AI-approved configuration changes.`,
+      plannedActions.map(({ action }) => describeConfigAction(action)).join(" | ")
+    )
+    pushAppToast({
+      tone: "success",
+      title: "AI changes applied",
+      message: `Applied ${plannedActions.length} approved configuration changes.`
+    })
+    setAiActionPlan(null)
+    setSelectedActionIds([])
   }
 
   async function refreshProfiles() {
@@ -421,6 +660,121 @@ export function SettingsPage({
               instruction="Review the scheduler configuration and suggest the best improvements for making it reusable across multiple departments."
               context={JSON.stringify({ settings, referenceSettings }, null, 2)}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>AI Configuration Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div style={{ display: "grid", gap: "12px" }}>
+            <div style={{ fontSize: "13px", color: "#475569" }}>
+              Ask AI to prepare actual configuration changes. It will propose a plan first, then you approve exactly what gets applied.
+            </div>
+
+            <textarea
+              value={aiActionPrompt}
+              onChange={(event) => setAiActionPrompt(event.target.value)}
+              placeholder="Example: Rename the app for a commercial template, add Police Officer and Lieutenant to ranks, and hide Audit from the default visible modules."
+              style={{
+                width: "100%",
+                minHeight: "110px",
+                padding: "12px 14px",
+                border: "1px solid #cbd5e1",
+                borderRadius: "12px",
+                resize: "vertical",
+                boxSizing: "border-box"
+              }}
+            />
+
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>
+                Safe scope only: branding, defaults, visible modules, vehicles, teams, ranks, patrol statuses, and shift templates.
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <Button
+                  onClick={() => {
+                    setAiActionPrompt("")
+                    setAiActionPlan(null)
+                    setSelectedActionIds([])
+                  }}
+                  disabled={aiActionLoading}
+                >
+                  Clear
+                </Button>
+                <Button onClick={() => void generateAiActionPlan()} disabled={aiActionLoading}>
+                  {aiActionLoading ? "Planning..." : "Generate Action Plan"}
+                </Button>
+              </div>
+            </div>
+
+            {aiActionPlan && (
+              <div
+                style={{
+                  border: "1px solid #dbeafe",
+                  borderRadius: "14px",
+                  padding: "14px",
+                  background: "#f8fbff",
+                  display: "grid",
+                  gap: "12px"
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>Proposed Plan</div>
+                  <div style={{ fontSize: "13px", color: "#334155" }}>{aiActionPlan.summary}</div>
+                </div>
+
+                <div style={{ display: "grid", gap: "8px" }}>
+                  {aiActionPlan.actions.map((planned) => {
+                    const checked = selectedActionIds.includes(planned.id)
+                    return (
+                      <label
+                        key={planned.id}
+                        style={{
+                          display: "flex",
+                          gap: "10px",
+                          alignItems: "start",
+                          border: "1px solid #dbeafe",
+                          borderRadius: "12px",
+                          padding: "10px 12px",
+                          background: checked ? "#eff6ff" : "#ffffff"
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) =>
+                            setSelectedActionIds((current) =>
+                              event.target.checked
+                                ? [...new Set([...current, planned.id])]
+                                : current.filter((id) => id !== planned.id)
+                            )
+                          }
+                        />
+                        <div style={{ display: "grid", gap: "4px" }}>
+                          <div style={{ fontWeight: 700, color: "#0f172a" }}>{describeConfigAction(planned.action)}</div>
+                          <div style={{ fontSize: "12px", color: "#64748b" }}>{planned.action.type}</div>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" }}>
+                  <Button onClick={() => setSelectedActionIds(aiActionPlan.actions.map((planned) => planned.id))}>
+                    Select All
+                  </Button>
+                  <Button onClick={() => setSelectedActionIds([])}>
+                    Clear Selection
+                  </Button>
+                  <Button onClick={() => applySelectedAiActions()}>
+                    Apply Selected Changes
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
