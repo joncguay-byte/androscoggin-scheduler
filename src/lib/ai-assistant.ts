@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabaseAnonKey, supabaseUrl } from "./supabase"
 
 export type AiAssistantConfig = {
   functionName: string
@@ -52,45 +52,29 @@ function extractFunctionText(payload: any): string {
   throw new Error(payload?.error || "The AI function returned an unreadable response.")
 }
 
-async function extractInvokeErrorMessage(error: any): Promise<string> {
-  const fallbackMessage =
-    typeof error?.message === "string" && error.message.trim()
-      ? error.message
-      : "AI function request failed."
-
-  const response = error?.context
-  if (!response || typeof response !== "object") {
-    return fallbackMessage
-  }
-
+async function extractHttpErrorMessage(response: Response): Promise<string> {
   try {
-    const cloned = typeof response.clone === "function" ? response.clone() : response
-    if (typeof cloned.json === "function") {
-      const payload = await cloned.json()
-      if (typeof payload?.error === "string" && payload.error.trim()) {
-        return payload.error.trim()
-      }
-      if (typeof payload?.message === "string" && payload.message.trim()) {
-        return payload.message.trim()
-      }
+    const payload = await response.clone().json()
+    if (typeof payload?.error === "string" && payload.error.trim()) {
+      return payload.error.trim()
+    }
+    if (typeof payload?.message === "string" && payload.message.trim()) {
+      return payload.message.trim()
     }
   } catch {
     // Fall through to text parsing.
   }
 
   try {
-    const cloned = typeof response.clone === "function" ? response.clone() : response
-    if (typeof cloned.text === "function") {
-      const text = await cloned.text()
-      if (typeof text === "string" && text.trim()) {
-        return text.trim()
-      }
+    const text = await response.clone().text()
+    if (typeof text === "string" && text.trim()) {
+      return text.trim()
     }
   } catch {
-    // Fall through to fallback.
+    // Fall through to status parsing.
   }
 
-  return fallbackMessage
+  return `AI function request failed with status ${response.status}.`
 }
 
 export async function requestAiAssistantResponse(params: {
@@ -105,19 +89,25 @@ export async function requestAiAssistantResponse(params: {
     throw new Error("Configure the AI assistant in Settings first.")
   }
 
-  const { data, error } = await supabase.functions.invoke(config.functionName, {
-    body: {
+  const response = await fetch(`${supabaseUrl}/functions/v1/${config.functionName}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${supabaseAnonKey}`
+    },
+    body: JSON.stringify({
       feature: params.feature,
       context: params.context,
       instruction: params.instruction || "Explain the current operational state and provide concrete guidance.",
       model: config.model,
       systemPrompt: config.systemPrompt
-    }
+    })
   })
 
-  if (error) {
-    throw new Error(await extractInvokeErrorMessage(error))
+  if (!response.ok) {
+    throw new Error(await extractHttpErrorMessage(response))
   }
 
-  return extractFunctionText(data)
+  return extractFunctionText(await response.json())
 }
